@@ -192,7 +192,7 @@ Nᴀᴍᴇ - {}
 <blockquote>🎉 <b>ꜱᴇʟᴇᴄᴛ ʏᴏᴜʀ ᴅᴏɴᴀᴛɪᴏɴ ᴍᴇᴛʜᴏᴅ 👇</b></blockquote>
 
 ➤ 📷 Qʀ ᴄᴏᴅᴇ → <a href='{}'>ᴄʟɪᴄᴋ ʜᴇʀᴇ ᴛᴏ ꜱᴄᴀɴ</a>  
-➤ 💸 ᴜᴘɪ ɪᴅ → <code>{moviehub4uofficial0@okicici}</code>
+➤ 💸 ᴜᴘɪ ɪᴅ → <code>{advitiyaaaa@fam}</code>
 
 ‼️ <b>ᴍᴜꜱᴛ ꜱᴇɴᴅ ꜱᴄʀᴇᴇɴꜱʜᴏᴛ ᴀꜰᴛᴇʀ ᴅᴏɴᴀᴛɪɴɢ.</b>"""
 
@@ -296,7 +296,7 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 
 ʏᴏᴜ ᴄᴀɴ ᴘᴜʀᴄʜᴀꜱᴇ ᴘʀᴇᴍɪᴜᴍ ᴛʜʀᴏᴜɢʜ ᴜᴘɪ , ɴᴇᴛ ʙᴀɴᴋɪɴɢ.
 
-💳 ᴜᴘɪ ɪᴅ - <code>{moviehub4uofficial0@okicici}</code>
+💳 ᴜᴘɪ ɪᴅ - <code>{advitiyaaaa@fam}</code>
 
 💢 ᴍᴜꜱᴛ ꜱᴇɴᴅ ꜱᴄʀᴇᴇɴꜱʜᴏᴛ ᴀꜰᴛᴇʀ ᴘᴀʏᴍᴇɴᴛ.
 
@@ -369,7 +369,7 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 ○ ᴍᴜʟᴛɪ-ᴘʟᴀʏᴇʀ sᴛʀᴇᴀᴍɪɴɢ ʟɪɴᴋs
 ○ ᴀᴅ-ғʀᴇᴇ ᴇxᴘᴇʀɪᴇɴᴄᴇ
 
-😺 ᴄᴏɴᴛᴀᴄᴛ ᴛʜᴇ <a href='https://t.me/dvl_naruto_06'>ᴏᴡɴᴇʀ</a> ᴛᴏ ɢᴇᴛ ʏᴏᴜʀ ᴛʀɪᴀʟ.
+😺 ᴄᴏɴᴛᴀᴄᴛ ᴛʜᴇ <a href='https://t.me/yuviiiii_i'>ᴏᴡɴᴇʀ</a> ᴛᴏ ɢᴇᴛ ʏᴏᴜʀ ᴛʀɪᴀʟ.
 
 ➛ ᴜꜱᴇ /plan ᴛᴏ ꜱᴇᴇ ᴀʟʟ ᴏᴜʀ ᴘʟᴀɴꜱ ᴀᴛ ᴏɴᴄᴇ.
 ➛ ᴄʜᴇᴄᴋ ʏᴏᴜʀ ᴀᴄᴛɪᴠᴇ ᴘʟᴀɴ ʙʏ ᴜꜱɪɴɢ : /myplan</b>"""
@@ -394,7 +394,7 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
     SOURCE_TXT ="""<b>ꜱᴏᴜʀᴄᴇ : 😺 </b>
 
 This Is Not A Open-Source Project. You Can Use It Freely, But Selling The Source Code Is Strictly Prohibited.\n
-ꜱᴏᴜʀᴄᴇ ᴏᴡɴᴇʀ :<a href=https://t.me/dvl_naruto_06>Ɲ 么 ʀ ᴜ Ƭ͢ ᴏ メ</a>\n """
+ꜱᴏᴜʀᴄᴇ ᴏᴡɴᴇʀ :<a href=https://t.me/yuviiiii_i>💘Ý𐌵𝘃ῖῖ💘✨</a>\n """
 
     SETTING_TXT = """    
 <u>ꜱᴇᴛᴛɪɴɢꜱ</u> :
