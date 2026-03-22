@@ -64,7 +64,7 @@ async def myplan(client, message):
             )
         else:
             await message.reply_photo(
-                photo="https://i.ibb.co/gMrpRQWP/photo-2025-07-09-05-21-32-7524948058832896004.jpg", 
+                photo="https://files.catbox.moe/fm96o1.jpg", 
                 caption=(
                     f"<b>ʜᴇʏ {user},\n\n"
                     f"ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴ ᴀᴄᴛɪᴠᴇ ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴ.\n"
