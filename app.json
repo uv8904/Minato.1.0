@@ -70,6 +70,20 @@
             "description": "Name of the collections. Defaults to Telegram_files. If you are using the same database, then use different collection name for each bot",
             "value": "Telegram_files",
             "required": false
+        },
+        "GROQ_API_KEY": {
+            "description": "Groq API key (gsk_...) for AI movie-title spell check. Get a free key at https://console.groq.com/keys. On Koyeb the name must be GROQ_API_KEY (GROK_API_KEY also works as an alias).",
+            "required": false
+        },
+        "GROQ_MODEL": {
+            "description": "Groq model id used for /aispell and auto spell-check.",
+            "value": "llama-3.1-8b-instant",
+            "required": false
+        },
+        "AI_SPELL_CHECK": {
+            "description": "Enable Groq/IMDb AI spell check on failed searches (true/false).",
+            "value": "True",
+            "required": false
         }
     },
     "addons": [],

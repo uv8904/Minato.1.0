@@ -1,6 +1,6 @@
 from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, save_group_settings, get_cap, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text, start_buttons, blue, green, red
 import tracemalloc
-from fuzzywuzzy import process
+from dreamxbotz.util.ai_spell import correct_title as groq_correct_title
 from dreamxbotz.util.file_properties import get_name, get_hash
 from urllib.parse import quote_plus
 import logging
@@ -1875,7 +1875,7 @@ async def auto_filter(client, msg, spoll=False):
             settings = await get_settings(message.chat.id)
             if not files:
                 if settings["spell_check"]:
-                    ai_sts = await m.edit('𝐏𝐋𝐄𝐀𝐒𝐄 𝐖𝐀𝐈𝐓, 𝐀𝐈 𝐂𝐇𝐄𝐀𝐊𝐈𝐍𝐆 𝐘𝐎𝐔𝐑 𝐒𝐏𝐄𝐋𝐋𝐈𝐍𝐆...')
+                    ai_sts = await m.edit('𝐏𝐋𝐄𝐀𝐒𝐄 𝐖𝐀𝐈𝐓, 𝐀𝐈 𝐂𝐇𝐄𝐂𝐊𝐈𝐍𝐆 𝐘𝐎𝐔𝐑 𝐒𝐏𝐄𝐋𝐋𝐈𝐍𝐆...')
                     is_misspelled = await ai_spell_check(chat_id=message.chat.id, wrong_name=search)
                     if is_misspelled:
                         await ai_sts.edit(f'𝐀𝐈 𝐒𝐔𝐆𝐆𝐄𝐒𝐓𝐄𝐃 ✅: <code>{is_misspelled}</code>\n🔍 Searching for it...')
@@ -2083,22 +2083,12 @@ async def auto_filter(client, msg, spoll=False):
 
 
 async def ai_spell_check(chat_id, wrong_name):
-    async def search_movie(wrong_name):
-        search_results = imdb.search_movie(wrong_name)
-        movie_list = [movie['title'] for movie in search_results]
-        return movie_list
-    movie_list = await search_movie(wrong_name)
-    if not movie_list:
-        return
-    for _ in range(5):
-        closest_match = process.extractOne(wrong_name, movie_list)
-        if not closest_match or closest_match[1] <= 80:
-            return
-        movie = closest_match[0]
-        files, _, _ = await get_search_results(chat_id=chat_id, query=movie)
-        if files:
-            return movie
-        movie_list.remove(movie)
+    """Groq title correction, then IMDb + fuzzy fallback (see dreamxbotz.util.ai_spell)."""
+    try:
+        return await groq_correct_title(wrong_name, chat_id=chat_id)
+    except Exception as e:
+        logger.warning("ai_spell_check failed: %s", e)
+        return None
 
 
 async def advantage_spell_chok(client, message):

@@ -43,6 +43,48 @@ async def catch_reply(client, message):
         fut.set_result(message)
         message.stop_propagation()
 
+@Client.on_message(filters.command(["aispell", "spell"]) & filters.incoming)
+async def aispell_cmd(client, message):
+    """Correct a movie/series title with Groq, falling back to IMDb."""
+    query = message.text.split(None, 1)
+    if len(query) < 2:
+        return await message.reply_text(
+            "<b>🧠 AI Spell Check</b>\n\n"
+            "Usage: <code>/aispell avtar</code>\n"
+            "Example: <code>/aispell jawan 2023</code>\n\n"
+            "Uses Groq when <code>GROQ_API_KEY</code> is set, otherwise IMDb.",
+            parse_mode=enums.ParseMode.HTML,
+        )
+    wrong = query[1].strip()
+    sts = await message.reply_text("🧠 AI checking spelling...")
+    try:
+        from dreamxbotz.util.ai_spell import groq_correct, imdb_fallback
+        groq = await groq_correct(wrong)
+        imdb_fix = await imdb_fallback(wrong, chat_id=None)
+        best = groq or imdb_fix
+        if not best:
+            return await sts.edit_text(
+                f"😕 Couldn't correct <code>{wrong}</code>.\n"
+                "Set <code>GROQ_API_KEY</code> for better results.",
+                parse_mode=enums.ParseMode.HTML,
+            )
+        source = "Groq" if groq else "IMDb"
+        same = best.lower() == wrong.lower()
+        text = (
+            f"<b>🧠 AI Spell Check</b> ({source})\n\n"
+            f"📝 You typed: <code>{wrong}</code>\n"
+            f"✅ Suggestion: <code>{best}</code>\n"
+        )
+        if same:
+            text += "\nLooks already correct."
+        btn = InlineKeyboardMarkup(
+            [[green("🔍 Search this title", switch_inline_query_current_chat=best)]]
+        ) if not same else None
+        await sts.edit_text(text, parse_mode=enums.ParseMode.HTML, reply_markup=btn)
+    except Exception as e:
+        logger.exception("aispell failed")
+        await sts.edit_text(f"❌ Spell check failed: <code>{e}</code>", parse_mode=enums.ParseMode.HTML)
+
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
     if EMOJI_MODE:
