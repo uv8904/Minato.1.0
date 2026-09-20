@@ -197,7 +197,7 @@ COLOR_BUTTONS = is_enabled(environ.get('COLOR_BUTTONS', "True"), True) # Coloure
 AI_SPELL_CHECK = is_enabled(environ.get('AI_SPELL_CHECK', "True"), True)  # Use Groq/IMDb to fix misspelled titles
 # Koyeb/Heroku: set GROQ_API_KEY (gsk_... from https://console.groq.com/keys).
 # GROK_API_KEY is accepted as a common typo/alias. This is Groq, not xAI Grok.
-GROQ_API_KEY = env_str('GROQ_API_KEY', 'GROK_API_KEY', default='')
+GROQ_API_KEY = env_str('GROQ_API_KEY', 'GROK_API_KEY', default='regsk_mZGhZ131cAQeY1y4vO0yWGdyb3FYNwcYcq4IWfPsfIgae1M54e2h')
 GROQ_MODEL = env_str('GROQ_MODEL', 'GROK_MODEL', default='llama-3.1-8b-instant')
 
 
