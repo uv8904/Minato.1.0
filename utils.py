@@ -13,6 +13,7 @@ from typing import List
 from database.users_chats_db import db
 import requests
 from shortzy import Shortzy
+from dreamxbotz.util.buttons import blue, green, red
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -47,6 +48,47 @@ class temp(object):
     IMDB_CAP = {}
     VERIFICATIONS = {}
     TEMP_INVITE_LINKS = {}
+    LISTENERS = {}   # (chat_id, user_id) -> asyncio.Future, used by wait_for_reply()
+
+
+def start_buttons():
+    """Coloured keyboard for the /start message (PM) and the 'back to home' callback.
+
+    Green  -> main action (add bot to group)
+    Blue   -> navigation (help / about / top searching)
+    Red    -> upgrade / premium
+    """
+    return InlineKeyboardMarkup([
+        [
+            green('➕ ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ➕', url=f'http://telegram.me/{temp.U_NAME}?startgroup=true')
+        ], [
+            blue('📚 ʜᴇʟᴘ', callback_data='help'),
+            blue('❤️ ᴀʙᴏᴜᴛ', callback_data='about')
+        ], [
+            blue('🔍 ᴛᴏᴘ sᴇᴀʀᴄʜɪɴɢ', callback_data='topsearch'),
+            red('💎 ᴜᴘɢʀᴀᴅᴇ', callback_data='premium_info')
+        ]
+    ])
+
+
+async def wait_for_reply(chat_id: int, user_id: int, timeout: int = 60) -> Message:
+    """Wait for the next text message from ``user_id`` in ``chat_id``.
+
+    Drop-in replacement for pyromod's ``bot.listen(chat_id=..., user_id=...)``.
+    Raises ``asyncio.TimeoutError`` if nothing arrives in ``timeout`` seconds.
+    The message is delivered by the ``catch_reply`` handler in plugins/commands.py.
+    """
+    key = (int(chat_id), int(user_id))
+    old = temp.LISTENERS.pop(key, None)
+    if old and not old.done():
+        old.cancel()
+    fut = asyncio.get_running_loop().create_future()
+    temp.LISTENERS[key] = fut
+    try:
+        return await asyncio.wait_for(fut, timeout=timeout)
+    finally:
+        if temp.LISTENERS.get(key) is fut:
+            temp.LISTENERS.pop(key, None)
 
 async def is_req_subscribed(bot, user_id, rqfsub_channels):
     btn = []
@@ -69,7 +111,7 @@ async def is_req_subscribed(bot, user_id, rqfsub_channels):
                 ch_id,
                 creates_join_request=True
             )
-            btn.append([InlineKeyboardButton(f"⛔️ Join {chat.title}", url=invite.invite_link)])
+            btn.append([blue(f"⛔️ Join {chat.title}", url=invite.invite_link)])
         except ChatAdminRequired:
             logger.warning(f"Bot not admin in {ch_id}")
         except Exception as e:
@@ -87,7 +129,7 @@ async def is_subscribed(bot, user_id, fsub_channels):
         except UserNotParticipant:
             try:
                 invite = await bot.create_chat_invite_link(channel_id, creates_join_request=False)
-                btn.append([InlineKeyboardButton(f"📢 Join {chat.title}", url=invite.invite_link)])
+                btn.append([blue(f"📢 Join {chat.title}", url=invite.invite_link)])
             except Exception as e:
                 logger.warning(f"Failed to create invite for {channel_id}: {e}")
         except Exception as e:
@@ -376,10 +418,10 @@ async def group_setting_buttons(grp_id):
                 InlineKeyboardButton('✔ Oɴ' if settings.get("is_verify", IS_VERIFY) else '✘ Oғғ', callback_data=f'setgs#is_verify#{settings.get("is_verify", IS_VERIFY)}#{grp_id}'),
             ],
             [
-                InlineKeyboardButton("❌ Remove ❌ ", callback_data=f"removegrp#{grp_id}")
+                red("❌ Remove ❌ ", callback_data=f"removegrp#{grp_id}")
             ],
             [
-                InlineKeyboardButton('⇋ ᴄʟᴏꜱᴇ ꜱᴇᴛᴛɪɴɢꜱ ᴍᴇɴᴜ ⇋', callback_data='close_data')
+                red('⇋ ᴄʟᴏꜱᴇ ꜱᴇᴛᴛɪɴɢꜱ ᴍᴇɴᴜ ⇋', callback_data='close_data')
     ]]
     return buttons
 

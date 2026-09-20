@@ -1,6 +1,7 @@
-pyrofork==2.3.45
-tgcrypto-pyrofork
-pymongo==4.13.2
+# Telegram MTProto framework (pyrogram-compatible fork, API layer 229).
+# Needed for coloured inline buttons (InlineKeyboardButton style=...).
+electrogram==0.3.230
+pymongo==4.16.0
 motor==3.7.1
 marshmallow<4.0.0
 umongo
@@ -31,7 +32,6 @@ ffmpeg-python==0.2.0
 jinja2
 apscheduler
 pyshorteners
-pyromod
 colorama
 fuzzywuzzy
 Levenshtein==0.24.0
