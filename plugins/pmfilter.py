@@ -1,6 +1,13 @@
 from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, save_group_settings, get_cap, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text, start_buttons, blue, green, red
 import tracemalloc
 from dreamxbotz.util.ai_spell import correct_title as groq_correct_title
+from dreamxbotz.util.title_notify import (
+    PENDING_TEXT,
+    notify_keyboard,
+    notify_rows,
+    register_notify_request,
+    remember_search,
+)
 from dreamxbotz.util.file_properties import get_name, get_hash
 from urllib.parse import quote_plus
 import logging
@@ -331,10 +338,11 @@ async def advantage_spoll_choker(bot, query):
                 await bot.send_message(chat_id=BIN_CHANNEL, text=script.NORSLTS.format(reqstr.id, reqstr.mention, movie))
             except Exception as e:
                 print(f"Error In Spol - {e}   Make Sure Bot Admin BIN CHANNEL")
-        btn = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Cʟɪᴄᴋ ʜᴇʀᴇ & ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴀᴅᴍɪɴ", url=OWNER_LNK)]])
+        notify_key = f"{query.message.chat.id}-{query.message.id}"
+        remember_search(notify_key, movie)
+        btn = notify_keyboard(notify_key, query.from_user.id if query.from_user else 0, movie)
         k = await query.message.edit(script.MVE_NT_FND, reply_markup=btn)
-        await asyncio.sleep(10)
+        await asyncio.sleep(120)
         await k.delete()
 
 # Qualities
@@ -791,6 +799,44 @@ async def filter_seasons_cb_handler(client: Client, query: CallbackQuery):
         except MessageNotModified:
             pass
     await query.answer()
+
+
+@Client.on_callback_query(filters.regex(r"^notify#"))
+async def notify_me_cb(client: Client, query: CallbackQuery):
+    """Green "Notify me when uploaded" button on the no-results screen.
+
+    Registered before the catch-all cb_handler below so this callback is not
+    swallowed by it. The title itself lives in PENDING_TEXT (callback_data is
+    capped at 64 bytes); after a restart it falls back to the message the bot
+    replied to.
+    """
+    try:
+        _, notify_key, _searcher = query.data.split('#')
+    except ValueError:
+        return await query.answer()
+
+    search = PENDING_TEXT.get(notify_key)
+    if not search:
+        reply_to = getattr(query.message, "reply_to_message", None)
+        search = getattr(reply_to, "text", None) or ""
+    search = (search or "").strip()
+    if not search:
+        return await query.answer("⚠️ ᴄᴏᴜʟᴅɴ'ᴛ ʀᴇᴀᴅ ʏᴏᴜʀ sᴇᴀʀᴄʜ, ᴘʟᴇᴀsᴇ sᴇᴀʀᴄʜ ᴀɢᴀɪɴ.", show_alert=True)
+
+    saved, reason = await register_notify_request(
+        user_id=query.from_user.id,
+        search_text=search,
+        chat_id=query.message.chat.id,
+        message_id=query.message.id,
+        name=query.from_user.first_name or "",
+    )
+    if saved:
+        return await query.answer(f"✅ ᴅᴏɴᴇ! ɪ'ʟʟ ᴘᴍ ʏᴏᴜ ᴀs sᴏᴏɴ ᴀs\n'{search}' ɪs ᴜᴘʟᴏᴀᴅᴇᴅ.", show_alert=True)
+    if reason == "duplicate":
+        return await query.answer("ℹ️ ʏᴏᴜ'ʀᴇ ᴀʟʀᴇᴀᴅʏ ᴏɴ ᴛʜᴇ ʟɪsᴛ ꜰᴏʀ ᴛʜɪs ᴛɪᴛʟᴇ.", show_alert=True)
+    if reason == "disabled":
+        return await query.answer("⚠️ ɴᴏᴛɪꜰʏ-ᴍᴇ ɪs ᴛᴜʀɴᴇᴅ ᴏꜰꜰ ʙʏ ᴛʜᴇ ʙᴏᴛ ᴏᴡɴᴇʀ.", show_alert=True)
+    return await query.answer("⚠️ ᴄᴏᴜʟᴅɴ'ᴛ sᴀᴠᴇ ʏᴏᴜʀ ʀᴇǫᴜᴇsᴛ, ᴛʀʏ ᴀɢᴀɪɴ.", show_alert=True)
 
 
 @Client.on_callback_query()
@@ -2112,10 +2158,9 @@ async def advantage_spell_chok(client, message):
             pass
         return
     if not movies:
-        google = search.replace(" ", "+")
-        button = [[InlineKeyboardButton(
-            "🔍 ᴄʜᴇᴄᴋ sᴘᴇʟʟɪɴɢ ᴏɴ ɢᴏᴏɢʟᴇ 🔍", url=f"https://www.google.com/search?q={google}")]]
-        k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=InlineKeyboardMarkup(button))
+        user = message.from_user.id if message.from_user else 0
+        remember_search(f"{chat_id}-{mv_id}", search)
+        k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=notify_keyboard(f"{chat_id}-{mv_id}", user, search))
         await asyncio.sleep(60)
         await k.delete()
         try:
@@ -2124,10 +2169,12 @@ async def advantage_spell_chok(client, message):
             pass
         return
     user = message.from_user.id if message.from_user else 0
+    remember_search(f"{chat_id}-{mv_id}", search)
     buttons = [
         [InlineKeyboardButton(text=movie.get('title'), callback_data=f"spol#{movie.movieID}#{user}")
          ] for movie in movies]
 
+    buttons += notify_rows(f"{chat_id}-{mv_id}", user, search)
     buttons.append([InlineKeyboardButton(
         text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
     d = await message.reply_text(text=script.CUDNT_FND.format(message.from_user.mention), reply_markup=InlineKeyboardMarkup(buttons), reply_to_message_id=message.id)

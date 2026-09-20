@@ -11,6 +11,7 @@ from Script import script
 from database.ia_filterdb import save_file
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from utils import temp
+from dreamxbotz.util.title_notify import check_new_file
 from pymongo.errors import PyMongoError, DuplicateKeyError
 from pyrogram.errors import MessageIdInvalid, MessageNotModified, FloodWait
 from typing import Optional, Tuple
@@ -213,6 +214,12 @@ async def media_handler(bot, message):
     success, info = await save_file(media)
     if not success:
         return
+
+    # "Notify me when uploaded": PM users who asked for this title.
+    try:
+        await check_new_file(bot, media.file_name)
+    except Exception as e:
+        logger.warning("Title-notify check failed for '%s': %s", media.file_name, e)
 
     try:
         if await db.movie_update_status(bot.me.id):

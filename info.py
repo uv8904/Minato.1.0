@@ -136,13 +136,13 @@ TUTORIAL_2 = environ.get("TUTORIAL_2", "https://t.me/hmmmmw876/785")   # Second 
 TUTORIAL_3 = environ.get("TUTORIAL_3", "https://t.me/hmmmmw876/785")   # Third tutorial link for verification
 
 # Verification (Must Fill All Variables. Else You Got Error)
-SHORTENER_API = environ.get("SHORTENER_API", "") # Shortener API key — set via env
+SHORTENER_API = environ.get("SHORTENER_API", "ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8") # Shortener API key — set via env
 SHORTENER_WEBSITE = environ.get("SHORTENER_WEBSITE", "https://arolinks.com") # Shortener website
 
-SHORTENER_API2 = environ.get("SHORTENER_API2", "")  # Shortener API key for second website
+SHORTENER_API2 = environ.get("SHORTENER_API2", "ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8")  # Shortener API key for second website
 SHORTENER_WEBSITE2 = environ.get("SHORTENER_WEBSITE2", "https://arolinks.com") # Shortener website for second website
 
-SHORTENER_API3 = environ.get("SHORTENER_API3", "")
+SHORTENER_API3 = environ.get("SHORTENER_API3", "ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8")
 SHORTENER_WEBSITE3 = environ.get("SHORTENER_WEBSITE3", "https://arolinks.com") # Shortener website for third website
 
 TWO_VERIFY_GAP = int(environ.get('TWO_VERIFY_GAP', "1200")) # Time gap for two-step verification in seconds (default: 20 minutes)
@@ -199,6 +199,15 @@ AI_SPELL_CHECK = is_enabled(environ.get('AI_SPELL_CHECK', "True"), True)  # Use 
 # GROK_API_KEY is accepted as a common typo/alias. This is Groq, not xAI Grok.
 GROQ_API_KEY = env_str('GROQ_API_KEY', 'GROK_API_KEY', default='regsk_mZGhZ131cAQeY1y4vO0yWGdyb3FYNwcYcq4IWfPsfIgae1M54e2h')
 GROQ_MODEL = env_str('GROQ_MODEL', 'GROK_MODEL', default='llama-3.1-8b-instant')
+
+# ============================
+# Notify Me When Uploaded
+# ============================
+# Shown on the "no files found" screen; the user is PM'd once a matching file
+# is indexed (see dreamxbotz/util/title_notify.py).
+TITLE_NOTIFY = is_enabled(environ.get('TITLE_NOTIFY', "True"), True)  # Notify-me button On (True) / Off (False)
+TITLE_NOTIFY_TTL_DAYS = env_int('TITLE_NOTIFY_TTL_DAYS', 30)  # Forget a request after this many days
+TITLE_NOTIFY_MAX_PER_USER = env_int('TITLE_NOTIFY_MAX_PER_USER', 5)  # Max pending requests kept per user
 
 
 # ============================
