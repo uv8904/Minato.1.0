@@ -104,13 +104,13 @@ STAR_PREMIUM_PLANS = {
 # ============================
 # MongoDB Configuration
 # ============================
-DATABASE_URI = environ.get('DATABASE_URI', '')  # MongoDB URI — set via env, never commit credentials
+DATABASE_URI = environ.get('DATABASE_URI', 'mongodb+srv://uvjangra:uvjangra@cluster0.cmjdvgq.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')  # MongoDB URI — set via env, never commit credentials
 DATABASE_NAME = environ.get('DATABASE_NAME', "Cluster0") # Database name (default: cluster)
 COLLECTION_NAME = environ.get('COLLECTION_NAME', 'dreamcinezone_files') # Collection name (default: dreamcinezone_files)
 
 # If MULTIPLE_DB Is True Then Fill DATABASE_URI2 Value Else You Will Get Error.
 MULTIPLE_DB = is_enabled(os.environ.get('MULTIPLE_DB', "True"), False) # Type True For Turn On MULTIPLE DB FUNTION 
-DATABASE_URI2 = environ.get('DATABASE_URI2', '')  # Second MongoDB URI (required when MULTIPLE_DB is True)
+DATABASE_URI2 = environ.get('DATABASE_URI2', 'mongodb+srv://yuvi123:yuvi123@cluster0.hlyhypg.mongodb.net/?appName=Cluster0')  # Second MongoDB URI (required when MULTIPLE_DB is True)
 # ============================
 # Movie Notification & Update Settings
 # ============================
