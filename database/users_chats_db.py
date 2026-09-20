@@ -20,6 +20,7 @@ class Database:
         self.filename_col = self.db.filename
         self.movie_updates = self.db.movie_updates
         self.connection = self.db.connections
+        self.notify_req = self.db.notify_requests  # "notify me when uploaded"
 
     async def delete_all_msg(self):
         await self.movie_updates.delete_many({})
@@ -410,7 +411,69 @@ class Database:
 
     async def update_movie_update_status(self, bot_id, enable):
         await self.update_bot_setting(bot_id, 'MOVIE_UPDATE_NOTIFICATION', enable)
-     
+
+    # ------------------------------------------------------------------
+    # "Notify me when uploaded" requests (see dreamxbotz/util/title_notify.py)
+    # ------------------------------------------------------------------
+    async def add_notify_request(self, user_id, query, chat_id=0, message_id=0, name=""):
+        """Store a notify-me request, keeping at most TITLE_NOTIFY_MAX_PER_USER per user."""
+        query = (query or "").strip()
+        if not query:
+            return False
+        now = datetime.datetime.utcnow()
+        await self.notify_req.update_one(
+            {'user_id': int(user_id), 'query': query},
+            {
+                '$set': {'name': name or "", 'chat_id': int(chat_id), 'message_id': int(message_id),
+                         'updated_at': now},
+                '$setOnInsert': {'created_at': now},
+            },
+            upsert=True,
+        )
+        # Trim the oldest requests when a user stacks up too many.
+        try:
+            mine = self.notify_req.find({'user_id': int(user_id)}).sort('created_at', -1)
+            docs = await mine.to_list(length=TITLE_NOTIFY_MAX_PER_USER + 1)
+            stale = [d['_id'] for d in docs[TITLE_NOTIFY_MAX_PER_USER:]]
+            if stale:
+                await self.notify_req.delete_many({'_id': {'$in': stale}})
+        except Exception as e:
+            print(f"add_notify_request trim failed: {e}")
+        return True
+
+    async def has_notify_request(self, user_id, query):
+        doc = await self.notify_req.find_one({'user_id': int(user_id), 'query': (query or "").strip()})
+        return bool(doc)
+
+    async def get_notify_requests(self, cutoff=None, limit=500):
+        """All pending requests, optionally only those newer than ``cutoff``."""
+        query = {'created_at': {'$gte': cutoff}} if cutoff else {}
+        return await self.notify_req.find(query).to_list(length=limit)
+
+    async def delete_notify_requests(self, ids):
+        if not ids:
+            return 0
+        res = await self.notify_req.delete_many({'_id': {'$in': list(ids)}})
+        return getattr(res, 'deleted_count', 0)
+
+    async def remove_notify_request(self, user_id, query=None):
+        """Cancel one request (or every request of ``user_id`` when query is None)."""
+        flt = {'user_id': int(user_id)}
+        if query is not None:
+            flt['query'] = (query or "").strip()
+        res = await self.notify_req.delete_many(flt)
+        return getattr(res, 'deleted_count', 0)
+
+    async def total_notify_requests(self):
+        return await self.notify_req.count_documents({})
+
+    async def purge_old_notify_requests(self, days=None):
+        """Drop requests older than ``days`` (TITLE_NOTIFY_TTL_DAYS by default)."""
+        days = TITLE_NOTIFY_TTL_DAYS if days is None else int(days)
+        cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=days)
+        res = await self.notify_req.delete_many({'created_at': {'$lt': cutoff}})
+        return getattr(res, 'deleted_count', 0)
+
 db = Database(DATABASE_URI, DATABASE_NAME)    
 db2 = Database(DATABASE_URI2, DATABASE_NAME)
 

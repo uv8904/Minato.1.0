@@ -14,6 +14,13 @@ from database.users_chats_db import db
 import requests
 from shortzy import Shortzy
 from dreamxbotz.util.buttons import blue, green, red
+# Re-exported so plugins can `from utils import ...` (same as blue/green/red).
+from dreamxbotz.util.title_notify import (
+    check_new_file,
+    notify_keyboard,
+    notify_rows,
+    register_notify_request,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)

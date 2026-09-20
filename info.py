@@ -200,6 +200,15 @@ AI_SPELL_CHECK = is_enabled(environ.get('AI_SPELL_CHECK', "True"), True)  # Use 
 GROQ_API_KEY = env_str('GROQ_API_KEY', 'GROK_API_KEY', default='')
 GROQ_MODEL = env_str('GROQ_MODEL', 'GROK_MODEL', default='llama-3.1-8b-instant')
 
+# ============================
+# Notify Me When Uploaded
+# ============================
+# Shown on the "no files found" screen; the user is PM'd once a matching file
+# is indexed (see dreamxbotz/util/title_notify.py).
+TITLE_NOTIFY = is_enabled(environ.get('TITLE_NOTIFY', "True"), True)  # Notify-me button On (True) / Off (False)
+TITLE_NOTIFY_TTL_DAYS = env_int('TITLE_NOTIFY_TTL_DAYS', 30)  # Forget a request after this many days
+TITLE_NOTIFY_MAX_PER_USER = env_int('TITLE_NOTIFY_MAX_PER_USER', 5)  # Max pending requests kept per user
+
 
 # ============================
 # Bot Configuration
