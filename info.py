@@ -34,6 +34,17 @@ def env_int(key, default=0):
     except (TypeError, ValueError):
         return int(default)
 
+def env_str(*keys, default=''):
+    """First non-empty env value. Strips whitespace and surrounding quotes (Koyeb/Heroku paste)."""
+    for key in keys:
+        raw = environ.get(key)
+        if raw is None:
+            continue
+        value = str(raw).strip().strip('"').strip("'")
+        if value:
+            return value
+    return default
+
 # ============================
 # Bot Information Configuration
 # ============================
@@ -184,8 +195,10 @@ COLOR_BUTTONS = is_enabled(environ.get('COLOR_BUTTONS', "True"), True) # Coloure
 # AI Spell Check (Groq + IMDb fallback)
 # ============================
 AI_SPELL_CHECK = is_enabled(environ.get('AI_SPELL_CHECK', "True"), True)  # Use Groq/IMDb to fix misspelled titles
-GROQ_API_KEY = environ.get('GROQ_API_KEY', '')  # Free key from https://console.groq.com/keys
-GROQ_MODEL = environ.get('GROQ_MODEL', 'llama-3.1-8b-instant')  # Groq model id
+# Koyeb/Heroku: set GROQ_API_KEY (gsk_... from https://console.groq.com/keys).
+# GROK_API_KEY is accepted as a common typo/alias. This is Groq, not xAI Grok.
+GROQ_API_KEY = env_str('GROQ_API_KEY', 'GROK_API_KEY', default='')
+GROQ_MODEL = env_str('GROQ_MODEL', 'GROK_MODEL', default='llama-3.1-8b-instant')
 
 
 # ============================

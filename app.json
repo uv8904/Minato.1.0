@@ -72,7 +72,7 @@
             "required": false
         },
         "GROQ_API_KEY": {
-            "description": "Groq API key for AI movie-title spell check. Get a free key at https://console.groq.com/keys",
+            "description": "Groq API key (gsk_...) for AI movie-title spell check. Get a free key at https://console.groq.com/keys. On Koyeb the name must be GROQ_API_KEY (GROK_API_KEY also works as an alias).",
             "required": false
         },
         "GROQ_MODEL": {

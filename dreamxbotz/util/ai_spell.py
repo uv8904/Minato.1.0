@@ -30,16 +30,36 @@ def _clean(text: str) -> str:
     return text
 
 
+def _groq_creds():
+    """Read key/model live from env so Koyeb aliases and quoted values work."""
+    from os import environ
+    try:
+        from info import env_str, GROQ_API_KEY, GROQ_MODEL
+    except Exception:
+        env_str = None
+        GROQ_API_KEY = environ.get('GROQ_API_KEY', '')
+        GROQ_MODEL = environ.get('GROQ_MODEL', 'llama-3.1-8b-instant')
+    if env_str:
+        key = env_str('GROQ_API_KEY', 'GROK_API_KEY', default=GROQ_API_KEY or '')
+        model = env_str('GROQ_MODEL', 'GROK_MODEL', default=GROQ_MODEL or 'llama-3.1-8b-instant')
+    else:
+        key = (environ.get('GROQ_API_KEY') or environ.get('GROK_API_KEY') or GROQ_API_KEY or '').strip().strip('"').strip("'")
+        model = (environ.get('GROQ_MODEL') or environ.get('GROK_MODEL') or GROQ_MODEL or 'llama-3.1-8b-instant').strip()
+    return key, model
+
+
 async def groq_correct(query: str) -> str | None:
     """Ask Groq to fix a movie/series title. Returns None if unavailable."""
-    from info import GROQ_API_KEY, GROQ_MODEL
+    groq_key, groq_model = _groq_creds()
 
     query = _clean(query)
-    if not query or not GROQ_API_KEY:
+    if not query or not groq_key:
+        if query and not groq_key:
+            logger.warning("Groq spell skipped: GROQ_API_KEY / GROK_API_KEY is empty")
         return None
 
     payload = {
-        "model": GROQ_MODEL,
+        "model": groq_model,
         "temperature": 0.1,
         "max_tokens": 40,
         "messages": [
@@ -48,7 +68,7 @@ async def groq_correct(query: str) -> str | None:
         ],
     }
     headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Authorization": f"Bearer {groq_key}",
         "Content-Type": "application/json",
     }
     try:
