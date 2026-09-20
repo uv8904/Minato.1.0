@@ -8,7 +8,7 @@ from pyrogram.errors.exceptions.bad_request_400 import MessageTooLong
 from pyrogram.errors import FloodWait
 from database.users_chats_db import db
 from info import ADMINS
-from utils import users_broadcast, groups_broadcast, temp, get_readable_time, clear_junk, junk_group
+from utils import users_broadcast, groups_broadcast, temp, get_readable_time, clear_junk, junk_group, wait_for_reply, red
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 lock = asyncio.Lock()
@@ -32,7 +32,7 @@ async def broadcast_users(bot, message):
         reply_markup=ReplyKeyboardMarkup([["Yes", "No"]], one_time_keyboard=True, resize_keyboard=True)
     )
     try:
-        dreamxbotz_user_response = await bot.listen(chat_id=message.chat.id, user_id=message.from_user.id, timeout=60)
+        dreamxbotz_user_response = await wait_for_reply(message.chat.id, message.from_user.id, timeout=60)
     except asyncio.TimeoutError:
         await ask.delete()
         return await message.reply("❌ Timed out. Broadcast cancelled.")
@@ -87,7 +87,7 @@ async def broadcast_users(bot, message):
                 f"🗑️ Deleted: <code>{deleted}</code>\n"
                 f"⏱️ Time: {elapsed}",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("❌ CANCEL", callback_data="broadcast_cancel#users")]
+                    [red("❌ CANCEL", callback_data="broadcast_cancel#users")]
                 ])
             )
             await asyncio.sleep(0.1)
@@ -111,7 +111,7 @@ async def broadcast_group(bot, message):
         reply_markup=ReplyKeyboardMarkup([["Yes", "No"]], one_time_keyboard=True, resize_keyboard=True)
     )
     try:
-        dreamxbotz_user_response = await bot.listen(chat_id=message.chat.id, user_id=message.from_user.id, timeout=60)
+        dreamxbotz_user_response = await wait_for_reply(message.chat.id, message.from_user.id, timeout=60)
     except asyncio.TimeoutError:
         await ask.delete()
         return await message.reply("❌ Timed out. Broadcast cancelled.")
@@ -146,7 +146,7 @@ async def broadcast_group(bot, message):
                 failed += 1
             done += 1
             if done % 10 == 0:
-                btn = [[InlineKeyboardButton("❌ CANCEL", callback_data="broadcast_cancel#groups")]]
+                btn = [[red("❌ CANCEL", callback_data="broadcast_cancel#groups")]]
                 await dreamxbotz_status_msg.edit(
                     f"📣 <b>Group broadcast progress:</b>\n\n"
                     f"👥 Total Groups: <code>{total_chats}</code>\n"
