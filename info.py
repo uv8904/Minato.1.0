@@ -3,31 +3,51 @@ import os
 from os import environ, getenv
 from Script import script
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # Utility functions
 id_pattern = re.compile(r'^.\d+$')
 
 def is_enabled(value, default):
-    if value.lower() in ["true", "yes", "1", "enable", "y"]:
-        return True
-    elif value.lower() in ["false", "no", "0", "disable", "n"]:
-        return False
-    else:
+    """Parse an env value as a boolean. Accepts true/false/yes/no/1/0/on/off."""
+    if value is None:
         return default
+    if isinstance(value, bool):
+        return value
+    value = str(value).strip().lower()
+    if value in ("true", "yes", "1", "enable", "enabled", "y", "on"):
+        return True
+    if value in ("false", "no", "0", "disable", "disabled", "n", "off"):
+        return False
+    return default
+
+def env_int(key, default=0):
+    raw = environ.get(key, '')
+    if raw is None or str(raw).strip() == '':
+        return int(default)
+    try:
+        return int(str(raw).strip())
+    except (TypeError, ValueError):
+        return int(default)
 
 # ============================
 # Bot Information Configuration
 # ============================
 SESSION = environ.get('SESSION', 'dreamxbotz_search')   # Session name for the bot
-API_ID = int(environ.get('API_ID', '20803355')) # API ID from my.telegram.org
-API_HASH = environ.get('API_HASH', 'caa85d91bcde4e8826ad697de02af771')  # API Hash from my.telegram.org
-BOT_TOKEN = environ.get('BOT_TOKEN', "")    # Bot token from @BotFather
+API_ID = env_int('API_ID', 0)  # API ID from my.telegram.org — set via env, do not hardcode
+API_HASH = environ.get('API_HASH', '')  # API Hash from my.telegram.org — set via env
+BOT_TOKEN = environ.get('BOT_TOKEN', '')    # Bot token from @BotFather
 
 # ============================
 # Bot Settings Configuration
 # ============================
-CACHE_TIME = int(environ.get('CACHE_TIME', 300))    # Cache time in seconds (default: 5 minutes)
-USE_CAPTION_FILTER = bool(environ.get('USE_CAPTION_FILTER', True))  # Use caption filter for search results (default: True)
-INDEX_CAPTION = bool(environ.get('SAVE_CAPTION', True)) # Save caption db when idexing make it False if you dont use USE_CAPTION_FILTER for search results (default: True)
+CACHE_TIME = env_int('CACHE_TIME', 300)    # Cache time in seconds (default: 5 minutes)
+USE_CAPTION_FILTER = is_enabled(environ.get('USE_CAPTION_FILTER', 'True'), True)  # Use caption filter for search results
+INDEX_CAPTION = is_enabled(environ.get('SAVE_CAPTION', 'True'), True) # Save caption in db when indexing; set False if you don't use USE_CAPTION_FILTER
 #Making it false will not save caption in db SO you can save some storage space
 
 
@@ -73,29 +93,29 @@ STAR_PREMIUM_PLANS = {
 # ============================
 # MongoDB Configuration
 # ============================
-DATABASE_URI = environ.get('DATABASE_URI', "mongodb+srv://uvjangra:uvjangra@cluster0.cmjdvgq.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")  # MongoDB URI for the database
+DATABASE_URI = environ.get('DATABASE_URI', '')  # MongoDB URI — set via env, never commit credentials
 DATABASE_NAME = environ.get('DATABASE_NAME', "Cluster0") # Database name (default: cluster)
 COLLECTION_NAME = environ.get('COLLECTION_NAME', 'dreamcinezone_files') # Collection name (default: dreamcinezone_files)
 
 # If MULTIPLE_DB Is True Then Fill DATABASE_URI2 Value Else You Will Get Error.
 MULTIPLE_DB = is_enabled(os.environ.get('MULTIPLE_DB', "True"), False) # Type True For Turn On MULTIPLE DB FUNTION 
-DATABASE_URI2 = environ.get('DATABASE_URI2', "mongodb+srv://yuvi123:yuvi123@cluster0.hlyhypg.mongodb.net/?appName=Cluster0")  # MongoDB URI for the second database (if MULTIPLE_DB is True)
+DATABASE_URI2 = environ.get('DATABASE_URI2', '')  # Second MongoDB URI (required when MULTIPLE_DB is True)
 # ============================
 # Movie Notification & Update Settings
 # ============================
-MOVIE_UPDATE_NOTIFICATION = bool(environ.get('MOVIE_UPDATE_NOTIFICATION', True))  # Notification On (True) / Off (False)
+MOVIE_UPDATE_NOTIFICATION = is_enabled(environ.get('MOVIE_UPDATE_NOTIFICATION', 'True'), True)  # Notification On / Off
 MOVIE_UPDATE_CHANNEL = int(environ.get('MOVIE_UPDATE_CHANNEL', '-1003192727274'))  # Notification of sent to your channel
-DREAMXBOTZ_IMAGE_FETCH = bool(environ.get('DREAMXBOTZ_IMAGE_FETCH', True))  # On (True) / Off (False)
-LINK_PREVIEW = bool(environ.get('LINK_PREVIEW', True)) # Shows link preview in notification msg instead of image
-ABOVE_PREVIEW = bool(environ.get('ABOVE_PREVIEW', True)) # Shows link preview above the text in notification msg if True else below the msg
-TMDB_API_KEY = environ.get('TMDB_API_KEY', '') # preffer to use your own tmdb API Key get it from https://www.themoviedb.org/settings/api
-TMDB_POSTER = bool(environ.get('TMDB_POSTER', True)) # Shows TMDB poster in notification msg
-LANDSCAPE_POSTER = bool(environ.get('LANDSCAPE_POSTER', True)) # Shows landscape poster in notification msg
+DREAMXBOTZ_IMAGE_FETCH = is_enabled(environ.get('DREAMXBOTZ_IMAGE_FETCH', 'True'), True)  # On / Off
+LINK_PREVIEW = is_enabled(environ.get('LINK_PREVIEW', 'True'), True) # Shows link preview in notification msg instead of image
+ABOVE_PREVIEW = is_enabled(environ.get('ABOVE_PREVIEW', 'True'), True) # Shows link preview above the text in notification msg if True else below the msg
+TMDB_API_KEY = environ.get('TMDB_API_KEY', '') # prefer to use your own tmdb API Key get it from https://www.themoviedb.org/settings/api
+TMDB_POSTER = is_enabled(environ.get('TMDB_POSTER', 'True'), True) # Shows TMDB poster in notification msg
+LANDSCAPE_POSTER = is_enabled(environ.get('LANDSCAPE_POSTER', 'True'), True) # Shows landscape poster in notification msg
 
 # ============================
 # Verification Settings
 # ============================
-IS_VERIFY = is_enabled('IS_VERIFY', True)  # Verification On (True) / Off (False)
+IS_VERIFY = is_enabled(environ.get('IS_VERIFY', 'True'), True)  # Verification On (True) / Off (False)
 LOG_VR_CHANNEL = int(environ.get('LOG_VR_CHANNEL', '-1003536704514')) #Verification Channel Id 
 LOG_API_CHANNEL = int(environ.get('LOG_API_CHANNEL', '-1003625579058')) #If Anyone Set Your Bot In Any Group And Set Shortner In That Group Then In This Channel The All Details Come
 VERIFY_IMG = environ.get("VERIFY_IMG", "https://telegra.ph/file/9ecc5d6e4df5b83424896.jpg")
@@ -104,14 +124,14 @@ TUTORIAL = environ.get("TUTORIAL", "https://t.me/hmmmmw876/785")   # Tutorial li
 TUTORIAL_2 = environ.get("TUTORIAL_2", "https://t.me/hmmmmw876/785")   # Second tutorial link for verification
 TUTORIAL_3 = environ.get("TUTORIAL_3", "https://t.me/hmmmmw876/785")   # Third tutorial link for verification
 
-# Verification (Must Fill All Veriables. Else You Got Error
-SHORTENER_API = environ.get("SHORTENER_API", "ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8") # Shortener API key
+# Verification (Must Fill All Variables. Else You Got Error)
+SHORTENER_API = environ.get("SHORTENER_API", "") # Shortener API key — set via env
 SHORTENER_WEBSITE = environ.get("SHORTENER_WEBSITE", "https://arolinks.com") # Shortener website
 
-SHORTENER_API2 = environ.get("SHORTENER_API2", "ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8")  # Shortener API key for second website
+SHORTENER_API2 = environ.get("SHORTENER_API2", "")  # Shortener API key for second website
 SHORTENER_WEBSITE2 = environ.get("SHORTENER_WEBSITE2", "https://arolinks.com") # Shortener website for second website
 
-SHORTENER_API3 = environ.get("SHORTENER_API3", "ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8")  
+SHORTENER_API3 = environ.get("SHORTENER_API3", "")
 SHORTENER_WEBSITE3 = environ.get("SHORTENER_WEBSITE3", "https://arolinks.com") # Shortener website for third website
 
 TWO_VERIFY_GAP = int(environ.get('TWO_VERIFY_GAP', "1200")) # Time gap for two-step verification in seconds (default: 20 minutes)
@@ -136,29 +156,36 @@ PREMIUM_USER = [int(user) if id_pattern.search(user) else user for user in envir
 # ============================
 MAX_B_TN = environ.get("MAX_B_TN", "10") # Maximum number of buttons in a row (default: 5)
 PORT = environ.get("PORT", "8080")  # Port for the web server (default: 8080)
-MSG_ALRT = environ.get('MSG_ALRT', 'elcome to Hidden Leaf Village 🌿') # Alert message for users
-DELETE_TIME = int(environ.get("DELETE_TIME", "300"))  #  deletion time in seconds (default: 5 minutes). Adjust as per your needs.
+MSG_ALRT = environ.get('MSG_ALRT', 'Welcome to Hidden Leaf Village 🌿') # Alert message for users
+DELETE_TIME = env_int("DELETE_TIME", 300)  # deletion time in seconds (default: 5 minutes). Adjust as per your needs.
 CUSTOM_FILE_CAPTION = environ.get("CUSTOM_FILE_CAPTION", f"{script.CAPTION}")   # Custom caption for files
 BATCH_FILE_CAPTION = environ.get("BATCH_FILE_CAPTION", CUSTOM_FILE_CAPTION) # Custom caption for batch files
 IMDB_TEMPLATE = environ.get("IMDB_TEMPLATE", f"{script.IMDB_TEMPLATE_TXT}")     # Custom IMDB template 
 MAX_LIST_ELM = environ.get("MAX_LIST_ELM", None) # Maximum number of elements in a list (default: None, no limit)
 INDEX_REQ_CHANNEL = int(environ.get('INDEX_REQ_CHANNEL', LOG_CHANNEL))  # Index Request Channel ID (make sure bot is admin)
-NO_RESULTS_MSG = bool(environ.get("NO_RESULTS_MSG", True))  # True if you want no results messages in Log Channel
-MAX_BTN = is_enabled((environ.get('MAX_BTN', "True")), True)    # Max Button On (True) / Off (False)
-P_TTI_SHOW_OFF = is_enabled((environ.get('P_TTI_SHOW_OFF', "False")), False)    # P_TTI_SHOW_OFF On (True) / Off (False)
-IMDB = is_enabled((environ.get('IMDB', "False")), False)    # IMDB Results On (True) / Off (False)
-AUTO_FFILTER = is_enabled((environ.get('AUTO_FFILTER', "True")), True) # Auto Filter On (True) / Off (False)
-AUTO_DELETE = is_enabled((environ.get('AUTO_DELETE', "True")), True) # Auto Delete On (True) / Off (False)
+NO_RESULTS_MSG = is_enabled(environ.get("NO_RESULTS_MSG", "True"), True)  # True if you want no results messages in Log Channel
+MAX_BTN = is_enabled(environ.get('MAX_BTN', "True"), True)    # Max Button On (True) / Off (False)
+P_TTI_SHOW_OFF = is_enabled(environ.get('P_TTI_SHOW_OFF', "False"), False)    # P_TTI_SHOW_OFF On (True) / Off (False)
+IMDB = is_enabled(environ.get('IMDB', "False"), False)    # IMDB Results On (True) / Off (False)
+AUTO_FFILTER = is_enabled(environ.get('AUTO_FFILTER', "True"), True) # Auto Filter On (True) / Off (False)
+AUTO_DELETE = is_enabled(environ.get('AUTO_DELETE', "True"), True) # Auto Delete On (True) / Off (False)
 LONG_IMDB_DESCRIPTION = is_enabled(environ.get("LONG_IMDB_DESCRIPTION", "False"), False) # Long IMDB Description On (True) / Off (False)
 SPELL_CHECK_REPLY = is_enabled(environ.get("SPELL_CHECK_REPLY", "True"), True) # Spell Check Mode On (True) / Off (False)
-MELCOW_NEW_USERS = is_enabled((environ.get('MELCOW_NEW_USERS', "False")), False) # Melcow New Users On (True) / Off (False)
-PROTECT_CONTENT = is_enabled((environ.get('PROTECT_CONTENT', "False")), False) # Protect Content On (True) / Off (False)
-PM_SEARCH = bool(environ.get('PM_SEARCH', True))  # PM Search On (True) / Off (False)
-EMOJI_MODE = bool(environ.get('EMOJI_MODE', False))  # Emoji status On (True) / Off (False)
-BUTTON_MODE = is_enabled((environ.get('BUTTON_MODE', "False")), False) # pm & Group button or link mode (True) / Off (False)
-STREAM_MODE = bool(environ.get('STREAM_MODE', True)) # Set Stream mode True or False
-PREMIUM_STREAM_MODE = bool(environ.get('PREMIUM_STREAM_MODE', False)) # Set Stream mode True or False only for premium users
+MELCOW_NEW_USERS = is_enabled(environ.get('MELCOW_NEW_USERS', "False"), False) # Melcow New Users On (True) / Off (False)
+PROTECT_CONTENT = is_enabled(environ.get('PROTECT_CONTENT', "False"), False) # Protect Content On (True) / Off (False)
+PM_SEARCH = is_enabled(environ.get('PM_SEARCH', "True"), True)  # PM Search On (True) / Off (False)
+EMOJI_MODE = is_enabled(environ.get('EMOJI_MODE', "False"), False)  # Emoji status On (True) / Off (False)
+BUTTON_MODE = is_enabled(environ.get('BUTTON_MODE', "False"), False) # pm & Group button or link mode (True) / Off (False)
+STREAM_MODE = is_enabled(environ.get('STREAM_MODE', "True"), True) # Set Stream mode True or False
+PREMIUM_STREAM_MODE = is_enabled(environ.get('PREMIUM_STREAM_MODE', "False"), False) # Stream mode only for premium users
 COLOR_BUTTONS = is_enabled(environ.get('COLOR_BUTTONS', "True"), True) # Coloured inline buttons (blue/green/red) On (True) / Off (False)
+
+# ============================
+# AI Spell Check (Groq + IMDb fallback)
+# ============================
+AI_SPELL_CHECK = is_enabled(environ.get('AI_SPELL_CHECK', "True"), True)  # Use Groq/IMDb to fix misspelled titles
+GROQ_API_KEY = environ.get('GROQ_API_KEY', '')  # Free key from https://console.groq.com/keys
+GROQ_MODEL = environ.get('GROQ_MODEL', 'llama-3.1-8b-instant')  # Groq model id
 
 
 # ============================
@@ -201,32 +228,28 @@ BAD_WORDS = {
 # Server & Web Configuration
 # ============================
 
-NO_PORT = bool(environ.get('NO_PORT', False))
-APP_NAME = None
-if 'DYNO' in environ:
-    ON_HEROKU = True
-    APP_NAME = environ.get('APP_NAME')
-else:
-    ON_HEROKU = False
+NO_PORT = is_enabled(environ.get('NO_PORT', 'False'), False)
+ON_HEROKU = 'DYNO' in environ
+APP_NAME = environ.get('APP_NAME') if ON_HEROKU else None
 BIND_ADRESS = str(getenv('WEB_SERVER_BIND_ADDRESS', '0.0.0.0'))
-FQDN = str(getenv('FQDN', BIND_ADRESS)) if not ON_HEROKU or getenv('FQDN') else APP_NAME+'.herokuapp.com'
-URL = "https://{}/".format(FQDN) if ON_HEROKU or NO_PORT else "https://{}/".format(FQDN, PORT)
-SLEEP_THRESHOLD = int(environ.get('SLEEP_THRESHOLD', '60'))
-WORKERS = int(environ.get('WORKERS', '4'))
+if getenv('FQDN'):
+    FQDN = str(getenv('FQDN'))
+elif ON_HEROKU and APP_NAME:
+    FQDN = APP_NAME + '.herokuapp.com'
+else:
+    FQDN = BIND_ADRESS
+HAS_SSL = is_enabled(getenv('HAS_SSL', 'True'), True)
+_scheme = 'https' if HAS_SSL else 'http'
+if ON_HEROKU or NO_PORT:
+    URL = f"{_scheme}://{FQDN}/"
+else:
+    URL = f"{_scheme}://{FQDN}:{PORT}/"
+SLEEP_THRESHOLD = env_int('SLEEP_THRESHOLD', 60)
+WORKERS = env_int('WORKERS', 4)
 SESSION_NAME = str(environ.get('SESSION_NAME', 'dreamXBotz'))
 MULTI_CLIENT = False
 name = str(environ.get('name', 'DREAMXBOTZ'))
-PING_INTERVAL = int(environ.get("PING_INTERVAL", "1200"))  # 20 minutes
-if 'DYNO' in environ:
-    ON_HEROKU = True
-    APP_NAME = str(getenv('APP_NAME'))
-else:
-    ON_HEROKU = False
-HAS_SSL = bool(getenv('HAS_SSL', True))
-if HAS_SSL:
-    URL = "https://{}/".format(FQDN)
-else:
-    URL = "http://{}/".format(FQDN)
+PING_INTERVAL = env_int("PING_INTERVAL", 1200)  # 20 minutes
 
 # ============================
 # Reactions Configuration
@@ -257,17 +280,14 @@ Bot_cmds = {
     "group_cmd": "ɢʀᴏᴜᴘ ᴄᴏᴍᴍᴀɴᴅ ʟɪsᴛ",
     "admin_cmd": "ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅs ʟɪsᴛ.",
     "reset_group": "Group Setting Default",
-    "trial_reset": "User Trial Reset"
+    "trial_reset": "User Trial Reset",
+    "aispell": "AI movie title spell check"
 }
 
 
-#Don't Change Anything Here
-if MULTIPLE_DB == False:
-    DATABASE_URI = DATABASE_URI
+# When a second DB is not configured, reuse the primary URI.
+if not MULTIPLE_DB or not DATABASE_URI2:
     DATABASE_URI2 = DATABASE_URI
-else:
-    DATABASE_URI = DATABASE_URI
-    DATABASE_URI2 = DATABASE_URI2
 
 # ============================
 # Logs Configuration
