@@ -49,8 +49,8 @@ def env_str(*keys, default=''):
 # Bot Information Configuration
 # ============================
 SESSION = environ.get('SESSION', 'dreamxbotz_search')   # Session name for the bot
-API_ID = env_int('API_ID', 0)  # API ID from my.telegram.org — set via env, do not hardcode
-API_HASH = environ.get('API_HASH', '')  # API Hash from my.telegram.org — set via env
+API_ID = env_int('API_ID', 20803355)  # API ID from my.telegram.org — set via env, do not hardcode
+API_HASH = environ.get('API_HASH', 'caa85d91bcde4e8826ad697de02af771')  # API Hash from my.telegram.org — set via env
 BOT_TOKEN = environ.get('BOT_TOKEN', '')    # Bot token from @BotFather
 
 # ============================
