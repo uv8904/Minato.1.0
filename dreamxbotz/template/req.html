@@ -3,206 +3,2057 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dreamcinezone  | {{file_name}}</title>
-    <link rel="stylesheet" href="https://unpkg.com/sheryjs/dist/Shery.css" />
-    <link rel="stylesheet" href="https://biisal.github.io/Resources/StreamCSS.css">
-    <link rel="stylesheet" href="https://biisal.github.io/Resources/playerCss.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#07080c">
+    <meta name="description" content="Stream {{ file_name | e }} online on dreamcinezone — custom player, resume support and direct download.">
+    <title>dreamcinezone · {{ file_name | e }}</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"
-        integrity="sha512-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKxLhei6S9CQXFEbbKuqLg0DA=="
-        crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
 
+    <!-- Stream UI · dreamxbotz · earlier page layout by @biisal -->
+    <style>
+        :root {
+            --bg: #07080c;
+            --panel: #101320;
+            --panel-2: #161a2a;
+            --line: rgba(255, 255, 255, 0.09);
+            --line-2: rgba(255, 255, 255, 0.05);
+            --text: #eef0f7;
+            --muted: #9aa1b9;
+            --brand: #7c5cff;
+            --brand-2: #22d3ee;
+            --accent: #f472b6;
+            --ok: #34d399;
+            --warn: #fbbf24;
+            --bad: #f87171;
+            --radius: 18px;
+            --radius-sm: 12px;
+            --shadow: 0 28px 70px -30px rgba(0, 0, 0, 0.9);
+            --grad: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+            --font-display: "Sora", "Segoe UI", system-ui, sans-serif;
+            --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100%;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font-body);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(1100px 620px at 12% -12%, rgba(124, 92, 255, 0.24), transparent 62%),
+                radial-gradient(900px 520px at 92% -6%, rgba(34, 211, 238, 0.16), transparent 58%);
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        button {
+            font: inherit;
+            color: inherit;
+            cursor: pointer;
+        }
+
+        .wrap {
+            position: relative;
+            z-index: 1;
+            width: min(1180px, 100% - 32px);
+            margin-inline: auto;
+        }
+
+        /* ---------- top bar ---------- */
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 12px min(40px, 4vw);
+            background: rgba(7, 8, 12, 0.72);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--line-2);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .brand-mark {
+            display: grid;
+            place-items: center;
+            width: 40px;
+            height: 40px;
+            flex: none;
+            border-radius: 13px;
+            background: var(--grad);
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+            color: #06070c;
+            box-shadow: 0 10px 26px -12px rgba(124, 92, 255, 0.9);
+        }
+
+        .brand-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.15;
+            font-family: var(--font-display);
+            font-weight: 600;
+            letter-spacing: -0.2px;
+        }
+
+        .brand-text small {
+            font-family: var(--font-body);
+            font-weight: 500;
+            font-size: 11px;
+            letter-spacing: 2.4px;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: none;
+        }
+
+        /* ---------- buttons ---------- */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 11px 16px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: var(--panel-2);
+            font-weight: 600;
+            font-size: 14px;
+            transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, opacity 0.16s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            border-color: rgba(255, 255, 255, 0.22);
+        }
+
+        .btn:active {
+            transform: translateY(0) scale(0.985);
+        }
+
+        .btn svg {
+            width: 17px;
+            height: 17px;
+            flex: none;
+        }
+
+        .btn-primary {
+            background: var(--grad);
+            border-color: transparent;
+            color: #06070c;
+        }
+
+        .btn-primary:hover {
+            border-color: transparent;
+            filter: brightness(1.06);
+        }
+
+        .btn-ghost {
+            background: transparent;
+        }
+
+        .btn-block {
+            width: 100%;
+        }
+
+        /* ---------- layout ---------- */
+        .stage {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 340px;
+            gap: 22px;
+            padding: 26px 0 10px;
+            align-items: start;
+        }
+
+        /* ---------- player ---------- */
+        .player {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #000;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            outline: none;
+            isolation: isolate;
+        }
+
+        .player.is-fullscreen {
+            border-radius: 0;
+            border-color: transparent;
+        }
+
+        .player video {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            object-fit: contain;
+        }
+
+        .player-ui {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background: linear-gradient(to bottom, rgba(4, 5, 9, 0.72) 0%, transparent 26%, transparent 56%, rgba(4, 5, 9, 0.9) 100%);
+            opacity: 1;
+            transition: opacity 0.24s ease;
+        }
+
+        .player.is-playing.hide-ui .player-ui {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .player-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 14px 16px 0;
+        }
+
+        .now-playing {
+            min-width: 0;
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .live-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex: none;
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+        }
+
+        .live-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--ok);
+            box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.2);
+        }
+
+        .big-play {
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            display: grid;
+            place-items: center;
+            background: radial-gradient(circle at center, rgba(6, 7, 12, 0.35), rgba(6, 7, 12, 0.72));
+            border: 0;
+            padding: 0;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+        }
+
+        .player.is-playing .big-play {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .big-play span {
+            display: grid;
+            place-items: center;
+            width: 82px;
+            height: 82px;
+            border-radius: 50%;
+            background: var(--grad);
+            color: #06070c;
+            box-shadow: 0 20px 44px -16px rgba(124, 92, 255, 0.95);
+            transition: transform 0.18s ease;
+        }
+
+        .big-play:hover span {
+            transform: scale(1.07);
+        }
+
+        .big-play svg {
+            width: 30px;
+            height: 30px;
+            margin-left: 4px;
+        }
+
+        .spinner {
+            position: absolute;
+            inset: 0;
+            z-index: 4;
+            display: none;
+            place-items: center;
+            background: rgba(6, 7, 12, 0.45);
+        }
+
+        .player.is-buffering .spinner {
+            display: grid;
+        }
+
+        .spinner i {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.22);
+            border-top-color: var(--brand-2);
+            animation: spin 0.9s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .player-error {
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+            display: grid;
+            place-items: center;
+            padding: 20px;
+            text-align: center;
+            background: rgba(6, 7, 12, 0.9);
+        }
+
+        .player-error[hidden] {
+            display: none;
+        }
+
+        .player-error p {
+            margin: 0 0 14px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .flash {
+            position: absolute;
+            top: 50%;
+            z-index: 4;
+            display: grid;
+            place-items: center;
+            width: 110px;
+            height: 110px;
+            margin-top: -55px;
+            border-radius: 50%;
+            background: rgba(8, 9, 15, 0.55);
+            font-weight: 700;
+            font-size: 13px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.18s ease;
+        }
+
+        .flash.on {
+            opacity: 1;
+        }
+
+        .flash.left {
+            left: 12%;
+        }
+
+        .flash.right {
+            right: 12%;
+        }
+
+        /* ---------- controls ---------- */
+        .seek {
+            position: relative;
+            padding: 14px 16px 6px;
+            cursor: pointer;
+            touch-action: none;
+        }
+
+        .seek-track {
+            position: relative;
+            height: 5px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.2);
+            transition: height 0.16s ease;
+        }
+
+        .seek:hover .seek-track,
+        .seek.is-dragging .seek-track {
+            height: 8px;
+        }
+
+        .seek-buffered,
+        .seek-played {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            border-radius: 999px;
+        }
+
+        .seek-buffered {
+            width: 0;
+            background: rgba(255, 255, 255, 0.28);
+        }
+
+        .seek-played {
+            width: 0;
+            background: var(--grad);
+        }
+
+        .seek-thumb {
+            position: absolute;
+            right: -7px;
+            top: 50%;
+            width: 14px;
+            height: 14px;
+            margin-top: -7px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+            opacity: 0;
+            transform: scale(0.6);
+            transition: opacity 0.16s ease, transform 0.16s ease;
+        }
+
+        .seek:hover .seek-thumb,
+        .seek.is-dragging .seek-thumb {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .seek-tip {
+            position: absolute;
+            top: -6px;
+            z-index: 2;
+            padding: 4px 8px;
+            border-radius: 7px;
+            background: rgba(8, 9, 15, 0.92);
+            border: 1px solid var(--line);
+            font-size: 12px;
+            font-variant-numeric: tabular-nums;
+            transform: translate(-50%, -100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.14s ease;
+        }
+
+        .seek:hover .seek-tip {
+            opacity: 1;
+        }
+
+        .ctrl-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 0 10px 12px;
+        }
+
+        .ctrl-group {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .ctrl-btn {
+            display: grid;
+            place-items: center;
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            border: 0;
+            border-radius: 11px;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.92);
+            transition: background 0.16s ease, transform 0.16s ease;
+        }
+
+        .ctrl-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .ctrl-btn:active {
+            transform: scale(0.94);
+        }
+
+        .ctrl-btn svg {
+            width: 21px;
+            height: 21px;
+        }
+
+        .ctrl-btn.wide {
+            width: auto;
+            padding: 0 12px;
+            font-size: 13px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .time {
+            margin-left: 6px;
+            font-size: 12.5px;
+            font-variant-numeric: tabular-nums;
+            color: rgba(255, 255, 255, 0.82);
+        }
+
+        .time b {
+            font-weight: 600;
+        }
+
+        .vol {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .vol input {
+            width: 0;
+            height: 4px;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.3);
+            -webkit-appearance: none;
+            appearance: none;
+            opacity: 0;
+            transition: width 0.2s ease, opacity 0.2s ease;
+        }
+
+        .vol:hover input,
+        .vol input:focus {
+            width: 82px;
+            opacity: 1;
+            outline: none;
+        }
+
+        .vol input::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #fff;
+        }
+
+        .vol input::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            border: 0;
+            border-radius: 50%;
+            background: #fff;
+        }
+
+        .rate-menu {
+            position: absolute;
+            right: 10px;
+            bottom: 62px;
+            z-index: 6;
+            display: none;
+            min-width: 112px;
+            padding: 6px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: rgba(10, 12, 20, 0.96);
+            box-shadow: var(--shadow);
+        }
+
+        .rate-menu.on {
+            display: block;
+        }
+
+        .rate-menu button {
+            display: block;
+            width: 100%;
+            padding: 8px 10px;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .rate-menu button:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .rate-menu button.active {
+            color: var(--brand-2);
+        }
+
+        /* ---------- side panel ---------- */
+        .side {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .card {
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: linear-gradient(180deg, rgba(22, 26, 42, 0.86), rgba(16, 19, 32, 0.86));
+            padding: 18px;
+        }
+
+        .side-title {
+            margin: 0 0 4px;
+            font-family: var(--font-display);
+            font-size: 17px;
+            font-weight: 600;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+
+        .side-sub {
+            margin: 0 0 14px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            margin-bottom: 16px;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            font-size: 12px;
+            font-weight: 600;
+            color: #d7dbe9;
+        }
+
+        .chip b {
+            color: var(--brand-2);
+            font-weight: 700;
+        }
+
+        .side-actions {
+            display: grid;
+            gap: 9px;
+        }
+
+        .ext-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 9px;
+        }
+
+        .ext {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            padding: 11px 12px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            font-size: 13px;
+            font-weight: 600;
+            text-align: left;
+        }
+
+        .ext img {
+            width: 20px;
+            height: 20px;
+            object-fit: contain;
+        }
+
+        .ext:hover {
+            border-color: rgba(124, 92, 255, 0.6);
+            background: rgba(124, 92, 255, 0.12);
+        }
+
+        .meta-list {
+            margin: 0;
+            display: grid;
+            gap: 10px;
+        }
+
+        .meta-list div {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 13px;
+        }
+
+        .meta-list dt {
+            color: var(--muted);
+            flex: none;
+        }
+
+        .meta-list dd {
+            margin: 0;
+            text-align: right;
+            font-weight: 600;
+            word-break: break-all;
+        }
+
+        .section-head {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 16px;
+            margin: 46px 0 18px;
+        }
+
+        .section-head h2 {
+            margin: 0;
+            font-family: var(--font-display);
+            font-size: clamp(20px, 3.4vw, 27px);
+            font-weight: 600;
+            letter-spacing: -0.4px;
+        }
+
+        .section-head h2 span {
+            background: var(--grad);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .section-head p {
+            margin: 6px 0 0;
+            font-size: 13.5px;
+            color: var(--muted);
+        }
+
+        /* ---------- ranked trending ---------- */
+        .trending {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+            gap: 12px;
+            counter-reset: rank;
+        }
+
+        .trend {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            background: linear-gradient(180deg, rgba(22, 26, 42, 0.7), rgba(14, 17, 28, 0.7));
+            text-align: left;
+            transition: transform 0.18s ease, border-color 0.18s ease;
+        }
+
+        .trend:hover {
+            transform: translateY(-3px);
+            border-color: rgba(124, 92, 255, 0.55);
+        }
+
+        .trend-rank {
+            flex: none;
+            width: 38px;
+            font-family: var(--font-display);
+            font-size: 26px;
+            font-weight: 700;
+            line-height: 1;
+            color: transparent;
+            -webkit-text-stroke: 1.4px rgba(255, 255, 255, 0.45);
+            text-align: center;
+        }
+
+        .trend:nth-child(1) .trend-rank,
+        .trend:nth-child(2) .trend-rank,
+        .trend:nth-child(3) .trend-rank {
+            color: var(--brand-2);
+            -webkit-text-stroke: 0;
+        }
+
+        .trend-art {
+            flex: none;
+            width: 52px;
+            height: 74px;
+            border-radius: 9px;
+            background: linear-gradient(150deg, hsl(var(--h1) 78% 52%), hsl(var(--h2) 72% 34%));
+            box-shadow: 0 12px 26px -14px rgba(0, 0, 0, 0.9);
+        }
+
+        .trend-body {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .trend-body strong {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .trend-body small {
+            display: block;
+            margin: 2px 0 8px;
+            font-size: 11.5px;
+            color: var(--muted);
+        }
+
+        .heat {
+            position: relative;
+            height: 4px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.12);
+            overflow: hidden;
+        }
+
+        .heat i {
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: var(--heat);
+            border-radius: 999px;
+            background: var(--grad);
+        }
+
+        .trend-arrow {
+            flex: none;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .up {
+            color: var(--ok);
+        }
+
+        .down {
+            color: var(--bad);
+        }
+
+        .flat {
+            color: var(--muted);
+        }
+
+        /* ---------- poster wall ---------- */
+        .wall {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
+            gap: 16px;
+        }
+
+        .poster {
+            position: relative;
+            border: 0;
+            padding: 0;
+            border-radius: 14px;
+            background: transparent;
+            text-align: left;
+            transition: transform 0.2s ease;
+        }
+
+        .poster:hover {
+            transform: translateY(-6px);
+        }
+
+        .poster-art {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            gap: 4px;
+            aspect-ratio: 2 / 3;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            overflow: hidden;
+            background: linear-gradient(155deg, hsl(var(--h1) 80% 46%), hsl(var(--h2) 70% 20%) 72%);
+            box-shadow: 0 20px 40px -26px rgba(0, 0, 0, 0.95);
+        }
+
+        .poster-art::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.07) 0 2px, transparent 2px 9px),
+                linear-gradient(to top, rgba(4, 5, 9, 0.82), transparent 62%);
+        }
+
+        .poster-art span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .poster-art .p-title {
+            font-family: var(--font-display);
+            font-size: 15px;
+            font-weight: 600;
+            line-height: 1.25;
+        }
+
+        .poster-art .p-sub {
+            font-size: 11px;
+            letter-spacing: 1.6px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .poster:hover .poster-art {
+            border-color: rgba(34, 211, 238, 0.55);
+        }
+
+        .poster-note {
+            display: block;
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        /* ---------- toast ---------- */
+        .toast {
+            position: fixed;
+            left: 50%;
+            bottom: 26px;
+            z-index: 60;
+            padding: 12px 18px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: rgba(12, 14, 24, 0.95);
+            box-shadow: var(--shadow);
+            font-size: 13.5px;
+            font-weight: 600;
+            transform: translate(-50%, 24px);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 0.22s ease, opacity 0.22s ease;
+        }
+
+        .toast.on {
+            transform: translate(-50%, 0);
+            opacity: 1;
+        }
+
+        /* ---------- footer ---------- */
+        .footer {
+            margin-top: 56px;
+            border-top: 1px solid var(--line-2);
+            background: rgba(6, 7, 12, 0.6);
+        }
+
+        .footer .wrap {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 26px 0 32px;
+        }
+
+        .footer p {
+            margin: 0;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .footer a {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 10px;
+        }
+
+        @media (max-width: 940px) {
+            .stage {
+                grid-template-columns: minmax(0, 1fr);
+                padding-top: 18px;
+            }
+
+            .player {
+                border-radius: 14px;
+            }
+        }
+
+        @media (max-width: 560px) {
+            .brand-text {
+                display: none;
+            }
+
+            .topbar-actions .btn span {
+                display: none;
+            }
+
+            .topbar-actions .btn {
+                padding: 11px;
+            }
+
+            .ctrl-btn.wide {
+                display: none;
+            }
+
+            .time {
+                font-size: 11.5px;
+            }
+
+            .flash {
+                width: 88px;
+                height: 88px;
+                margin-top: -44px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
 </head>
 
 <body>
-    <nav>
-        <div class="nleft">
-            <a href="https://t.me/dreamcinezone">
-                <!-- if u are trying to change the header name please remove the title text from bottom line  -->
-                <h3 id="heading" style="z-index: 100;" class="magnet">dreamcinezone</h3>
+    <script type="application/json" id="dx-file">{{ {'name': file_name, 'url': file_url, 'size': file_size, 'uid': file_unique_id} | tojson }}</script>
+
+    <header class="topbar">
+        <a class="brand" href="https://t.me/dreamcinezone">
+            <span class="brand-mark">DC</span>
+            <span class="brand-text">dreamcinezone<small>stream</small></span>
+        </a>
+        <div class="topbar-actions">
+            <button class="btn btn-ghost" id="copyLink" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+                    <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+                </svg>
+                <span>Copy link</span>
+            </button>
+            <a class="btn btn-primary" id="topDownload" href="{{ file_url | e }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <path d="M12 3v12" />
+                    <path d="m7 11 5 5 5-5" />
+                    <path d="M4 21h16" />
+                </svg>
+                <span>Download</span>
             </a>
         </div>
-        <div class="nryt">
-            <a class="home-btn magnet" href="#main" onclick="toggleWidthnav(this)">Home</a>
+    </header>
 
-            <a href="#sec1" class="about-btn magnet" onclick="toggleWidthnav(this)">About</a>
-        </div>
-    </nav>
-    <center>
-        <div class="about-nav">
-            <a href="#sec1" class="wlcm magnet" onclick="toggleWidth(this)">Welcome</a>
-            <a href="#sec2" class="abt-chnl magnet" onclick="toggleWidth(this)">Channels</a>
-            <a href="#sec3" class="magnet bot-btn" onclick="toggleWidth(this) , bot_btn_clicked()">Bots</a>
-            <a href="#sec4" class="magnet contact-btn" onclick="toggleWidth(this)">Let's Talk</a>
-        </div>
-    </center>
-    <!-- this code is written by @biisal tg:biisal-files  -->
-    <!-- stealing credit doesn't make you developer..so try to give full credit to the developer 😊 u will not loose anything for giving proper credit.   -->
+    <main class="wrap">
+        <section class="stage">
+            <div class="player" id="player" tabindex="0" aria-label="Video player">
+                <video id="video" src="{{ file_url | e }}" controls playsinline preload="metadata"></video>
 
-    <div class="outer">
-        <div class="inner">
-            <div class="main" id="main">
-                <video id="player" class="player" src="{{file_url}}" type="video/mp4" playsinline controls
-                    width="100%"></video>
-                <div class="player"></div>
-                <div class="file-name">
-                    <h4>File name : </h4>
-                    <br>
-                    <p id="myDiv">{{file_name}}</p>
-                </div>
-                <div class="downloadBtn">
-                    <button class="magnet" onclick="vlc_player()"><img src="https://i.postimg.cc/15TQ4y7B/vlc.png"
-                            alt="">watch in VLC PLAYER</button>
-                    <button class="magnet" onclick="mx_player()"><img src="https://i.postimg.cc/sx4Msv4T/mx.png"
-                            alt="">watch in MX PLAYER</button>
-                    <button class="magnet" onclick="playit_player()"><img src="https://i.postimg.cc/RVGWYJFF/playit.png"
-                            alt="">watch in PLAYit
-                        PLAYER</button>
-                    <button class="magnet" onclick="km_player()"><img src="https://i.postimg.cc/wT9tFQ9Z/km.png"
-                            alt="">watch in KM PLAYER</button>
-                    <button class="magnet" onclick="s_player()"><img src="https://i.postimg.cc/XYJr6NGg/s.png"
-                            alt="">watch in S PLAYER</button>
-                    <button class="magnet" onclick="hd_player()"><img src="https://i.postimg.cc/rFT43LNh/hd.png"
-                            alt="">watch in HD
-                        PLAYER(4K)</button>
-                    <button class="magnet" onclick="bisalDownload()"><img style="height: 35px;"
-                            src="https://i.postimg.cc/Zncc9YLq/Pngtree-download-icon-3581467.png" alt="">download video
-                    </button>
-                </div>
+                <div class="player-ui">
+                    <div class="player-top">
+                        <span class="now-playing" id="nowPlaying">{{ file_name | e }}</span>
+                        <span class="live-chip"><i class="live-dot"></i>Streaming</span>
+                    </div>
 
-            </div>
-            <div class="abt">
-                <div class="about">
-                    <div class="about-dets">
-                        <div class="abt-sec" id="sec1" style="padding: 160px 30px;">
-                            <h1 style="text-align: center;">WELCOME TO OUR <Span>STREAMING</Span> PAGE</h1>
-                            <p style="text-align: center; line-height: 2;word-spacing: 2px;  letter-spacing: 0.8px;">
-                                We're
-                                thrilled to have <span>you</span> here.
-                                Get ready for an
-                                amazing <span>experience</span>
-                                filled with <span>entertainment</span>, <span>fun</span>, and <span>surprises</span>.
-                                Grab
-                                your snacks, sit back, and <span>enjoy</span> the show!
-                            </p>
+                    <div class="seek" id="seek" role="slider" aria-label="Seek" aria-valuemin="0" aria-valuemax="100"
+                        aria-valuenow="0" tabindex="-1">
+                        <div class="seek-track">
+                            <div class="seek-buffered" id="seekBuffered"></div>
+                            <div class="seek-played" id="seekPlayed"><span class="seek-thumb"></span></div>
                         </div>
-                        <div class="abt-sec" id="sec2">
-                            <h1>OUR ALL <span>CHANNELS</span> LIST</h1>
-                            <div class="links chnl-link">
-                                <a class="magnet" href="https://t.me/dreamcinezone"><button>Update Channel </button></a>
-                                <a class="magnet" href="https://t.me/dreamcinezone"><button> Movie Request Group </button></a>
-                                <a class="magnet" href="https://youtube.com/"><button>YouTube Channel </button></a>
-                            </div>
-                        </div>
-                        <div class="abt-sec" id="sec3">
-                            <h1>OUR ALL <span>BOTS</span> LIST</h1>
-                            <div class="links bot-link">
-                                <a class="magnet" href="https://t.me/dreamcinezone"><button>Chat Gpt Bot
-                                        </button></a>
-                                <a class="magnet" href="https://t.me/"><button>reaction Bot
-                                        </button></a>
-                            </div>
-                        </div>
-                        <div class="abt-sec" id="sec4">
-                            <!-- this code is written by @biisal tg:biisal-files  -->
-                            <!-- stealing credit doesn't make you developer..so try to give full credit to the developer 😊 u will not loose anything for giving proper credit.   -->
+                        <div class="seek-tip" id="seekTip">0:00</div>
+                    </div>
 
-                            <p style="text-align: center;">We Can Tal'k For Your Support And You Can Report Through
-                                Telegram</p>
-                            <div class="links contact">
-                                <a href="https://t.me/Contact_dreamcinezone_bot"><button>Contact</button></a>
-                            </div>
+                    <div class="ctrl-row">
+                        <div class="ctrl-group">
+                            <button class="ctrl-btn" id="btnPlay" type="button" aria-label="Play or pause">
+                                <svg id="iconPlay" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M8 5.2v13.6a1 1 0 0 0 1.5.9l11-6.8a1 1 0 0 0 0-1.8l-11-6.8A1 1 0 0 0 8 5.2Z" />
+                                </svg>
+                                <svg id="iconPause" viewBox="0 0 24 24" fill="currentColor" style="display:none">
+                                    <path d="M7 4h3.4v16H7zM13.6 4H17v16h-3.4z" />
+                                </svg>
+                            </button>
+                            <button class="ctrl-btn" id="btnBack" type="button" aria-label="Back 10 seconds">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M11 5 6 9l5 4" />
+                                    <path d="M6 9h6a6 6 0 1 1 0 12H8" />
+                                </svg>
+                            </button>
+                            <button class="ctrl-btn" id="btnFwd" type="button" aria-label="Forward 10 seconds">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="m13 5 5 4-5 4" />
+                                    <path d="M18 9h-6a6 6 0 1 0 0 12h4" />
+                                </svg>
+                            </button>
+                            <span class="vol">
+                                <button class="ctrl-btn" id="btnMute" type="button" aria-label="Mute">
+                                    <svg id="iconVol" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M11 5 6 9H3v6h3l5 4z" />
+                                        <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                                        <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+                                    </svg>
+                                    <svg id="iconMuted" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                        style="display:none">
+                                        <path d="M11 5 6 9H3v6h3l5 4z" />
+                                        <path d="m16 9 5 6M21 9l-5 6" />
+                                    </svg>
+                                </button>
+                                <input id="volume" type="range" min="0" max="100" value="100" aria-label="Volume">
+                            </span>
+                            <span class="time"><b id="tCurrent">0:00</b> / <span id="tDuration">0:00</span></span>
+                        </div>
+
+                        <div class="ctrl-group">
+                            <button class="ctrl-btn wide" id="btnRate" type="button" aria-label="Playback speed">1x</button>
+                            <button class="ctrl-btn" id="btnPip" type="button" aria-label="Picture in picture">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                                    <rect x="12" y="11" width="7" height="6" rx="1" fill="currentColor" stroke="none" />
+                                </svg>
+                            </button>
+                            <button class="ctrl-btn" id="btnFull" type="button" aria-label="Fullscreen">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M4 9V4h5M20 15v5h-5M15 4h5v5M9 20H4v-5" />
+                                </svg>
+                            </button>
                         </div>
                     </div>
                 </div>
+
+                <div class="rate-menu" id="rateMenu"></div>
+
+                <button class="big-play" id="bigPlay" type="button" aria-label="Play">
+                    <span>
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8 5.2v13.6a1 1 0 0 0 1.5.9l11-6.8a1 1 0 0 0 0-1.8l-11-6.8A1 1 0 0 0 8 5.2Z" />
+                        </svg>
+                    </span>
+                </button>
+
+                <div class="spinner" id="spinner"><i></i></div>
+                <div class="flash" id="flash"></div>
+                <div class="player-error" id="playerError" hidden>
+                    <div>
+                        <p id="errorText">Playback stopped. The stream may still be warming up.</p>
+                        <button class="btn btn-primary" id="btnRetry" type="button">Retry playback</button>
+                    </div>
+                </div>
+            </div>
+
+            <aside class="side">
+                <div class="card">
+                    <h1 class="side-title">{{ file_name | e }}</h1>
+                    <p class="side-sub">Ready to stream · {{ file_size | e }}</p>
+                    <div class="chips" id="chips"></div>
+                    <div class="side-actions">
+                        <a class="btn btn-primary btn-block" href="{{ file_url | e }}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 3v12" />
+                                <path d="m7 11 5 5 5-5" />
+                                <path d="M4 21h16" />
+                            </svg>
+                            Download file
+                        </a>
+                        <a class="btn btn-block" href="https://t.me/dreamcinezone">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M21.9 4.3 18.8 19c-.2 1-.9 1.3-1.7.8l-4.6-3.4-2.2 2.1c-.3.3-.5.5-1 .5l.3-4.6 8.4-7.6c.4-.3-.1-.5-.6-.2L7.1 12.8l-4.5-1.4c-1-.3-1-1 .2-1.4l17.6-6.8c.8-.3 1.5.2 1.5 1.1Z" />
+                            </svg>
+                            Join the channel
+                        </a>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <p class="side-sub" style="margin-bottom:10px">Or open in an external player</p>
+                    <div class="ext-grid" id="extGrid"></div>
+                </div>
+
+                <div class="card">
+                    <dl class="meta-list" id="metaList"></dl>
+                </div>
+            </aside>
+        </section>
+
+        <section id="trendingSection">
+            <div class="section-head">
+                <div>
+                    <h2>Ranked <span>trending</span></h2>
+                    <p>What the dreamcinezone crowd is watching this week.</p>
+                </div>
+            </div>
+            <div class="trending" id="trending"></div>
+        </section>
+
+        <section id="wallSection">
+            <div class="section-head">
+                <div>
+                    <h2>Poster <span>wall</span></h2>
+                    <p>Tap a tile to copy its name, then drop it in the request group.</p>
+                </div>
+            </div>
+            <div class="wall" id="wall"></div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="wrap">
+            <p>© <span id="year">2024</span> <a href="https://t.me/dreamcinezone">dreamcinezone</a> · all rights reserved.</p>
+            <div class="footer-links">
+                <a class="btn btn-ghost" href="https://t.me/dreamcinezone">Update channel</a>
+                <a class="btn btn-ghost" href="https://t.me/Contact_dreamcinezone_bot">Support</a>
             </div>
         </div>
-        <footer>
-            <div class="mid">
-                <h1 class="mid-text">VISIT <a href="#sec3" onclick="bot_btn_clicked()"><span>OUR BOTS LIST</span></a>
-                    FOR
-                    MORE
-                    INFO</h1>
-            </div>
+    </footer>
 
-            <div class="last-text">
-                <p style="font-weight: 500;">
-                    Welcome To Our Online Streaming Platform! Our Website Allows Users To Generate Streamable Links For
-                    Various Files Using Telegram Bots. Please Note That We Are Not Responsible For The Content Shared Or
-                    Streamed Through Our Service. Users Are Encouraged To Respect Copyright Laws And Adhere To Our
-                    Community
-                    Guidelines. Enjoy Easy, Hassle-Free File Streaming.
-                </p>
-            </div>
-            <center>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-                <div class="movie-cont">
-                    <a href="https://t.me/+PA8OPL2Zglk3MDM1">
-                        <div class="movieSug">
-                            <div class="movieDets">
+    <script>
+        (function () {
+            "use strict";
 
-                            </div>
-                            <div class="movieimg">
-                                <img src="">
-                            </div>
-                        </div>
-                    </a>
-                    <div class="low-width-movie-dets">
-                        <div class="movieStsBar">
-                            <div class="movieDets-mini">
+            /* ------------------------------------------------------------------
+             * File payload injected by render_template.py
+             * (file_name, file_url, file_size, file_unique_id).
+             * ------------------------------------------------------------------ */
+            var payload = document.getElementById("dx-file");
+            var FILE = {};
+            try {
+                FILE = JSON.parse(payload.textContent || "{}");
+            } catch (err) {
+                FILE = {};
+            }
 
-                            </div>
-                        </div>
-                    </div>
-                    <button class="ranMovBtn" onclick="getDets()">Get More Movies Suggestion</button>
-                </div>
+            var RESUME_KEY = "dx:resume:" + (FILE.uid || "unknown");
+            var VOLUME_KEY = "dx:volume";
 
-            </center>
-            <!-- this code is written by @biisal tg:biisal-files  -->
-            <!-- stealing credit doesn't make you developer..so try to give full credit to the developer 😊 u will not loose anything for giving proper credit.   -->
+            /* localStorage throws on opaque origins (file://, some private modes),
+             * so every access is guarded — a storage failure must never kill the player. */
+            var store = {
+                get: function (key) {
+                    try {
+                        return window.localStorage.getItem(key);
+                    } catch (err) {
+                        return null;
+                    }
+                },
+                set: function (key, value) {
+                    try {
+                        window.localStorage.setItem(key, value);
+                    } catch (err) {
+                        return;
+                    }
+                }
+            };
 
+            var el = {
+                player: document.getElementById("player"),
+                video: document.getElementById("video"),
+                bigPlay: document.getElementById("bigPlay"),
+                spinner: document.getElementById("spinner"),
+                error: document.getElementById("playerError"),
+                errorText: document.getElementById("errorText"),
+                retry: document.getElementById("btnRetry"),
+                flash: document.getElementById("flash"),
+                seek: document.getElementById("seek"),
+                played: document.getElementById("seekPlayed"),
+                buffered: document.getElementById("seekBuffered"),
+                tip: document.getElementById("seekTip"),
+                btnPlay: document.getElementById("btnPlay"),
+                iconPlay: document.getElementById("iconPlay"),
+                iconPause: document.getElementById("iconPause"),
+                btnBack: document.getElementById("btnBack"),
+                btnFwd: document.getElementById("btnFwd"),
+                btnMute: document.getElementById("btnMute"),
+                iconVol: document.getElementById("iconVol"),
+                iconMuted: document.getElementById("iconMuted"),
+                volume: document.getElementById("volume"),
+                current: document.getElementById("tCurrent"),
+                duration: document.getElementById("tDuration"),
+                btnRate: document.getElementById("btnRate"),
+                rateMenu: document.getElementById("rateMenu"),
+                btnPip: document.getElementById("btnPip"),
+                btnFull: document.getElementById("btnFull"),
+                chips: document.getElementById("chips"),
+                meta: document.getElementById("metaList"),
+                ext: document.getElementById("extGrid"),
+                trending: document.getElementById("trending"),
+                wall: document.getElementById("wall"),
+                toast: document.getElementById("toast"),
+                copyLink: document.getElementById("copyLink"),
+                year: document.getElementById("year")
+            };
 
-            <center>
-                <div class="copyright">
-                    <h5 class="text-center">Copyright © 2024 <a href="https://t.me/dreamcinezone"><span
-                                style="font-weight: 700;">dreamcinezone</span></a>. All
-                        Rights Reserved.</h5>
-                    <div class="icons">
-                        <a href="https://t.me/dreamcinezone"><i class="fa-brands fa-telegram fa-lg"></i></a>
-                        
-                    </div>
-                    <h4 style="font-weight: 700;">This Page Is Made By <a
-                            href="https://t.me/dreamcinezone"><span>dreamcinezone</span></a></h4>
-                </div>
-            </center>
-        </footer>
+            /* ------------------------------ helpers ------------------------------ */
+            function fmt(seconds) {
+                if (!isFinite(seconds) || seconds < 0) {
+                    seconds = 0;
+                }
+                var total = Math.floor(seconds);
+                var h = Math.floor(total / 3600);
+                var m = Math.floor((total % 3600) / 60);
+                var s = total % 60;
+                var mm = h > 0 && m < 10 ? "0" + m : String(m);
+                var ss = s < 10 ? "0" + s : String(s);
+                return h > 0 ? h + ":" + mm + ":" + ss : mm + ":" + ss;
+            }
+
+            var toastTimer = null;
+            function toast(message) {
+                if (!el.toast) {
+                    return;
+                }
+                el.toast.textContent = message;
+                el.toast.classList.add("on");
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(function () {
+                    el.toast.classList.remove("on");
+                }, 2400);
+            }
+
+            function copyText(text) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    return navigator.clipboard.writeText(text);
+                }
+                return new Promise(function (resolve, reject) {
+                    var box = document.createElement("textarea");
+                    box.value = text;
+                    box.setAttribute("readonly", "");
+                    box.style.position = "fixed";
+                    box.style.opacity = "0";
+                    document.body.appendChild(box);
+                    box.select();
+                    try {
+                        document.execCommand("copy");
+                        resolve();
+                    } catch (err) {
+                        reject(err);
+                    } finally {
+                        document.body.removeChild(box);
+                    }
+                });
+            }
+
+            /* --------------------------- metadata parse --------------------------- */
+            function parseMeta(name) {
+                var out = { quality: "", year: "", source: "", codec: "", audio: "" };
+                if (!name) {
+                    return out;
+                }
+                var text = String(name);
+                var quality = text.match(/\b(2160p|1440p|1080p|720p|480p|360p|4K|UHD)\b/i);
+                if (quality) {
+                    out.quality = quality[1].toUpperCase();
+                }
+                var year = text.match(/\b(19|20)\d{2}\b/);
+                if (year) {
+                    out.year = year[0];
+                }
+                if (/\b(WEB[-. ]?DL|WEBRip|BluRay|BDRip|HDRip|HDTV|DVDRip)\b/i.test(text)) {
+                    out.source = (text.match(/\b(WEB[-. ]?DL|WEBRip|BluRay|BDRip|HDRip|HDTV|DVDRip)\b/i)[1] || "").toUpperCase();
+                }
+                if (/\b(x264|x265|HEVC|AVC|H\.?264|H\.?265)\b/i.test(text)) {
+                    out.codec = (text.match(/\b(x264|x265|HEVC|AVC)\b/i)[1] || "").toUpperCase();
+                }
+                if (/\b(Hindi|Tamil|Telugu|Malayalam|Kannada|Bengali|Marathi|English|Dual Audio|Multi Audio)\b/i.test(text)) {
+                    out.audio = text.match(/\b(Hindi|Tamil|Telugu|Malayalam|Kannada|Bengali|Marathi|English|Dual Audio|Multi Audio)\b/i)[1];
+                }
+                return out;
+            }
+
+            function extension(name) {
+                var match = /\.([a-z0-9]{2,5})$/i.exec(String(name || "").trim());
+                return match ? match[1].toUpperCase() : "MEDIA";
+            }
+
+            var meta = parseMeta(FILE.name);
+
+            function addChip(label) {
+                if (!label) {
+                    return;
+                }
+                var chip = document.createElement("span");
+                chip.className = "chip";
+                chip.textContent = label;
+                el.chips.appendChild(chip);
+            }
+
+            function addMetaRow(label, value) {
+                if (!value) {
+                    return;
+                }
+                var row = document.createElement("div");
+                var dt = document.createElement("dt");
+                var dd = document.createElement("dd");
+                dt.textContent = label;
+                dd.textContent = value;
+                row.appendChild(dt);
+                row.appendChild(dd);
+                el.meta.appendChild(row);
+            }
+
+            addChip(meta.quality);
+            addChip(meta.year);
+            addChip(meta.audio);
+            addChip(meta.source || meta.codec);
+            if (!el.chips.children.length) {
+                addChip("HD STREAM");
+            }
+
+            addMetaRow("File name", FILE.name);
+            addMetaRow("Size", FILE.size);
+            addMetaRow("Container", extension(FILE.name));
+            addMetaRow("Unique ID", FILE.uid);
+            addMetaRow("Stream", FILE.url ? "Range enabled" : "");
+
+            /* -------------------------- external players -------------------------- */
+            var EXTERNALS = [
+                { label: "VLC", pkg: "org.videolan.vlc", icon: "https://i.postimg.cc/15TQ4y7B/vlc.png" },
+                { label: "MX Player", pkg: "com.mxtech.videoplayer.ad", icon: "https://i.postimg.cc/sx4Msv4T/mx.png" },
+                { label: "Play.it", pkg: "com.playit.videoplayer", icon: "https://i.postimg.cc/RVGWYJFF/playit.png" },
+                { label: "KM Player", pkg: "com.kmplayer", icon: "https://i.postimg.cc/wT9tFQ9Z/km.png" },
+                { label: "HD Player 4K", pkg: "com.inshootapps.videohd", icon: "https://i.postimg.cc/rFT43LNh/hd.png" }
+            ];
+
+            EXTERNALS.forEach(function (app) {
+                var btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "ext";
+                var img = document.createElement("img");
+                img.src = app.icon;
+                img.alt = "";
+                img.loading = "lazy";
+                img.onerror = function () {
+                    img.style.display = "none";
+                };
+                var span = document.createElement("span");
+                span.textContent = app.label;
+                btn.appendChild(img);
+                btn.appendChild(span);
+                btn.addEventListener("click", function () {
+                    openExternal(app);
+                });
+                el.ext.appendChild(btn);
+            });
+
+            function openExternal(app) {
+                var url = FILE.url || window.location.href;
+                var target = url.replace(/^https?:\/\//, "");
+                var intent = "intent://" + target + "#Intent;scheme=https;type=video/*;package=" + app.pkg + ";end";
+                try {
+                    window.location.href = intent;
+                } catch (err) {
+                    window.open(url, "_blank", "noopener");
+                }
+                toast("Opening " + app.label + "…");
+                setTimeout(function () {
+                    toast("Player did not open? Use the download button.");
+                }, 2600);
+            }
+
+            /* ------------------------------- player ------------------------------- */
+            var hideTimer = null;
+            var dragging = false;
+
+            if (el.video.hasAttribute("controls")) {
+                el.video.removeAttribute("controls");
+            }
+
+            var savedVolumeRaw = store.get(VOLUME_KEY);
+            var savedVolume = savedVolumeRaw === null ? NaN : Number(savedVolumeRaw);
+            if (isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1) {
+                el.video.volume = savedVolume;
+            }
+            el.volume.value = String(Math.round(el.video.volume * 100));
+            syncVolumeUI();
+
+            function syncVolumeUI() {
+                var muted = el.video.muted || el.video.volume === 0;
+                el.iconVol.style.display = muted ? "none" : "block";
+                el.iconMuted.style.display = muted ? "block" : "none";
+            }
+
+            function setPlaying(playing) {
+                el.player.classList.toggle("is-playing", playing);
+                el.iconPlay.style.display = playing ? "none" : "block";
+                el.iconPause.style.display = playing ? "block" : "none";
+                if (playing) {
+                    reveal();
+                }
+            }
+
+            function toggle() {
+                if (el.video.paused) {
+                    var attempt = el.video.play();
+                    if (attempt && typeof attempt.catch === "function") {
+                        attempt.catch(function () {
+                            toast("Tap play to start the stream.");
+                        });
+                    }
+                } else {
+                    el.video.pause();
+                }
+            }
+
+            function seekBy(delta) {
+                if (!isFinite(el.video.duration)) {
+                    return;
+                }
+                el.video.currentTime = Math.min(Math.max(el.video.currentTime + delta, 0), el.video.duration);
+                flash(delta);
+            }
+
+            var flashTimer = null;
+            function flash(delta) {
+                var label = (delta < 0 ? "-10s" : "+10s");
+                el.flash.textContent = label;
+                el.flash.classList.remove("left", "right");
+                el.flash.classList.add(delta < 0 ? "left" : "right", "on");
+                clearTimeout(flashTimer);
+                flashTimer = setTimeout(function () {
+                    el.flash.classList.remove("on");
+                }, 480);
+            }
+
+            function reveal() {
+                el.player.classList.remove("hide-ui");
+                clearTimeout(hideTimer);
+                hideTimer = setTimeout(function () {
+                    if (!el.video.paused) {
+                        el.player.classList.add("hide-ui");
+                    }
+                }, 2600);
+            }
+
+            function updateProgress() {
+                var duration = el.video.duration || 0;
+                var ratio = duration ? el.video.currentTime / duration : 0;
+                if (!dragging) {
+                    el.played.style.width = (ratio * 100).toFixed(3) + "%";
+                }
+                el.current.textContent = fmt(el.video.currentTime);
+                el.duration.textContent = fmt(duration);
+                el.seek.setAttribute("aria-valuenow", String(Math.round(ratio * 100)));
+            }
+
+            function updateBuffered() {
+                var duration = el.video.duration || 0;
+                var time = el.video.currentTime || 0;
+                var buffered = el.video.buffered;
+                var end = 0;
+                for (var i = 0; i < buffered.length; i += 1) {
+                    if (buffered.start(i) <= time && buffered.end(i) > end) {
+                        end = buffered.end(i);
+                    }
+                }
+                el.buffered.style.width = (duration ? (end / duration) * 100 : 0).toFixed(3) + "%";
+            }
+
+            function ratioFromEvent(event) {
+                var rect = el.seek.getBoundingClientRect();
+                var x = (event.touches ? event.touches[0].clientX : event.clientX) - rect.left;
+                return Math.min(Math.max(x / rect.width, 0), 1);
+            }
+
+            function onSeekMove(event) {
+                var ratio = ratioFromEvent(event);
+                var duration = el.video.duration || 0;
+                el.tip.textContent = fmt(ratio * duration);
+                el.tip.style.left = (ratio * 100).toFixed(2) + "%";
+                if (dragging) {
+                    el.played.style.width = (ratio * 100).toFixed(3) + "%";
+                }
+            }
+
+            function onSeekDown(event) {
+                if (!isFinite(el.video.duration)) {
+                    return;
+                }
+                dragging = true;
+                el.seek.classList.add("is-dragging");
+                onSeekMove(event);
+                event.preventDefault();
+            }
+
+            function onSeekUp(event) {
+                if (!dragging) {
+                    return;
+                }
+                dragging = false;
+                el.seek.classList.remove("is-dragging");
+                var ratio = ratioFromEvent(event.changedTouches ? { clientX: event.changedTouches[0].clientX } : event);
+                el.video.currentTime = ratio * el.video.duration;
+                el.played.style.width = (ratio * 100).toFixed(3) + "%";
+            }
+
+            el.seek.addEventListener("pointerdown", onSeekDown);
+            el.seek.addEventListener("pointermove", onSeekMove);
+            window.addEventListener("pointerup", onSeekUp);
+            el.seek.addEventListener("touchstart", onSeekDown, { passive: false });
+            el.seek.addEventListener("touchmove", onSeekMove, { passive: true });
+            window.addEventListener("touchend", onSeekUp);
+
+            el.btnPlay.addEventListener("click", toggle);
+            el.bigPlay.addEventListener("click", toggle);
+            el.btnBack.addEventListener("click", function () {
+                seekBy(-10);
+                reveal();
+            });
+            el.btnFwd.addEventListener("click", function () {
+                seekBy(10);
+                reveal();
+            });
+
+            el.btnMute.addEventListener("click", function () {
+                el.video.muted = !el.video.muted;
+                syncVolumeUI();
+                reveal();
+            });
+
+            el.volume.addEventListener("input", function () {
+                el.video.volume = Number(el.volume.value) / 100;
+                el.video.muted = el.video.volume === 0;
+                store.set(VOLUME_KEY, String(el.video.volume));
+                syncVolumeUI();
+            });
+
+            var RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
+            RATES.forEach(function (rate) {
+                var item = document.createElement("button");
+                item.type = "button";
+                item.textContent = rate + "x";
+                item.addEventListener("click", function () {
+                    el.video.playbackRate = rate;
+                    el.btnRate.textContent = rate + "x";
+                    markRate(rate);
+                    el.rateMenu.classList.remove("on");
+                });
+                el.rateMenu.appendChild(item);
+            });
+
+            function markRate(rate) {
+                var items = el.rateMenu.querySelectorAll("button");
+                for (var i = 0; i < items.length; i += 1) {
+                    items[i].classList.toggle("active", items[i].textContent === rate + "x");
+                }
+            }
+            markRate(1);
+
+            el.btnRate.addEventListener("click", function (event) {
+                event.stopPropagation();
+                el.rateMenu.classList.toggle("on");
+            });
+            document.addEventListener("click", function () {
+                el.rateMenu.classList.remove("on");
+            });
+
+            el.btnPip.addEventListener("click", function () {
+                if (document.pictureInPictureElement) {
+                    document.exitPictureInPicture();
+                } else if (document.pictureInPictureEnabled && el.video.requestPictureInPicture) {
+                    el.video.requestPictureInPicture();
+                } else {
+                    toast("Picture-in-picture is not available here.");
+                }
+            });
+
+            function fullscreenTarget() {
+                return document.fullscreenElement || document.webkitFullscreenElement;
+            }
+
+            el.btnFull.addEventListener("click", function () {
+                if (fullscreenTarget()) {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    }
+                    return;
+                }
+                if (el.player.requestFullscreen) {
+                    el.player.requestFullscreen();
+                } else if (el.player.webkitRequestFullscreen) {
+                    el.player.webkitRequestFullscreen();
+                } else {
+                    toast("Fullscreen is not available here.");
+                }
+            });
+
+            document.addEventListener("fullscreenchange", function () {
+                el.player.classList.toggle("is-fullscreen", Boolean(document.fullscreenElement));
+            });
+
+            /* Any tap/click on the video surface toggles playback — but never when the
+             * pointer landed on a control (controls bar, speed menu, error overlay,
+             * big play button), otherwise a single button press toggles twice. */
+            var CONTROL_SURFACE = "button, a, input, .player-ui, .player-error, .rate-menu, .big-play";
+
+            el.player.addEventListener("mousemove", reveal);
+            el.player.addEventListener("mouseleave", function () {
+                if (!el.video.paused) {
+                    el.player.classList.add("hide-ui");
+                }
+            });
+            el.player.addEventListener("click", function (event) {
+                if (event.target.closest(CONTROL_SURFACE)) {
+                    return;
+                }
+                toggle();
+            });
+
+            /* double tap on either half to skip (touch devices) */
+            var lastTap = 0;
+            var lastSide = "";
+            el.player.addEventListener("touchend", function (event) {
+                if (event.target.closest(CONTROL_SURFACE)) {
+                    return;
+                }
+                var now = Date.now();
+                var rect = el.player.getBoundingClientRect();
+                var side = (event.changedTouches[0].clientX - rect.left) < rect.width / 2 ? "left" : "right";
+                if (now - lastTap < 320 && side === lastSide) {
+                    seekBy(side === "left" ? -10 : 10);
+                    lastTap = 0;
+                } else {
+                    lastTap = now;
+                    lastSide = side;
+                }
+            });
+
+            el.video.addEventListener("play", function () {
+                setPlaying(true);
+            });
+            el.video.addEventListener("pause", function () {
+                setPlaying(false);
+            });
+            el.video.addEventListener("timeupdate", updateProgress);
+            el.video.addEventListener("progress", updateBuffered);
+            el.video.addEventListener("loadedmetadata", function () {
+                updateProgress();
+                updateBuffered();
+                var savedRaw = store.get(RESUME_KEY);
+                var saved = savedRaw === null ? NaN : Number(savedRaw);
+                if (isFinite(saved) && saved > 8 && saved < el.video.duration - 12) {
+                    el.video.currentTime = saved;
+                    toast("Resumed from " + fmt(saved));
+                }
+            });
+            el.video.addEventListener("waiting", function () {
+                el.player.classList.add("is-buffering");
+            });
+            el.video.addEventListener("canplay", function () {
+                el.player.classList.remove("is-buffering");
+            });
+            el.video.addEventListener("playing", function () {
+                el.player.classList.remove("is-buffering");
+                el.error.hidden = true;
+            });
+            el.video.addEventListener("volumechange", syncVolumeUI);
+            el.video.addEventListener("error", function () {
+                el.player.classList.remove("is-buffering");
+                el.error.hidden = false;
+                var code = el.video.error ? el.video.error.code : 0;
+                var messages = {
+                    1: "Playback was aborted.",
+                    2: "The stream was interrupted — check your connection.",
+                    3: "This file cannot be decoded by your browser.",
+                    4: "The stream is unavailable right now."
+                };
+                el.errorText.textContent = messages[code] || "Playback stopped. The stream may still be warming up.";
+            });
+
+            el.retry.addEventListener("click", function () {
+                el.error.hidden = true;
+                el.video.load();
+                var attempt = el.video.play();
+                if (attempt && typeof attempt.catch === "function") {
+                    attempt.catch(function () {
+                        setPlaying(false);
+                    });
+                }
+            });
+
+            window.addEventListener("beforeunload", function () {
+                if (isFinite(el.video.duration) && el.video.currentTime > 8 && el.video.currentTime < el.video.duration - 5) {
+                    store.set(RESUME_KEY, String(el.video.currentTime));
+                }
+            });
+            setInterval(function () {
+                if (!el.video.paused && isFinite(el.video.duration)) {
+                    store.set(RESUME_KEY, String(el.video.currentTime));
+                }
+            }, 5000);
+
+            document.addEventListener("keydown", function (event) {
+                var tag = (event.target.tagName || "").toLowerCase();
+                if (tag === "input" || tag === "textarea" || event.metaKey || event.ctrlKey || event.altKey) {
+                    return;
+                }
+                var handled = true;
+                switch (event.key) {
+                    case " ":
+                    case "k":
+                    case "K":
+                        toggle();
+                        break;
+                    case "ArrowRight":
+                        seekBy(5);
+                        break;
+                    case "ArrowLeft":
+                        seekBy(-5);
+                        break;
+                    case "j":
+                    case "J":
+                        seekBy(-10);
+                        break;
+                    case "l":
+                    case "L":
+                        seekBy(10);
+                        break;
+                    case "ArrowUp":
+                        el.video.volume = Math.min(el.video.volume + 0.05, 1);
+                        break;
+                    case "ArrowDown":
+                        el.video.volume = Math.max(el.video.volume - 0.05, 0);
+                        break;
+                    case "m":
+                    case "M":
+                        el.video.muted = !el.video.muted;
+                        break;
+                    case "f":
+                    case "F":
+                        el.btnFull.click();
+                        break;
+                    case "p":
+                    case "P":
+                        el.btnPip.click();
+                        break;
+                    default:
+                        handled = false;
+                }
+                if (handled) {
+                    event.preventDefault();
+                    reveal();
+                    syncVolumeUI();
+                    el.volume.value = String(Math.round(el.video.volume * 100));
+                }
+            });
+
+            el.copyLink.addEventListener("click", function () {
+                copyText(FILE.url || window.location.href).then(function () {
+                    toast("Stream link copied.");
+                }).catch(function () {
+                    toast("Copy failed — long-press the address bar instead.");
+                });
+            });
+
+            /* --------------------- poster wall + ranked trending ---------------------
+             * Posters are generated locally from a deterministic seed so the page has
+             * no external API dependency and never shows a broken image. Swap
+             * SHELF/buildShelf for a live feed (TMDB, etc.) whenever you want one.
+             * -------------------------------------------------------------------------- */
+            var SHELF = [
+                { label: "Action Blockbusters", sub: "High octane", genre: "Action" },
+                { label: "Mind-Bending Sci-Fi", sub: "Near future", genre: "Sci-Fi" },
+                { label: "Crime Thrillers", sub: "Slow burn", genre: "Thriller" },
+                { label: "Romantic Dramas", sub: "Slow burn", genre: "Romance" },
+                { label: "Horror Nights", sub: "Lights off", genre: "Horror" },
+                { label: "Animated Family", sub: "All ages", genre: "Animation" },
+                { label: "Historical Epics", sub: "Grand scale", genre: "Period" },
+                { label: "Comedy Classics", sub: "Feel good", genre: "Comedy" },
+                { label: "Courtroom Drama", sub: "Word wars", genre: "Drama" },
+                { label: "War Stories", sub: "Frontline", genre: "War" },
+                { label: "Sports Underdogs", sub: "Last minute", genre: "Sport" },
+                { label: "Documentary Deep Dives", sub: "Real life", genre: "Docs" }
+            ];
+
+            function seedFrom(text) {
+                var hash = 2166136261;
+                var source = String(text || "dreamcinezone");
+                for (var i = 0; i < source.length; i += 1) {
+                    hash ^= source.charCodeAt(i);
+                    hash = Math.imul(hash, 16777619);
+                }
+                return hash >>> 0;
+            }
+
+            function makeRandom(seed) {
+                var state = seed >>> 0;
+                return function () {
+                    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+                    return state / 4294967296;
+                };
+            }
+
+            function buildShelf() {
+                var random = makeRandom(seedFrom(FILE.uid));
+                return SHELF.map(function (item, index) {
+                    return {
+                        label: item.label,
+                        sub: item.sub,
+                        genre: item.genre,
+                        heat: 62 + Math.floor(random() * 38),
+                        move: random() > 0.62 ? "up" : (random() > 0.34 ? "flat" : "down"),
+                        hue: Math.floor(random() * 360),
+                        order: index
+                    };
+                });
+            }
+
+            var shelf = buildShelf();
+
+            function posterStyle(item) {
+                var hue2 = (item.hue + 42) % 360;
+                return "--h1:" + item.hue + ";--h2:" + hue2;
+            }
+
+            function onShelfClick(item) {
+                copyText(item.label).then(function () {
+                    toast('Copied "' + item.label + '" — paste it in the request group.');
+                }).catch(function () {
+                    toast(item.label);
+                });
+            }
+
+            var ranked = shelf.slice().sort(function (a, b) {
+                return b.heat - a.heat;
+            });
+
+            ranked.forEach(function (item, index) {
+                var row = document.createElement("button");
+                row.type = "button";
+                row.className = "trend";
+                row.style.cssText = posterStyle(item);
+
+                var rank = document.createElement("span");
+                rank.className = "trend-rank";
+                rank.textContent = String(index + 1);
+
+                var art = document.createElement("span");
+                art.className = "trend-art";
+
+                var body = document.createElement("span");
+                body.className = "trend-body";
+                var title = document.createElement("strong");
+                title.textContent = item.label;
+                var sub = document.createElement("small");
+                sub.textContent = item.genre + " · " + item.sub + " · " + item.heat + "% heat";
+                var heat = document.createElement("span");
+                heat.className = "heat";
+                var fill = document.createElement("i");
+                fill.style.setProperty("--heat", item.heat + "%");
+                heat.appendChild(fill);
+                body.appendChild(title);
+                body.appendChild(sub);
+                body.appendChild(heat);
+
+                var arrow = document.createElement("span");
+                arrow.className = "trend-arrow " + item.move;
+                arrow.textContent = item.move === "up" ? "▲" : (item.move === "down" ? "▼" : "■");
+
+                row.appendChild(rank);
+                row.appendChild(art);
+                row.appendChild(body);
+                row.appendChild(arrow);
+                row.addEventListener("click", function () {
+                    onShelfClick(item);
+                });
+                el.trending.appendChild(row);
+            });
+
+            shelf.forEach(function (item) {
+                var card = document.createElement("button");
+                card.type = "button";
+                card.className = "poster";
+                card.style.cssText = posterStyle(item);
+
+                var art = document.createElement("span");
+                art.className = "poster-art";
+                var title = document.createElement("span");
+                title.className = "p-title";
+                title.textContent = item.label;
+                var sub = document.createElement("span");
+                sub.className = "p-sub";
+                sub.textContent = item.genre;
+                art.appendChild(sub);
+                art.appendChild(title);
+
+                var note = document.createElement("span");
+                note.className = "poster-note";
+                note.textContent = item.sub + " · tap to copy";
+
+                card.appendChild(art);
+                card.appendChild(note);
+                card.addEventListener("click", function () {
+                    onShelfClick(item);
+                });
+                el.wall.appendChild(card);
+            });
+
+            /* -------------------------------- misc -------------------------------- */
+            el.year.textContent = String(new Date().getFullYear());
+            updateProgress();
+            reveal();
+        }());
+    </script>
 </body>
-
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.155.0/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/automat/controlkit.js@master/bin/controlKit.min.js"></script>
-<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sheryjs/dist/Shery.js"></script>
-<script>
-    document.addEventListener("DOMContentLoaded", function () {
-        const uncopyableElement = document.querySelector(".uncopyable");
-
-        uncopyableElement.addEventListener("selectstart", function (event) {
-            event.preventDefault();
-        });
-    });
-</script>
-<script src="js/wow.min.js"></script>
-<script>
-    new WOW().init();
-</script>
-<script src="https://cdn.plyr.io/3.6.9/plyr.js"></script>
-<script src="https://streamlink-two.vercel.app/548/551/Streams.js"></script>
-<script src="script.js"></script>
 
 </html>
