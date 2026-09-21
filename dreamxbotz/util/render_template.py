@@ -44,4 +44,5 @@ async def render_page(id, secure_hash, src=None):
         file_url=src,
         file_size=file_size,
         file_unique_id=file_data.unique_id,
+        update_channel_url=UPDATE_CHNL_LNK,
     )
