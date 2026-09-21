@@ -262,7 +262,8 @@ else:
     FQDN = BIND_ADRESS
 HAS_SSL = is_enabled(getenv('HAS_SSL', 'True'), True)
 _scheme = 'https' if HAS_SSL else 'http'
-if ON_HEROKU or NO_PORT:
+ON_KOYEB = 'KOYEB_APP_NAME' in environ or str(FQDN).endswith('.koyeb.app')
+if ON_HEROKU or ON_KOYEB or NO_PORT:
     URL = f"{_scheme}://{FQDN}/"
 else:
     URL = f"{_scheme}://{FQDN}:{PORT}/"
