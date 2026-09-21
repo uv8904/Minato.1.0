@@ -39,10 +39,13 @@ async def render_page(id, secure_hash, src=None):
 
     file_name = file_data.file_name.replace("_", " ")
 
+    bot_username = str(getattr(dreamxbotz, "username", "") or "").lstrip("@")
+
     return template.render(
         file_name=file_name,
         file_url=src,
         file_size=file_size,
         file_unique_id=file_data.unique_id,
         update_channel_url=UPDATE_CHNL_LNK,
+        bot_username=bot_username,
     )
