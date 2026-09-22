@@ -93,6 +93,18 @@ async def start(client, message):
         except Exception:
             await message.react(emoji="🍂", big=True)
     m = message
+    if len(m.command) == 2 and m.command[1].startswith("msrch_"):
+        # Deep link from the MinatoVerse web pages: t.me/<bot>?start=msrch_<b64url>
+        # The user tapped a movie poster on the site, so search that movie
+        # directly right here in the bot — no typing, no copying.
+        payload = m.command[1][len("msrch_"):]
+        try:
+            query = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)).decode("utf-8").strip()
+        except Exception:
+            query = payload.replace("_", " ").strip()
+        if query:
+            m.text = query
+            return await auto_filter(client, m)
     if len(m.command) == 2 and m.command[1].startswith(('notcopy', 'sendall')):
         _, userid, verify_id, file_id = m.command[1].split("_", 3)
         user_id = int(userid)

@@ -648,6 +648,40 @@
             border-color: rgba(34, 211, 238, 0.55);
         }
 
+        .poster-img {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 0.45s ease;
+        }
+
+        .poster-img.on {
+            opacity: 1;
+        }
+
+        .trend-art {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .trend-art img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 0.45s ease;
+        }
+
+        .trend-art img.on {
+            opacity: 1;
+        }
+
         .poster-note {
             display: block;
             margin-top: 8px;
@@ -746,7 +780,7 @@
 </head>
 
 <body>
-    <script type="application/json" id="dx-file">{{ {'name': file_name, 'url': file_url, 'size': file_size, 'uid': file_unique_id} | tojson }}</script>
+    <script type="application/json" id="dx-file">{{ {'name': file_name, 'url': file_url, 'size': file_size, 'uid': file_unique_id, 'bot': bot_username} | tojson }}</script>
 
     <header class="topbar">
         <a class="brand" href="{{ update_channel_url | e }}">
@@ -843,8 +877,8 @@
         <section id="wallSection">
             <div class="section-head">
                 <div>
-                    <h2>Poster <span>wall</span></h2>
-                    <p>Tap a tile to copy its name, then drop it in the request group.</p>
+                    <h2>Movie <span>suggestions</span></h2>
+                    <p>Hand-picked hits with real posters — tap one and the bot searches it for you instantly.</p>
                 </div>
             </div>
             <div class="wall" id="wall"></div>
@@ -1043,24 +1077,25 @@
                 });
             });
 
-            /* --------------------- poster wall + ranked trending ---------------------
-             * Posters are generated locally from a deterministic seed so the page has
-             * no external API dependency and never shows a broken image. Swap
-             * SHELF/buildShelf for a live feed (TMDB, etc.) whenever you want one.
+            /* --------------------- movie suggestions + ranked trending ----------------
+             * Real movie suggestions with live posters (iTunes artwork via JSONP,
+             * gradient fallback so a tile never looks broken). Tapping a poster or a
+             * trending row opens the Telegram bot with a ?start=msrch_<title> deep
+             * link and the bot searches that movie directly — no copying anywhere.
              * -------------------------------------------------------------------------- */
-            var SHELF = [
-                { label: "Action Blockbusters", sub: "High octane", genre: "Action" },
-                { label: "Mind-Bending Sci-Fi", sub: "Near future", genre: "Sci-Fi" },
-                { label: "Crime Thrillers", sub: "Slow burn", genre: "Thriller" },
-                { label: "Romantic Dramas", sub: "Slow burn", genre: "Romance" },
-                { label: "Horror Nights", sub: "Lights off", genre: "Horror" },
-                { label: "Animated Family", sub: "All ages", genre: "Animation" },
-                { label: "Historical Epics", sub: "Grand scale", genre: "Period" },
-                { label: "Comedy Classics", sub: "Feel good", genre: "Comedy" },
-                { label: "Courtroom Drama", sub: "Word wars", genre: "Drama" },
-                { label: "War Stories", sub: "Frontline", genre: "War" },
-                { label: "Sports Underdogs", sub: "Last minute", genre: "Sport" },
-                { label: "Documentary Deep Dives", sub: "Real life", genre: "Docs" }
+            var MOVIES = [
+                { title: "Jawan", year: 2023, tag: "Hindi · Action" },
+                { title: "Pushpa 2 The Rule", year: 2024, tag: "Telugu · Action" },
+                { title: "Pathaan", year: 2023, tag: "Hindi · Spy" },
+                { title: "Jailer", year: 2023, tag: "Tamil · Action" },
+                { title: "Leo", year: 2023, tag: "Tamil · Thriller" },
+                { title: "RRR", year: 2022, tag: "Telugu · Epic" },
+                { title: "3 Idiots", year: 2009, tag: "Hindi · Comedy" },
+                { title: "Sholay", year: 1975, tag: "Hindi · Classic" },
+                { title: "Interstellar", year: 2014, tag: "English · Sci-Fi" },
+                { title: "Inception", year: 2010, tag: "English · Sci-Fi" },
+                { title: "Oppenheimer", year: 2023, tag: "English · Drama" },
+                { title: "Dune Part Two", year: 2024, tag: "English · Sci-Fi" }
             ];
 
             function seedFrom(text) {
@@ -1083,32 +1118,101 @@
 
             function buildShelf() {
                 var random = makeRandom(seedFrom(FILE.uid));
-                return SHELF.map(function (item, index) {
+                return MOVIES.map(function (item, index) {
                     return {
-                        label: item.label,
-                        sub: item.sub,
-                        genre: item.genre,
+                        label: item.title,
+                        year: item.year,
+                        tag: item.tag,
+                        sub: item.year + " · " + item.tag,
                         heat: 62 + Math.floor(random() * 38),
                         move: random() > 0.62 ? "up" : (random() > 0.34 ? "flat" : "down"),
                         hue: Math.floor(random() * 360),
-                        order: index
+                        order: index,
+                        imgs: []
                     };
                 });
             }
 
             var shelf = buildShelf();
 
+            var BOT_USER = String(FILE.bot || "").replace(/^@/, "");
+
+            function b64url(text) {
+                var b = btoa(unescape(encodeURIComponent(text)));
+                return b.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+            }
+
+            function botSearchLink(item) {
+                return "https://t.me/" + BOT_USER + "?start=msrch_" + b64url(item.label);
+            }
+
             function posterStyle(item) {
                 var hue2 = (item.hue + 42) % 360;
                 return "--h1:" + item.hue + ";--h2:" + hue2;
             }
 
-            function onShelfClick(item) {
-                copyText(item.label).then(function () {
-                    toast('Copied "' + item.label + '" — paste it in the request group.');
-                }).catch(function () {
-                    toast(item.label);
+            /* ---- live poster lookup (JSONP, no CORS issues, graceful fallback) ---- */
+            var posterCache = {};
+            var cbCounter = 0;
+
+            function applyPoster(item, url) {
+                item.imgs.forEach(function (img) {
+                    if (!url) {
+                        return;
+                    }
+                    img.src = url;
+                    img.addEventListener("load", function () {
+                        img.classList.add("on");
+                    });
+                    img.addEventListener("error", function () {
+                        img.classList.remove("on");
+                    });
                 });
+            }
+
+            function fetchPoster(item) {
+                if (Object.prototype.hasOwnProperty.call(posterCache, item.label)) {
+                    applyPoster(item, posterCache[item.label]);
+                    return;
+                }
+                cbCounter += 1;
+                var cbName = "__mvcb" + cbCounter;
+                var script = document.createElement("script");
+                var settled = false;
+                var timer = setTimeout(function () {
+                    finish(null);
+                }, 6000);
+                function finish(url) {
+                    if (settled) {
+                        return;
+                    }
+                    settled = true;
+                    clearTimeout(timer);
+                    delete window[cbName];
+                    if (script.parentNode) {
+                        script.parentNode.removeChild(script);
+                    }
+                    posterCache[item.label] = url;
+                    applyPoster(item, url);
+                }
+                window[cbName] = function (data) {
+                    var url = null;
+                    try {
+                        var first = data && data.results && data.results[0];
+                        if (first && first.artworkUrl100) {
+                            url = first.artworkUrl100.replace("100x100", "400x600");
+                        }
+                    } catch (err) {
+                        url = null;
+                    }
+                    finish(url);
+                };
+                script.onerror = function () {
+                    finish(null);
+                };
+                script.src = "https://itunes.apple.com/search?media=movie&country=IN&limit=1&callback=" +
+                    cbName + "&term=" + encodeURIComponent(item.label + " " + item.year);
+                document.head.appendChild(script);
             }
 
             var ranked = shelf.slice().sort(function (a, b) {
@@ -1116,10 +1220,11 @@
             });
 
             ranked.forEach(function (item, index) {
-                var row = document.createElement("button");
-                row.type = "button";
+                var row = document.createElement("a");
                 row.className = "trend";
                 row.style.cssText = posterStyle(item);
+                row.href = botSearchLink(item);
+                row.title = "Search " + item.label + " in the bot";
 
                 var rank = document.createElement("span");
                 rank.className = "trend-rank";
@@ -1127,13 +1232,18 @@
 
                 var art = document.createElement("span");
                 art.className = "trend-art";
+                var artImg = document.createElement("img");
+                artImg.alt = item.label + " poster";
+                artImg.loading = "lazy";
+                art.appendChild(artImg);
+                item.imgs.push(artImg);
 
                 var body = document.createElement("span");
                 body.className = "trend-body";
                 var title = document.createElement("strong");
                 title.textContent = item.label;
                 var sub = document.createElement("small");
-                sub.textContent = item.genre + " · " + item.sub + " · " + item.heat + "% heat";
+                sub.textContent = item.sub + " · " + item.heat + "% heat";
                 var heat = document.createElement("span");
                 heat.className = "heat";
                 var fill = document.createElement("i");
@@ -1151,39 +1261,42 @@
                 row.appendChild(art);
                 row.appendChild(body);
                 row.appendChild(arrow);
-                row.addEventListener("click", function () {
-                    onShelfClick(item);
-                });
                 el.trending.appendChild(row);
             });
 
             shelf.forEach(function (item) {
-                var card = document.createElement("button");
-                card.type = "button";
+                var card = document.createElement("a");
                 card.className = "poster";
                 card.style.cssText = posterStyle(item);
+                card.href = botSearchLink(item);
+                card.title = "Search " + item.label + " in the bot";
 
                 var art = document.createElement("span");
                 art.className = "poster-art";
+                var img = document.createElement("img");
+                img.className = "poster-img";
+                img.alt = item.label + " poster";
+                img.loading = "lazy";
+                art.appendChild(img);
+                item.imgs.push(img);
+
                 var title = document.createElement("span");
                 title.className = "p-title";
                 title.textContent = item.label;
                 var sub = document.createElement("span");
                 sub.className = "p-sub";
-                sub.textContent = item.genre;
+                sub.textContent = item.tag;
                 art.appendChild(sub);
                 art.appendChild(title);
 
                 var note = document.createElement("span");
                 note.className = "poster-note";
-                note.textContent = item.sub + " · tap to copy";
+                note.textContent = item.sub + " · tap to search in bot";
 
                 card.appendChild(art);
                 card.appendChild(note);
-                card.addEventListener("click", function () {
-                    onShelfClick(item);
-                });
                 el.wall.appendChild(card);
+                fetchPoster(item);
             });
 
             el.year.textContent = String(new Date().getFullYear());
