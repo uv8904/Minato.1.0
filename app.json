@@ -101,6 +101,10 @@
             "description": "Stream Mode website: look missing posters up in the background from TMDB/IMDb (true/false).",
             "required": false
         },
+        "TMDB_API_KEY": {
+            "description": "Free TMDB API key (themoviedb.org -> Settings -> API). Needed for automatic posters/backdrops on the Stream Mode website (IMDb is only a slow fallback). Without it use /setposter.",
+            "required": false
+        },
         "NEW_UPLOADED_POSTER_TIMEOUT": {
             "description": "Stream Mode website: timeout in seconds for a single poster lookup.",
             "required": false

@@ -163,10 +163,19 @@ class MemoryCollection:
 
     def _matches(self, doc, filter_):
         for key, condition in (filter_ or {}).items():
-            if isinstance(condition, dict) and "$in" in condition:
-                if doc.get(key) not in condition["$in"]:
+            value = doc.get(key)
+            if isinstance(condition, dict):
+                if "$in" in condition and value not in condition["$in"]:
                     return False
-            elif doc.get(key) != condition:
+                if "$exists" in condition and (key in doc) != bool(condition["$exists"]):
+                    return False
+                if "$regex" in condition:
+                    import re as _re
+
+                    flags = _re.IGNORECASE if "i" in str(condition.get("$options", "")) else 0
+                    if not isinstance(value, str) or not _re.search(condition["$regex"], value, flags):
+                        return False
+            elif value != condition:
                 return False
         return True
 
@@ -188,6 +197,12 @@ class MemoryCollection:
         for key in doomed:
             del self.docs[key]
         return SimpleNamespace(deleted_count=len(doomed))
+
+    async def update_many(self, filter_, update):
+        matched = [doc["_id"] for doc in self.docs.values() if self._matches(doc, filter_)]
+        for movie_id in matched:
+            await self.update_one({"_id": movie_id}, update)
+        return SimpleNamespace(matched_count=len(matched), modified_count=len(matched))
 
     async def update_one(self, filter_, update, upsert=False):
         movie_id = filter_["_id"]
@@ -623,7 +638,8 @@ async def demo_upload(request):
                 "label": "poster worker",
                 "detail": (
                     f"queued: TMDB → IMDb lookup for “{parsed['title']}” runs in the background "
-                    f"(demo artwork arrives in ~{poster_delay:g}s; until then the branded placeholder shows)"
+                    f"(demo artwork arrives in ~{poster_delay:g}s; until then the branded placeholder shows). "
+                    "In production this needs a free TMDB_API_KEY – or /setposter with a photo."
                 ),
                 "ok": True,
             }
@@ -734,7 +750,8 @@ SIMULATOR_PANEL = r"""
             </div>
             <ol class="ups-steps" id="upsSteps" aria-live="polite"></ol>
             <div class="ups-foot">
-                <span>In production the Telegram channel post triggers this — no button.</span>
+                <span>In production the channel post triggers this — no button. Real posters need a free
+                    TMDB_API_KEY (or <code>/setposter</code>).</span>
                 <button type="button" id="upsReset">Reset demo</button>
             </div>
         </div>

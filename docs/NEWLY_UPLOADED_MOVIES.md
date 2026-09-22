@@ -19,6 +19,8 @@ step-by-step walkthrough (“I upload *hmm* – where does it show up?”).
 * Storage: `database/recent_movies_db.py` → collection `recent_movies`
 * Indexing hook: `dreamxbotz/util/new_uploaded.py` (called from `database/ia_filterdb.save_file`)
 * Bot deep link: `dreamxbotz/util/movie_deeplink.py` + `plugins/commands.py` (`/start movie_…`)
+* Posters: `dreamxbotz/util/tmdb_direct.py` (official TMDB fallback), `plugins/poster_admin.py`
+  + `dreamxbotz/util/poster_admin.py` (`/posters`, `/setposter`, `/delposter`) — section 9b
 * Local preview + **upload simulator**: `python tools/preview_section.py`
 
 The same database also powers the **movie hero** above the video player on
@@ -494,13 +496,50 @@ the page.
 
 ---
 
+## 9b. Posters — what is needed, and what to do when one is missing
+
+**Requirements for automatic posters** (nothing else has to be installed):
+
+| Need | Why |
+| --- | --- |
+| `TMDB_API_KEY` | the poster/backdrop source. Free: themoviedb.org → *Settings → API* (the v3 “API Key” **or** the v4 “Read Access Token” both work). Without it only the slow IMDb scrape is left and no 16:9 backdrops exist |
+| outbound internet from the host | `api.themoviedb.org`, `image.tmdb.org`, `m.media-amazon.com` (IMDb images) must be reachable; the browser never talks to them — the bot proxies and resizes every image |
+| a **real, clean release name** | `Jawan (2023) 1080p WEB-DL.mkv` → title *Jawan*, 2023. A made-up name such as `hmm.mkv` has no poster anywhere — use `/setposter` for those |
+| switches at their defaults | `NEW_UPLOADED_POSTER_FETCH=True`, `TMDB_POSTER=True`, `WATCH_HERO_ART_FETCH=True` |
+
+Lookup order of the poster worker: **TMDB via the bot’s poster helper → TMDB
+directly with your key** (`dreamxbotz/util/tmdb_direct.py`, so a hosted
+helper outage cannot leave the rail without posters) **→ IMDb**. A miss is
+remembered for `NEW_UPLOADED_POSTER_RETRY_HOURS` (48 h) — `/posters retry`
+forgets it.
+
+**Admin commands (private chat, admins only):**
+
+| Command | What it does |
+| --- | --- |
+| `/posters` | status: key present?, switches, worker queue, the newest movies **without** a poster (with their `MOVIE_ID`), and the concrete fix list |
+| `/posters retry` | resets the failed lookups and queues them again — send it right after adding `TMDB_API_KEY` |
+| `/setposter MOVIE_ID` *(as a reply to a photo)* | that photo becomes the poster. It is stored as `tg://file/<file_id>` and served through the bot itself — no third-party image host, works even if TMDB knows nothing about the movie |
+| `/setposter MOVIE_ID https://image.tmdb.org/…jpg` | poster from an allow-listed image host (TMDB, IMDb/Amazon, graph.org, telegra.ph, imgur, `NEW_UPLOADED_POSTER_HOSTS`) |
+| `/delposter MOVIE_ID` | removes it; the placeholder is back and the worker may look it up again |
+
+`MOVIE_ID` is what `/posters` prints (e.g. `hmm-2024`); the title (`Hmm 2024`)
+works as well when it is unambiguous. A hand-set poster (`poster_source =
+"manual"`) is never replaced by the automatic flows, the artwork caches of the
+poster proxy are evicted immediately and the `?v=` token of the poster URL
+changes, so the website shows the new image on its next refresh (at most
+`NEW_UPLOADED_POLL` seconds).
+
+---
+
 ## 10. Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
 | Empty rail, API returns `{"movies": []}` | upload/index a movie; check `NEW_UPLOADED_MOVIES=True` and that `recent_movies` has documents and indexes |
 | Error state on the page | `curl /api/movies/new` — a `503` means Mongo (`DATABASE_URI`) is unreachable; the pages themselves keep working |
-| Posters missing | `NEW_UPLOADED_POSTER_FETCH=True`, and `TMDB_API_KEY`/`GROQ…`-style keys are set as usual; a disallowed host also forces the placeholder — add it to `NEW_UPLOADED_POSTER_HOSTS` |
+| Posters missing | send `/posters` — it tells you what is missing. Usually: `TMDB_API_KEY` not set (free, see section 9b) → set it, restart, `/posters retry`; `NEW_UPLOADED_POSTER_FETCH=True`; a made-up/unknown title → `/setposter MOVIE_ID` as a reply to a poster photo; a disallowed host forces the placeholder — add it to `NEW_UPLOADED_POSTER_HOSTS` |
+| Poster is wrong (other movie) | `/setposter MOVIE_ID` with the right photo/link — manual posters win over the automatic lookup |
 | Posters look blurry/zoomed | lower the `?w=` values or widen the card; the proxy keeps the 2:3 ratio, so use poster (portrait) URLs |
 | Cards link to the wrong bot | `BOT_USERNAME` comes from the running client (`temp.U_NAME`); restart the bot so it is set, or let the page’s `data-bot` fill in |
 | Section missing on the page | `NEW_UPLOADED_MOVIES=True` (restart required) and the page must be rendered by `render_template.render_page` |

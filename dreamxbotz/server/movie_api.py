@@ -134,6 +134,12 @@ DEFAULT_POSTER_HOSTS = (
     "i.imgur.com",
 )
 
+#: Posters an admin attached with ``/setposter`` by replying to a photo are
+#: stored as ``tg://file/<telegram_file_id>`` and downloaded through the bot
+#: itself – no third-party image host involved.
+TELEGRAM_SCHEME = "tg://file/"
+_VERSION_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+
 _POSTER_CACHE: "OrderedDict[str, Tuple[bytes, str, float]]" = OrderedDict()
 _POSTER_CACHE_BYTES = 0
 _POSTER_INFLIGHT: Dict[str, "Any"] = {}
@@ -543,7 +549,7 @@ async def movie_poster(request: web.Request) -> web.Response:
         return _not_found_poster(request)
 
     width = _safe_width(request.rel_url.query.get("w"))
-    cache_key = f"{movie_id}:{width}"
+    cache_key = f"{movie_id}:{width}:{_safe_version(request)}"
     cached = _cache_get(cache_key)
     if cached:
         payload, content_type, ttl = cached
@@ -607,7 +613,7 @@ async def movie_backdrop(request: web.Request) -> web.Response:
         return _not_found_art(request)
 
     width = _safe_width(request.rel_url.query.get("w"), ALLOWED_BACKDROP_WIDTHS)
-    cache_key = f"backdrop:{movie_id}:{width}"
+    cache_key = f"backdrop:{movie_id}:{width}:{_safe_version(request)}"
     cached = _cache_get(cache_key)
     if cached:
         payload, content_type, ttl = cached
@@ -636,6 +642,28 @@ async def movie_backdrop(request: web.Request) -> web.Response:
         return _image_response(payload[0], payload[1], request=request)
 
     return _image_response(image[0], image[1], request=request)
+
+
+def _safe_version(request) -> str:
+    """The ``?v=`` cache-busting token (part of the in-process cache key)."""
+    try:
+        value = str(request.rel_url.query.get("v") or "").strip()
+    except Exception:
+        return ""
+    return value if _VERSION_RE.match(value) else ""
+
+
+def evict_cached(movie_id: str) -> int:
+    """Drop every cached rendition of one movie (after ``/setposter`` etc.)."""
+    safe_id = sanitize_movie_id(movie_id)
+    if not safe_id:
+        return 0
+    prefixes = (f"{safe_id}:", f"backdrop:{safe_id}:")
+    doomed = [key for key in _POSTER_CACHE if key.startswith(prefixes)]
+    for key in doomed:
+        payload, _, _ = _POSTER_CACHE.pop(key)
+        _drop_cached_bytes(len(payload))
+    return len(doomed)
 
 
 def _safe_width(value, allowed=ALLOWED_POSTER_WIDTHS) -> int:
@@ -889,11 +917,52 @@ async def close_session() -> None:
         await session.close()
 
 
+async def download_telegram_file(file_id: str) -> Optional[bytes]:
+    """Fetch a photo/document the bot has access to (``/setposter`` posters).
+
+    Replaced in tests / tools; inside the bot it uses the running client.
+    """
+    from dreamxbotz.Bot import dreamxbotz  # lazy: only available inside the bot
+
+    buffer = await dreamxbotz.download_media(file_id, in_memory=True)
+    if buffer is None:
+        return None
+    data = buffer.getvalue() if hasattr(buffer, "getvalue") else buffer
+    return bytes(data) if data else None
+
+
+async def _fetch_telegram_poster(cache_key: str, file_id: str, width: int):
+    """Poster bytes for a ``tg://file/<id>`` artwork (resized like any other).
+
+    The original bytes are cached per file id, so the poster, the backdrop
+    band and every width share a single download through the bot.
+    """
+    raw_key = f"tgraw:{file_id}"
+    cached = _cache_get(raw_key)
+    if cached:
+        data = cached[0]
+    else:
+        try:
+            data = await download_telegram_file(file_id)
+        except Exception as exc:
+            logger.warning("Telegram poster download failed (%s): %s", file_id[:16], exc)
+            return None
+        if not data or len(data) > MAX_POSTER_BYTES:
+            return None
+        _cache_put(raw_key, data, "application/octet-stream", POSTER_TTL)
+    # Telegram photos are JPEG already – without Pillow serve them as they are.
+    result = _resize_jpeg(data, width) or (data, "image/jpeg")
+    _cache_put(cache_key, result[0], result[1], POSTER_TTL)
+    return result
+
+
 async def _fetch_poster(cache_key: str, poster_url: str, width: int, session: ClientSession):
     """Download + resize a poster; returns ``(bytes, content_type)`` or ``None``.
 
     Concurrent requests for the same poster share one upstream download.
     """
+    if str(poster_url).startswith(TELEGRAM_SCHEME):
+        return await _fetch_telegram_poster(cache_key, str(poster_url)[len(TELEGRAM_SCHEME):], width)
     if not poster_host_allowed(poster_url):
         logger.info("Poster host not allow-listed, serving placeholder: %s", poster_url)
         return None

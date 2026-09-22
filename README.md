@@ -116,6 +116,13 @@ The streaming/download pages now open with a responsive, dark + gold
   → the bot opens **that exact movie**, no manual searching
 - no file ids, download links or the bot token ever reach the browser
 
+**Posters need one thing: a free `TMDB_API_KEY`** (themoviedb.org → Settings →
+API). Set it, restart, and every new upload gets its poster + backdrop
+automatically (IMDb is the fallback). `/posters` tells you what is missing and
+lists the movies without artwork; `/posters retry` re-queues them; for a movie
+TMDB does not know, reply to a poster photo with `/setposter MOVIE_ID` — the
+photo is served through the bot itself, no image host needed.
+
 **How an upload reaches the page** — upload `Hmm (2024) 1080p.mkv` to your
 channel → `save_file()` indexes it → the release name is parsed (title *Hmm*,
 2024, 1080p) → one document `hmm-2024` is upserted into `recent_movies` → the
@@ -166,6 +173,9 @@ python tools/preview_section.py   # http://127.0.0.1:8080
 
 ```bash
 movie_update        – Toggle movie update notifications
+posters             – Stream Mode poster status + how to fix (admin); "/posters retry" re-queues lookups
+setposter           – Set a movie poster by hand: reply to a photo, or give an https image link (admin)
+delposter           – Remove a hand-set poster (admin)
 pm_search           – Toggle private message search
 verification        – View total verified users
 top                 – Search top trending items

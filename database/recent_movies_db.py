@@ -213,6 +213,28 @@ class RecentMoviesStore:
         result = await self.col.update_one({"_id": safe_id}, {"$set": fields})
         return bool(getattr(result, "matched_count", 0))
 
+    async def clear_poster(self, movie_id: str) -> bool:
+        """Remove the poster and forget the last lookup (``/delposter``).
+
+        The placeholder shows again and the poster worker may look the movie
+        up afresh on the next run.
+        """
+        safe_id = sanitize_movie_id(movie_id)
+        if not safe_id:
+            return False
+        result = await self.col.update_one(
+            {"_id": safe_id},
+            {
+                "$set": {
+                    "poster_url": None,
+                    "poster_source": None,
+                    "poster_checked_at": None,
+                    "updated_at": utcnow(),
+                }
+            },
+        )
+        return bool(getattr(result, "matched_count", 0))
+
     async def trim(self, keep: int = DEFAULT_MAX_MOVIES) -> int:
         """Delete everything but the newest ``keep`` movies (housekeeping)."""
         try:
@@ -272,6 +294,91 @@ class RecentMoviesStore:
             return int(await self.col.count_documents({}))
         except Exception:
             return 0
+
+    async def missing_posters(self, limit: int = 60) -> List[Dict[str, Any]]:
+        """Newest movies that still have no poster (diagnostics / retry)."""
+        try:
+            limit = max(1, min(int(limit), 200))
+        except (TypeError, ValueError):
+            limit = 60
+        try:
+            cursor = (
+                self.col.find({"poster_url": {"$in": [None, ""]}}, INTERNAL_FIELDS)
+                .sort(SORT)
+                .limit(limit)
+            )
+            rows = [doc async for doc in cursor]
+        except Exception as exc:
+            logger.error("Newly-uploaded movies: missing-poster query failed: %s", exc)
+            return []
+        # Older documents may simply lack the field.
+        if not rows:
+            try:
+                cursor = self.col.find({"poster_url": {"$exists": False}}, INTERNAL_FIELDS).sort(SORT).limit(limit)
+                rows = [doc async for doc in cursor]
+            except Exception:
+                rows = []
+        return rows
+
+    async def find_by_title(self, text: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Resolve what an admin typed – a ``MOVIE_ID`` or a title – to documents.
+
+        Order of attempts: exact ``_id`` → id derived from the text (with and
+        without the year) → case-insensitive ``title_key`` search.
+        """
+        text = str(text or "").strip()
+        if not text:
+            return []
+        seen: List[Dict[str, Any]] = []
+
+        async def _add(doc):
+            if doc and all(doc.get("_id") != other.get("_id") for other in seen):
+                seen.append(doc)
+
+        safe_id = sanitize_movie_id(text)
+        if safe_id:
+            await _add(await self.get(safe_id))
+        title, year, title_key = normalize_title(text, None)
+        if title:
+            for candidate in (movie_id_for(title, year), movie_id_for(title, None)):
+                if candidate and candidate != safe_id:
+                    await _add(await self.get(candidate))
+        if seen:
+            return seen[:limit]
+        if not title_key:
+            return []
+        try:
+            import re as _re
+
+            pattern = ".*".join(_re.escape(part) for part in title_key.split()[:6])
+            cursor = (
+                self.col.find({"title_key": {"$regex": pattern, "$options": "i"}}, INTERNAL_FIELDS)
+                .sort(SORT)
+                .limit(max(1, int(limit)))
+            )
+            return [doc async for doc in cursor]
+        except Exception as exc:
+            logger.error("Newly-uploaded movies: title search failed: %s", exc)
+            return []
+
+    async def reset_poster_checks(self, limit: int = 200) -> int:
+        """Forget failed poster lookups so the worker retries them right away.
+
+        Used by ``/posters retry`` – typically after ``TMDB_API_KEY`` was added.
+        Returns the number of movies that will be looked up again.
+        """
+        rows = await self.missing_posters(limit)
+        ids = [doc.get("_id") for doc in rows if doc.get("_id")]
+        if not ids:
+            return 0
+        try:
+            await self.col.update_many(
+                {"_id": {"$in": ids}}, {"$set": {"poster_checked_at": None}}
+            )
+        except Exception as exc:
+            logger.error("Newly-uploaded movies: reset of poster checks failed: %s", exc)
+            return 0
+        return len(ids)
 
     # ------------------------------------------------------------------ #
     # Private helpers
