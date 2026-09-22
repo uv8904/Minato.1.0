@@ -70,7 +70,8 @@ Join our support group for assistance:
 - ✅ Refer & Earn Premium  
 - ✅ Top Searching  
 - ✅ Best Streaming Website Integration
-- ✅ Newly Uploaded Movies section (auto-filled from the bot DB, gold/dark theme, Telegram deep links)
+- ✅ Newly Uploaded Movies section (auto-filled from the bot DB, gold/dark theme, Telegram deep links)  
+- ✅ "Just added" spotlight (Prime-Video-style banner for the newest upload) + live refresh — no reload needed  
 - ✅ Movie hero on the watch page (IMDb poster + 16:9 backdrop + deep search link above the player)
 - ✅ Premium Membership Management  
 - ✅ Online Streaming & Fast Download  
@@ -105,10 +106,32 @@ The streaming/download pages now open with a responsive, dark + gold
 **“Newly Uploaded Movies”** rail that fills itself from the bot database:
 
 - newest **20** movies, newest first, no duplicates (deterministic `MOVIE_ID`)
+- the **newest upload gets a Prime-Video-style “Just added” spotlight**: wide
+  backdrop, poster card, title, year/quality chips and a gold *Open in Telegram*
+  button — a movie you upload right now is the first thing visitors see
+- **live refresh**: open pages re-check the feed every `NEW_UPLOADED_POLL`
+  seconds (default 60), so a fresh upload slides in without a reload
 - real posters (TMDB → IMDb) with lazy loading, skeletons, empty and error states
 - every card deep-links to `https://t.me/BOT_USERNAME?start=movie_MOVIE_ID`
   → the bot opens **that exact movie**, no manual searching
 - no file ids, download links or the bot token ever reach the browser
+
+**Posters need one thing: a free `TMDB_API_KEY`** (themoviedb.org → Settings →
+API). Set it — variable name `TMDB_API_KEY`, value = the whole 32-character
+key as one word, nothing else — restart, and every new upload gets its poster +
+backdrop automatically (IMDb is the fallback). `/posters` tells you what is
+missing (including a cut-off or mistyped key) and
+lists the movies without artwork; `/posters retry` re-queues them; for a movie
+TMDB does not know, reply to a poster photo with `/setposter MOVIE_ID` — the
+photo is served through the bot itself, no image host needed.
+
+**How an upload reaches the page** — upload `Hmm (2024) 1080p.mkv` to your
+channel → `save_file()` indexes it → the release name is parsed (title *Hmm*,
+2024, 1080p) → one document `hmm-2024` is upserted into `recent_movies` → the
+poster worker fetches the artwork → `/api/movies/new` lists it first → the
+spotlight + rail update on every open page. Step by step (and a way to try it
+without the bot): section 0 of
+[`docs/NEWLY_UPLOADED_MOVIES.md`](docs/NEWLY_UPLOADED_MOVIES.md).
 
 **Setup:** nothing to install — it ships with the bot. See
 [`docs/NEWLY_UPLOADED_MOVIES.md`](docs/NEWLY_UPLOADED_MOVIES.md) for the
@@ -135,12 +158,15 @@ collection and proxied from your own origin; switch it off with
 `WATCH_HERO=False`. Details: section 9 of
 [`docs/NEWLY_UPLOADED_MOVIES.md`](docs/NEWLY_UPLOADED_MOVIES.md).
 
-Preview it locally without Telegram:
+Preview it locally without Telegram — including an **upload simulator**
+(type a movie file name, press *Upload to bot*, watch it appear in the
+spotlight and the rail with its poster):
 
 ```bash
 python tools/preview_section.py   # http://127.0.0.1:8080
-#   /               the section (rail)
-#   /watch/demo     the watch page with the movie hero
+#   /               Stream Mode page: player + movie hero + spotlight + rail + simulator
+#   /download       the download page (same rail, same simulator)
+#   POST /demo/upload {"file_name": "Hmm (2024) 1080p WEB-DL.mkv"}
 ```
 
 ---
@@ -149,6 +175,9 @@ python tools/preview_section.py   # http://127.0.0.1:8080
 
 ```bash
 movie_update        – Toggle movie update notifications
+posters             – Stream Mode poster status + how to fix (admin); "/posters retry" re-queues lookups
+setposter           – Set a movie poster by hand: reply to a photo, or give an https image link (admin)
+delposter           – Remove a hand-set poster (admin)
 pm_search           – Toggle private message search
 verification        – View total verified users
 top                 – Search top trending items

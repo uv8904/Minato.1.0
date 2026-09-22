@@ -879,7 +879,11 @@
         {% if newly_uploaded_enabled %}
         <section class="nu-section" id="newlyUploaded" aria-labelledby="nuTitle"
             data-api="{{ newly_uploaded_api | e }}" data-limit="{{ newly_uploaded_limit }}"
-            data-bot="{{ bot_username | e }}">
+            data-bot="{{ bot_username | e }}" data-poll="{{ newly_uploaded_poll | default(60) }}">
+            <!-- "Just added" spotlight: the newest upload gets a Prime-Video-style
+                 banner (16:9 backdrop, poster card, title, badges, deep link).
+                 Filled by newly_uploaded.js from the same /api/movies/new payload. -->
+            <div class="nu-spotlight" id="nuSpotlight" data-nu-spotlight aria-live="polite" hidden></div>
             <div class="nu-head">
                 <div>
                     <h2 class="nu-title" id="nuTitle">Newly <span>uploaded</span> movies</h2>

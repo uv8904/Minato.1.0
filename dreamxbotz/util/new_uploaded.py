@@ -49,6 +49,9 @@ UPLOAD_QUEUE_SIZE = 5000
 POSTER_QUEUE_SIZE = 200
 #: Seconds between two poster lookups (upstream APIs are rate limited).
 POSTER_POLL_INTERVAL = 1.0
+#: ``poster_source`` of artwork chosen by an admin (``/setposter``) – such a
+#: poster is never replaced by the automatic TMDB/IMDb/movie-update flows.
+MANUAL_SOURCE = "manual"
 
 
 def _cfg(name: str, default):
@@ -357,6 +360,9 @@ async def _persist(item: Dict[str, Any]) -> None:
 
     if movie_id:
         if item.get("poster_url"):
+            current = await recent_movies.get(movie_id)
+            if current and current.get("poster_source") == MANUAL_SOURCE:
+                return  # an admin picked this poster on purpose – keep it
             await recent_movies.set_poster(
                 movie_id, item["poster_url"], item.get("poster_source") or "movie_update"
             )
@@ -433,9 +439,14 @@ async def lookup_art(
 
     Returns ``{"poster": url|None, "backdrop": url|None, "source": str|None}``:
 
-    * TMDB (``get_movie_detailsx``) is asked first – it is the only source that
-      returns a 16:9 ``backdrop_url`` as well as the 2:3 poster,
-    * IMDb (``get_movie_details``) is the fallback when TMDB has no poster.
+    1. TMDB through the bot's poster helper (``get_movie_detailsx``) – it is
+       the only source that returns a 16:9 ``backdrop_url`` as well as the
+       2:3 poster,
+    2. TMDB **directly** (``dreamxbotz/util/tmdb_direct.py``) with the owner's
+       ``TMDB_API_KEY`` when the helper had no poster (its hosted wrapper may
+       be down or rate limited),
+    3. IMDb (``get_movie_details``) as the last fallback – no key needed, but
+       slower and without backdrops.
 
     Only ``https://`` URLs are returned; everything else is rejected so a
     hostile upstream answer can never reach the poster proxy.
@@ -449,14 +460,14 @@ async def lookup_art(
         )
     except Exception as exc:
         logger.debug("Poster helpers unavailable: %s", exc)
-        return art
+        get_movie_details = get_movie_detailsx = None  # type: ignore
 
     if timeout is None:
         timeout = _poster_timeout()
     use_tmdb = bool(_cfg("TMDB_POSTER", True))
     details: Optional[dict] = None
 
-    if use_tmdb:
+    if use_tmdb and get_movie_detailsx is not None:
         try:
             details = await asyncio.wait_for(get_movie_detailsx(query), timeout=timeout)
         except Exception as exc:
@@ -464,7 +475,16 @@ async def lookup_art(
         if details and details.get("error"):
             details = None
 
-    if not (details or {}).get("poster_url"):
+    if use_tmdb and not (details or {}).get("poster_url"):
+        direct = await _tmdb_direct(query, timeout)
+        if direct.get("poster") or direct.get("backdrop"):
+            details = {
+                "poster_url": direct.get("poster"),
+                "backdrop_url": direct.get("backdrop"),
+                "tmdb_url": f"https://www.themoviedb.org/movie/{direct.get('tmdb_id')}",
+            }
+
+    if not (details or {}).get("poster_url") and get_movie_details is not None:
         try:
             details = await asyncio.wait_for(get_movie_details(title), timeout=timeout) or details
         except Exception as exc:
@@ -486,6 +506,29 @@ async def lookup_art(
         tmdb_hint = "tmdb" in str(poster or backdrop).lower() or bool(details.get("tmdb_url"))
         art["source"] = "tmdb" if (use_tmdb and tmdb_hint) else "imdb"
     return art
+
+
+def tmdb_api_key() -> str:
+    """The owner's ``TMDB_API_KEY`` (empty when not configured), stripped of pasted quotes/markdown."""
+    from dreamxbotz.util.tmdb_direct import clean_key
+
+    return clean_key(_cfg("TMDB_API_KEY", ""))
+
+
+async def _tmdb_direct(query: str, timeout: float) -> Dict[str, Any]:
+    """Official TMDB search with the owner's key – ``{}`` when no key / no hit."""
+    key = tmdb_api_key()
+    if not key:
+        return {}
+    try:
+        from dreamxbotz.util.tmdb_direct import search_movie
+
+        return await asyncio.wait_for(
+            search_movie(query, api_key=key, timeout=timeout), timeout=timeout + 1
+        ) or {}
+    except Exception as exc:
+        logger.debug("Direct TMDB lookup failed for '%s': %s", query, exc)
+        return {}
 
 
 # --------------------------------------------------------------------------- #

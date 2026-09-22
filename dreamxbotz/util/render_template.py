@@ -26,6 +26,10 @@ try:
 except Exception:  # pragma: no cover - defensive
     _NU_LIMIT = 20
 try:
+    from info import NEW_UPLOADED_POLL as _NU_POLL
+except Exception:  # pragma: no cover - defensive
+    _NU_POLL = 60
+try:
     from info import API_URL as _NU_API_URL
 except Exception:  # pragma: no cover - defensive
     _NU_API_URL = ""
@@ -129,5 +133,8 @@ async def render_page(id, secure_hash, src=None):
         newly_uploaded_enabled=_NU_ENABLED,
         newly_uploaded_api=newly_uploaded_api_url(),
         newly_uploaded_limit=_NU_LIMIT,
+        # Live refresh interval (seconds, 0 = off): a movie uploaded to the bot
+        # shows up in the spotlight + rail without the visitor reloading.
+        newly_uploaded_poll=_NU_POLL,
         asset_version=ASSET_VERSION,
     )

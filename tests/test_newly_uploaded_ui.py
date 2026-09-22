@@ -161,6 +161,23 @@ def test_section_is_rendered_with_its_configuration(page, request):
     # The grid starts in the loading state (skeletons are rendered by JS).
     assert parsed.ids["nuGrid"][1]["aria-busy"] == "true"
     assert "data-nu-grid" in parsed.ids["nuGrid"][1]
+    # Live refresh interval (NEW_UPLOADED_POLL, default 60 s).
+    assert attrs["data-poll"] == "60"
+
+
+@pytest.mark.parametrize("page", ["stream_page", "download_page"])
+def test_section_has_the_just_added_spotlight_container(page, request):
+    """The newest upload gets a Prime-Video-style banner above the rail."""
+    _, html = request.getfixturevalue(page)
+    parsed = parse(html)
+    tag, attrs = parsed.ids["nuSpotlight"]
+    assert tag == "div"
+    assert "data-nu-spotlight" in attrs
+    assert "hidden" in attrs  # empty until the feed answered
+    assert attrs["aria-live"] == "polite"
+    # It lives inside the section, above the grid.
+    assert ("section", "nu-section") in parsed.ancestors["nuSpotlight"]
+    assert html.index('id="nuSpotlight"') < html.index('id="nuGrid"')
 
 
 @pytest.mark.parametrize("page", ["stream_page", "download_page"])
@@ -263,6 +280,11 @@ def test_stylesheet_matches_the_dark_gold_theme_and_stays_scoped():
     assert "prefers-reduced-motion" in css
     assert "nu-skel" in css and "nu-shimmer" in css
     assert ".nu-state" in css and ".nu-retry" in css
+    # "Just added" spotlight: wide artwork + poster card + gold CTA.
+    assert ".nu-spot {" in css and ".nu-spot-backdrop {" in css
+    assert ".nu-spot-backdrop--poster" in css  # portrait fallback → blurred ambient bg
+    assert ".nu-spot-btn-primary" in css and ".nu-spot--fresh" in css
+    assert "@media (max-width: 760px)" in css  # banner collapses on phones
 
 
 def test_script_implements_states_lazy_posters_and_deep_links():
@@ -297,3 +319,26 @@ def test_script_exposes_a_refresh_hook_and_respects_the_limit():
     assert "refresh" in js
     assert 'root.getAttribute("data-limit")' in js
     assert '"?limit=" + limit' in js or "limit=" in js
+
+
+def test_script_renders_the_spotlight_and_refreshes_live():
+    js = js_text()
+    # Newest upload → banner (built with DOM APIs like everything else).
+    assert "function buildSpotlight" in js
+    assert 'querySelector("[data-nu-spotlight]")' in js
+    assert '"Just added"' in js
+    assert "nu-spot-backdrop--poster" in js  # portrait artwork → ambient background
+    # The backdrop URL is validated exactly like the poster URL.
+    assert "safePoster(movie.backdrop)" in js
+    # Live refresh: data-poll seconds, only while the tab is visible, ETag friendly.
+    assert 'root.getAttribute("data-poll")' in js
+    assert "document.hidden" in js
+    assert '"no-cache"' in js
+    # Unchanged cards are reused (no poster flicker) – keyed by a signature.
+    assert "data-nu-sig" in js
+    assert "function movieSignature" in js
+    # A movie that arrived while the page was open is highlighted.
+    assert "nu-spot--fresh" in js
+    assert 'setChip("fresh"' in js
+    # Manual hook keeps both flavours.
+    assert "silent" in js

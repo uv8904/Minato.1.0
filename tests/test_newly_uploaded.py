@@ -463,6 +463,7 @@ def test_api_returns_sanitized_payload_newest_first():
         "quality",
         "quality_label",
         "poster",
+        "backdrop",
         "has_poster",
         "uploaded_at",
         "added",
@@ -471,6 +472,9 @@ def test_api_returns_sanitized_payload_newest_first():
     assert first["quality"] == "1080p"
     assert first["quality_label"] == "1080p, 720p"
     assert first["poster"] == "/api/movies/poster/jawan-2023?v=%s" % movie_api._poster_version(
+        docs[0]
+    )
+    assert first["backdrop"] == "/api/movies/backdrop/jawan-2023?v=%s" % movie_api._poster_version(
         docs[0]
     )
     assert first["deeplink"] == "https://t.me/TestBot?start=movie_jawan-2023"

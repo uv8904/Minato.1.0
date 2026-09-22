@@ -101,6 +101,10 @@
             "description": "Stream Mode website: look missing posters up in the background from TMDB/IMDb (true/false).",
             "required": false
         },
+        "TMDB_API_KEY": {
+            "description": "Free TMDB API key (themoviedb.org -> Settings -> API). Needed for automatic posters/backdrops on the Stream Mode website (IMDb is only a slow fallback). Without it use /setposter.",
+            "required": false
+        },
         "NEW_UPLOADED_POSTER_TIMEOUT": {
             "description": "Stream Mode website: timeout in seconds for a single poster lookup.",
             "required": false
@@ -111,6 +115,10 @@
         },
         "NEW_UPLOADED_MAX_MOVIES": {
             "description": "Stream Mode website: keep only the newest N entries in the recent_movies collection.",
+            "required": false
+        },
+        "NEW_UPLOADED_POLL": {
+            "description": "Stream Mode website: live refresh - open pages re-check /api/movies/new every N seconds so a fresh upload appears in the \"Just added\" spotlight without a reload (default 60, 0 = off).",
             "required": false
         },
         "API_URL": {
