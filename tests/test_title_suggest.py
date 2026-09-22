@@ -17,6 +17,8 @@ from dreamxbotz.util import title_suggest
 from dreamxbotz.util.title_suggest import (
     AUTO_PICK_GAP,
     AUTO_PICK_SCORE,
+    _core_tokens,
+    _score,
     choose_auto_pick,
     extract_title,
     normalize_title,
@@ -49,6 +51,36 @@ def test_extract_title_display_form():
     assert extract_title("Pushpa 2_The Rule (2024) 1080p WEB DL Hindi AAC x264.mkv") == "Pushpa 2 The Rule"
     assert extract_title("Pradhama Dristhiya Kuttakkar 1080p x264 Hindi.mkv") == "Pradhama Dristhiya Kuttakkar"
     assert extract_title("") == ""
+
+
+def test_normalize_drops_release_group_words():
+    # No year here, so only the noise list can remove these tokens.
+    assert normalize_title("Inception Goflix DS4K DDP5 HQ RIP BR") == "inception"
+    for token in ("goflix", "ds4k", "ddp5", "hq", "rip", "br"):
+        assert normalize_title(token) == ""
+
+
+def test_core_tokens_drop_after_release_year_keep_leading_year():
+    assert _core_tokens(["marco", "2024", "goflix", "720p"]) == ["marco"]
+    assert _core_tokens(["marco", "2024", "ddp5", "1", "h", "265"]) == ["marco"]
+    assert _core_tokens(["pushpa", "2", "the", "rule", "2024"]) == ["pushpa", "2", "the", "rule"]
+    # A leading year *is* the title. A later year is the release year.
+    assert _core_tokens(["1917"]) == ["1917"]
+    assert _core_tokens(["1917", "2019", "bluray"]) == ["1917"]
+    assert _core_tokens(["1917", "directors", "cut"]) == ["1917", "directors", "cut"]
+    assert _core_tokens(["blade", "runner", "2049", "2017", "extras"]) == ["blade", "runner", "2049"]
+    assert normalize_title("1917") == "1917"
+    assert normalize_title("1917 2019 1080p BluRay") == "1917"
+    assert extract_title("1917.2019.1080p.BluRay.mkv") == "1917"
+
+
+def test_short_query_score_uses_partial_ratio():
+    # Full-string ratio of a 1-word query against a long candidate is under
+    # the suggestion threshold; partial_ratio is what clears it.
+    long_name = "marco unreleased cut fanedit edition"
+    assert _score("marcoo", long_name) >= 55
+    # Four or more words stay on full-string ratios only.
+    assert _score("marcoo zzzz yyyy xxxx", long_name) < 55
 
 
 # --------------------------------------------------------------------------
@@ -97,6 +129,28 @@ def test_rank_keeps_best_score_per_title():
     ranked = rank_suggestions("pushpa 2 the rule", DB_TITLES)
     top = dict(ranked).get("Pushpa 2 The Rule")
     assert top is not None and top >= 90
+
+
+def test_short_query_suggests_marco_release_names():
+    """``marcoo 2024`` must hit both of these release names, as one title.
+
+    Release-group words (Goflix, DDP5) and the tags after the year used to
+    survive normalisation, and the full-string ratio of the short query then
+    fell under the suggestion threshold.
+    """
+    files = [
+        "Marco 2024 Kannada HDRip Goflix 720p",
+        "MARCO Hindi 2024 720p AMZN WEB DL DDP5 1 H 265",
+    ]
+    assert normalize_title(files[0]) == "marco"
+    assert normalize_title(files[1]) == "marco"
+    assert extract_title(files[0]) == "Marco"
+    assert extract_title(files[1]) == "Marco"
+
+    ranked = rank_suggestions("marcoo 2024", files)
+    assert ranked, "short misspelled query should still suggest the release"
+    assert [title for title, _score in ranked] == ["Marco"]
+    assert ranked[0][1] >= 55
 
 
 # --------------------------------------------------------------------------
