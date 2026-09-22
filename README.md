@@ -63,6 +63,7 @@ Join our support group for assistance:
 - ✅ Verified User Counter  
 - ✅ Trending Titles  
 - ✅ Advanced AI Spelling Correction  
+- ✅ "Did You Mean?" - File-DB Fuzzy Suggestions with Coloured Buttons (auto-fixes obvious typos, `DB_SUGGEST` env, default True)  
 - ✅ Request to Join via FSub (Admins Only)  
 - ✅ Verified User Database Save  
 - ✅ Superfast User Broadcast  

@@ -195,6 +195,10 @@ COLOR_BUTTONS = is_enabled(environ.get('COLOR_BUTTONS', "True"), True) # Coloure
 # AI Spell Check (Groq + IMDb fallback)
 # ============================
 AI_SPELL_CHECK = is_enabled(environ.get('AI_SPELL_CHECK', "True"), True)  # Use Groq/IMDb to fix misspelled titles
+# On a search miss, fuzzy-match the typed text against titles that exist in
+# the file DB and show coloured "did you mean" buttons (or auto-fix when the
+# match is obvious). See dreamxbotz/util/title_suggest.py.
+DB_SUGGEST = is_enabled(environ.get('DB_SUGGEST', "True"), True)  # File-DB "did you mean" suggestions On/Off
 # Koyeb/Heroku: set GROQ_API_KEY (gsk_... from https://console.groq.com/keys).
 # GROK_API_KEY is accepted as a common typo/alias. This is Groq, not xAI Grok.
 GROQ_API_KEY = env_str('GROQ_API_KEY', 'GROK_API_KEY', default='regsk_mZGhZ131cAQeY1y4vO0yWGdyb3FYNwcYcq4IWfPsfIgae1M54e2h')
