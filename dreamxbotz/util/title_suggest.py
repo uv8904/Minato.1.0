@@ -35,6 +35,8 @@ AUTO_PICK_GAP = 6          # ...and must beat the runner-up by at least this
 # ---------------------------------------------------------------------------
 # Junk tokens that never belong to a title: containers, codecs, qualities,
 # languages, sources, release-group noise. (Same idea as title_notify.)
+# goflix/ds4k/ddp5/hq/rip/br are release-group or source tags that survive
+# as their own token (``DDP5.1`` -> ddp5).
 _NOISE_RE = re.compile(
     r"^(?:mkv|mp4|avi|m4v|mov|webm|ts|"
     r"x264|x265|h264|h265|hevc|avc|aac|ac3|eac3|dts|truehd|flac|opus|mp3|"
@@ -44,7 +46,8 @@ _NOISE_RE = re.compile(
     r"hindi|english|tamil|telugu|malayalam|kannada|bengali|marathi|gujarati|punjabi|urdu|"
     r"hin|eng|tam|tel|mal|kan|ben|mar|guj|pun|multi|dual|audio|sub|subs|subbed|dubbed|esubs|"
     r"full|movie|film|new|latest|official|proper|extended|imax|complete|"
-    r"nf|amzn|prime|hotstar|zee5|sonyliv|jhs|aha|hbo|apple|dsnp|paramount|lionsgate)$"
+    r"nf|amzn|prime|hotstar|zee5|sonyliv|jhs|aha|hbo|apple|dsnp|paramount|lionsgate|"
+    r"goflix|ds4k|ddp5|hq|rip|br)$"
 )
 _YEAR_RE = re.compile(r"^(?:19|20)\d{2}$")
 _EXT_RE = re.compile(r"\.(?:mkv|mp4|avi|m4v|mov|webm|ts)$", re.IGNORECASE)
@@ -56,6 +59,43 @@ _SEASON_WORD_RE = re.compile(r"\bseasons?\s*(\d+)\b")
 _EPISODE_WORD_RE = re.compile(r"\bepisodes?\s*(\d+)\b")
 
 
+def _noise_tokens(text) -> list[str]:
+    """Lowercase tokens with containers, season markers and noise words removed."""
+    if not text:
+        return []
+    t = str(text).lower()
+    t = _EXT_RE.sub(" ", t)
+    t = _SEASON_EP_RE.sub(lambda m: "s%02d e%02d" % (int(m.group(1)), int(m.group(2))), t)
+    t = _SEASON_WORD_RE.sub(lambda m: "s%02d" % int(m.group(1)), t)
+    t = _EPISODE_WORD_RE.sub(lambda m: "e%02d" % int(m.group(1)), t)
+    t = re.sub(r"[^a-z0-9]+", " ", t)
+    return [tok for tok in t.split() if not _NOISE_RE.match(tok)]
+
+
+def _core_tokens(tokens: list[str]) -> list[str]:
+    """Title core: drop the release year and every token after it.
+
+    Scene names hang tags after the year (``Marco 2024 Goflix 720p``,
+    ``MARCO ... DDP5 1 H 265``). Those tokens must not leak into matching,
+    de-duplication or the display title - a short query would otherwise be
+    scored against the junk, and two copies of the same movie would not
+    collapse to one button.
+
+    The release year is the last ``19xx``/``20xx`` token that does not lead
+    the name. A year in the first position *is* the title (``1917``), so it
+    is never the cutoff; a later year still ends the name
+    (``1917 2019 BluRay`` -> ``['1917']``,
+    ``Blade Runner 2049 2017`` -> ``['blade', 'runner', '2049']``).
+    """
+    release_at = None
+    for index, tok in enumerate(tokens):
+        if index and _YEAR_RE.match(tok):
+            release_at = index
+    if release_at is None:
+        return list(tokens)
+    return list(tokens[:release_at])
+
+
 def normalize_title(text) -> str:
     """Lowercase ``text`` and drop everything that is not the title.
 
@@ -64,19 +104,8 @@ def normalize_title(text) -> str:
     >>> normalize_title('Loki.S01E04.720p.mkv')
     'loki s01 e04'
     """
-    if not text:
-        return ""
-    t = str(text).lower()
-    t = _EXT_RE.sub(" ", t)
-    t = _SEASON_EP_RE.sub(lambda m: "s%02d e%02d" % (int(m.group(1)), int(m.group(2))), t)
-    t = _SEASON_WORD_RE.sub(lambda m: "s%02d" % int(m.group(1)), t)
-    t = _EPISODE_WORD_RE.sub(lambda m: "e%02d" % int(m.group(1)), t)
-    t = re.sub(r"[^a-z0-9]+", " ", t)
-    tokens = [tok for tok in t.split() if not _NOISE_RE.match(tok)]
-    # A trailing release year ("... 2025") is not part of the title.
-    if len(tokens) > 1 and _YEAR_RE.match(tokens[-1]):
-        tokens = tokens[:-1]
-    return " ".join(tokens)
+    # Matching string: core tokens only (release year and the tags after it gone).
+    return " ".join(_core_tokens(_noise_tokens(text)))
 
 
 def extract_title(file_name) -> str:
@@ -85,16 +114,8 @@ def extract_title(file_name) -> str:
     >>> extract_title('Pushpa 2_The Rule (2024) 1080p WEB DL Hindi AAC x264.mkv')
     'Pushpa 2 The Rule'
     """
-    if not file_name:
-        return ""
-    t = _EXT_RE.sub(" ", str(file_name)).lower()
-    t = _SEASON_EP_RE.sub(lambda m: "s%02d e%02d" % (int(m.group(1)), int(m.group(2))), t)
-    t = _SEASON_WORD_RE.sub(lambda m: "s%02d" % int(m.group(1)), t)
-    t = _EPISODE_WORD_RE.sub(lambda m: "e%02d" % int(m.group(1)), t)
-    tokens = [tok for tok in re.sub(r"[^a-z0-9]+", " ", t).split()
-              if not _NOISE_RE.match(tok)]
-    if len(tokens) > 1 and _YEAR_RE.match(tokens[-1]):
-        tokens = tokens[:-1]
+    # Display title uses the same core as matching / de-dupe.
+    tokens = _core_tokens(_noise_tokens(file_name))
     if not tokens:
         return ""
     return " ".join(tok.capitalize() for tok in tokens).strip()
@@ -110,7 +131,16 @@ def _score(query_norm: str, cand_norm: str) -> int:
         return 0
     if query_norm == cand_norm:
         return 100
-    return max(fuzz.ratio(query_norm, cand_norm), fuzz.token_sort_ratio(query_norm, cand_norm))
+    scores = [
+        fuzz.ratio(query_norm, cand_norm),
+        fuzz.token_sort_ratio(query_norm, cand_norm),
+    ]
+    # A short query ("marcoo 2024" -> "marcoo") loses to a long release name
+    # on full-string ratio even when the title itself is right there.
+    # partial_ratio scores the best window, which is the right signal then.
+    if len(query_norm.split()) <= 3:
+        scores.append(fuzz.partial_ratio(query_norm, cand_norm))
+    return max(scores)
 
 
 def _token_matched(query_token: str, cand_tokens) -> bool:
@@ -131,29 +161,38 @@ def rank_suggestions(query: str, candidates: Iterable[str],
     Returns ``[(display_title, score), ...]`` best first, de-duplicated by
     normalized title. Candidates with no meaningful token overlap with the
     query are ignored so "devara" is never suggested for "pushpa".
+
+    Matching, de-duplication and the button label all go through
+    ``_core_tokens``, so release tags after the year cannot hide a short
+    query or split one movie into two suggestions.
     """
-    q = normalize_title(query)
+    # matching
+    q_tokens = _core_tokens(_noise_tokens(query))
+    q = " ".join(q_tokens)
     if not q:
         return []
-    q_tokens = q.split()
     best: dict[str, tuple[str, int]] = {}
     for raw in candidates or []:
-        c = normalize_title(raw)
+        # same core is the match string and the de-dupe key
+        c_tokens = _core_tokens(_noise_tokens(raw))
+        c = " ".join(c_tokens)
         if not c or len(c) < 3:
             continue
-        c_tokens = set(c.split())
+        c_token_set = set(c_tokens)
         # At least a third of the query words must resemble a candidate word
         # (fuzzily - the query itself is misspelled), otherwise it is a
         # different movie entirely.
-        if q_tokens and c_tokens:
-            overlap = sum(1 for t in q_tokens if _token_matched(t, c_tokens)) / len(q_tokens)
+        if q_tokens and c_token_set:
+            overlap = sum(1 for t in q_tokens if _token_matched(t, c_token_set)) / len(q_tokens)
             if overlap < 0.34:
                 continue
         score = _score(q, c)
         if score < min_score:
             continue
         if c not in best or score > best[c][1]:
-            best[c] = (extract_title(raw) or c.title(), score)
+            # display - same core, title-cased (extract_title shares this cut)
+            display = extract_title(raw) or c.title()
+            best[c] = (display, score)
     ranked = sorted(((title, score) for title, score in best.values()),
                     key=lambda item: (-item[1], item[0]))
     return ranked[:limit]
