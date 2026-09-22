@@ -80,6 +80,28 @@ def key_state() -> Tuple[bool, str]:
     return True, f"set ({kind}, …{key[-4:]})"
 
 
+#: Seconds the live "is this key accepted?" question may take inside ``/posters``.
+LIVE_CHECK_TIMEOUT = 6.0
+
+
+async def live_key_check(timeout: float = LIVE_CHECK_TIMEOUT) -> Tuple[Optional[bool], str]:
+    """Ask TMDB whether the configured key works – ``(True|False|None, reason)``.
+
+    ``None`` means "could not ask" (no internet / TMDB down); the key itself
+    is only judged when TMDB answered.  Skipped when the key is missing or
+    already fails the format check.
+    """
+    usable, _ = key_state()
+    if not usable:
+        return None, "skipped"
+    from dreamxbotz.util.tmdb_direct import clean_key, validate_key
+
+    try:
+        return await validate_key(clean_key(_cfg("TMDB_API_KEY", "")), timeout=timeout)
+    except Exception as exc:  # pragma: no cover - defensive
+        return None, f"check failed ({type(exc).__name__})"
+
+
 def misnamed_key_variables(env=None) -> List[str]:
     """Environment variables that *mention* TMDB but are not one of the accepted key names.
 
@@ -106,8 +128,12 @@ def misnamed_key_variables(env=None) -> List[str]:
     return sorted(found)
 
 
-async def collect_status(window: int = REPORT_WINDOW) -> Dict[str, Any]:
-    """Raw facts for the report (also handy for tests and ``/stats``)."""
+async def collect_status(window: int = REPORT_WINDOW, live: bool = True) -> Dict[str, Any]:
+    """Raw facts for the report (also handy for tests and ``/stats``).
+
+    ``live=True`` additionally asks TMDB whether the key is accepted, which
+    catches the classic one-wrong-digit paste that passes every format check.
+    """
     from dreamxbotz.util import new_uploaded
 
     store = _store()
@@ -115,7 +141,10 @@ async def collect_status(window: int = REPORT_WINDOW) -> Dict[str, Any]:
     missing = [row for row in rows if not row.get("poster_url")]
     manual = sum(1 for row in rows if row.get("poster_source") == new_uploaded.MANUAL_SOURCE)
     usable, key_text = key_state()
+    live_ok, live_text = (await live_key_check()) if (live and usable) else (None, "skipped")
     return {
+        "tmdb_live_ok": live_ok,
+        "tmdb_live": live_text,
         "enabled": new_uploaded.is_enabled(),
         "poster_fetch": bool(_cfg("NEW_UPLOADED_POSTER_FETCH", True)),
         "tmdb_helper": bool(_cfg("TMDB_POSTER", True)),
@@ -151,6 +180,14 @@ def format_report(status: Dict[str, Any]) -> str:
     lines.append(f"Section: {onoff(status['enabled'])} · auto poster lookup: {onoff(status['poster_fetch'])}")
     key_icon = "✅" if status["tmdb_key_ok"] else "❌"
     lines.append(f"TMDB_API_KEY: {key_icon} {status['tmdb_key']}")
+    live_ok, live_text = status.get("tmdb_live_ok"), status.get("tmdb_live") or ""
+    if status["tmdb_key_ok"] and live_text != "skipped":
+        if live_ok is True:
+            lines.append("TMDB says: ✅ key accepted – posters will work")
+        elif live_ok is False:
+            lines.append(f"TMDB says: ❌ key REJECTED – {esc(live_text)}")
+        else:
+            lines.append(f"TMDB says: ⚠️ could not check right now – {esc(live_text)}")
     lines.append(
         "Sources: TMDB helper ({}) → TMDB direct ({}) → IMDb (no key needed)".format(
             "on" if status["tmdb_helper"] else "off",
@@ -183,6 +220,13 @@ def format_report(status: Dict[str, Any]) -> str:
     lines.append("")
     lines.append("<b>How to get posters:</b>")
     step = 1
+    if status["tmdb_key_ok"] and status.get("tmdb_live_ok") is False:
+        lines.append(
+            f"{step}. TMDB rejected this key ({esc(status.get('tmdb_live') or 'invalid')}) – one wrong digit is enough. "
+            "Open themoviedb.org → Settings → API, copy the <b>API Key</b> again, replace <code>TMDB_API_KEY</code>, "
+            "restart the bot and send <code>/posters retry</code>."
+        )
+        step += 1
     if not status["tmdb_key_ok"]:
         if status.get("tmdb_key_set"):
             lines.append(

@@ -105,6 +105,28 @@ def test_key_problem_explains_copy_paste_mistakes():
     assert tmdb_direct.key_problem("eyJhbGciOiJIUzI1NiJ9." + "a" * 60 + "." + "b" * 40) == ""
 
 
+def test_validate_key_tells_wrong_key_apart_from_no_internet():
+    good = "0123456789abcdef0123456789abcdef"
+    session = FakeSession([(200, {"success": True, "status_code": 1, "status_message": "Success."})])
+    assert run(tmdb_direct.validate_key(good, session=session)) == (True, "accepted")
+    url, params, headers = session.calls[0]
+    assert url == tmdb_direct.AUTH_URL and params == {"api_key": good}
+
+    rejected = FakeSession([(401, {"success": False, "status_code": 7, "status_message": "Invalid API key: You must be granted a valid key."})])
+    ok, reason = run(tmdb_direct.validate_key(good, session=rejected))
+    assert ok is False and reason.startswith("Invalid API key")
+
+    class Offline:
+        def get(self, url, params=None, headers=None):
+            raise OSError("Network is unreachable")
+
+    ok, reason = run(tmdb_direct.validate_key(good, session=Offline()))
+    assert ok is None and "could not reach" in reason
+    ok, reason = run(tmdb_direct.validate_key(good, session=FakeSession([(503, {})])))
+    assert ok is None and reason == "HTTP 503"
+    assert run(tmdb_direct.validate_key("", session=FakeSession([])))[0] is False
+
+
 def test_info_accepts_common_spellings_of_the_key_variable():
     import info
 
@@ -331,9 +353,22 @@ def test_telegram_reply_becomes_a_tg_reference():
     assert poster_admin.telegram_poster_ref(SimpleNamespace(photo=None, document=None))[0] == ""
 
 
+async def _live_accepted(timeout=6.0):
+    return True, "accepted"
+
+
+async def _live_rejected(timeout=6.0):
+    return False, "Invalid API key: You must be granted a valid key."
+
+
+async def _live_offline(timeout=6.0):
+    return None, "could not reach api.themoviedb.org (ClientConnectorError)"
+
+
 def test_status_report_explains_what_is_missing(monkeypatch):
     store = run(seed(make_store()))
     monkeypatch.setattr(poster_admin, "_store", lambda: store)
+    monkeypatch.setattr(poster_admin, "live_key_check", _live_accepted)
     settings = {"TMDB_API_KEY": "", "NEW_UPLOADED_POSTER_FETCH": True, "TMDB_POSTER": True, "URL": "https://bot.example/"}
     monkeypatch.setattr(poster_admin, "_cfg", lambda name, default: settings.get(name, default))
 
@@ -350,13 +385,49 @@ def test_status_report_explains_what_is_missing(monkeypatch):
     settings["TMDB_API_KEY"] = "0123456789abcdef0123456789abcdef"
     report = poster_admin.format_report(run(poster_admin.collect_status()))
     assert "TMDB_API_KEY: ✅ set (v3 key, …cdef)" in report
+    assert "TMDB says: ✅ key accepted" in report
     assert "Set <code>TMDB_API_KEY</code>" not in report
     assert poster_admin.poster_preview_url("hmm-2024") == "https://bot.example/api/movies/poster/hmm-2024"
+
+    # The live question is skipped when asked for (or when the key already fails the format check).
+    status = run(poster_admin.collect_status(live=False))
+    assert status["tmdb_live"] == "skipped" and "TMDB says:" not in poster_admin.format_report(status)
+
+
+def test_status_report_shows_tmdbs_own_verdict_on_the_key(monkeypatch):
+    store = run(seed(make_store()))
+    monkeypatch.setattr(poster_admin, "_store", lambda: store)
+    settings = {"TMDB_API_KEY": "ed52bfafe0bba9cbf8924dd783d7dab1", "NEW_UPLOADED_POSTER_FETCH": True, "TMDB_POSTER": True}
+    monkeypatch.setattr(poster_admin, "_cfg", lambda name, default: settings.get(name, default))
+
+    # Looks fine, but TMDB says no (one wrong digit) → first fix is "copy the key again".
+    monkeypatch.setattr(poster_admin, "live_key_check", _live_rejected)
+    report = poster_admin.format_report(run(poster_admin.collect_status()))
+    assert "TMDB says: ❌ key REJECTED – Invalid API key" in report
+    assert report.index("1. TMDB rejected this key") < report.index("Use clean release names")
+
+    # No internet → say so instead of blaming the key.
+    monkeypatch.setattr(poster_admin, "live_key_check", _live_offline)
+    report = poster_admin.format_report(run(poster_admin.collect_status()))
+    assert "TMDB says: ⚠️ could not check right now" in report and "rejected this key" not in report
+
+    # A key that fails the format check is never sent to TMDB.
+    settings["TMDB_API_KEY"] = "ed52bfafe0bba9cbf8radab1"
+    called = []
+
+    async def spy(timeout=6.0):
+        called.append(1)
+        return True, "accepted"
+
+    monkeypatch.setattr(poster_admin, "live_key_check", spy)
+    status = run(poster_admin.collect_status())
+    assert called == [] and status["tmdb_live"] == "skipped"
 
 
 def test_status_report_calls_out_a_garbled_or_misnamed_key(monkeypatch):
     store = run(seed(make_store()))
     monkeypatch.setattr(poster_admin, "_store", lambda: store)
+    monkeypatch.setattr(poster_admin, "live_key_check", _live_accepted)
     settings = {"TMDB_API_KEY": "ed52bfafe0bba9cbf8radab1", "NEW_UPLOADED_POSTER_FETCH": True, "TMDB_POSTER": True}
     monkeypatch.setattr(poster_admin, "_cfg", lambda name, default: settings.get(name, default))
 

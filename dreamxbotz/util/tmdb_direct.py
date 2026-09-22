@@ -25,6 +25,8 @@ from aiohttp import ClientSession, ClientTimeout
 logger = logging.getLogger(__name__)
 
 SEARCH_URL = "https://api.themoviedb.org/3/search/movie"
+#: "Validate key" endpoint – answers 200 for a good credential and 401 for a bad one.
+AUTH_URL = "https://api.themoviedb.org/3/authentication"
 IMAGE_BASE = "https://image.tmdb.org/t/p/"
 POSTER_SIZE = "w780"
 BACKDROP_SIZE = "w1280"
@@ -125,6 +127,49 @@ def _pick(results, title: str) -> Optional[dict]:
     if with_poster:
         return with_poster[0]
     return results[0] if results and isinstance(results[0], dict) else None
+
+
+async def validate_key(
+    api_key: str,
+    *,
+    timeout: float = DEFAULT_TIMEOUT,
+    session: Optional[ClientSession] = None,
+) -> Tuple[Optional[bool], str]:
+    """Ask TMDB itself whether ``api_key`` is accepted.
+
+    Returns ``(True, "accepted")``, ``(False, "<TMDB's reason>")`` when the key
+    is rejected (HTTP 401 – usually one mistyped digit) or ``(None, "<why>")``
+    when TMDB could not be reached, so the caller can tell "wrong key" from
+    "no internet".
+    """
+    params, headers = auth_for(api_key)
+    if not params and not headers:
+        return False, "no key configured"
+    headers = dict(headers)
+    headers.setdefault("Accept", "application/json")
+    headers.setdefault("User-Agent", USER_AGENT)
+
+    own_session = session is None
+    if own_session:
+        session = ClientSession(timeout=ClientTimeout(total=max(2.0, float(timeout))))
+    try:
+        async with session.get(AUTH_URL, params=params, headers=headers) as response:
+            try:
+                payload = await response.json(content_type=None)
+            except Exception:
+                payload = None
+            payload = payload if isinstance(payload, dict) else {}
+            if response.status == 200 and payload.get("success", True):
+                return True, "accepted"
+            reason = str(payload.get("status_message") or f"HTTP {response.status}").strip()
+            if response.status in (401, 403):
+                return False, reason
+            return None, reason
+    except Exception as exc:  # DNS / firewall / timeout – not the key's fault
+        return None, f"could not reach api.themoviedb.org ({type(exc).__name__})"
+    finally:
+        if own_session:
+            await session.close()
 
 
 async def search_movie(

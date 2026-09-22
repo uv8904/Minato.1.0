@@ -519,6 +519,7 @@ forgets it.
 | --- | --- |
 | `/posters` | status: key present?, switches, worker queue, the newest movies **without** a poster (with their `MOVIE_ID`), and the concrete fix list |
 | `/posters retry` | resets the failed lookups and queues them again — send it right after adding `TMDB_API_KEY` |
+| *(inside `/posters`)* `TMDB says: …` | the bot asks TMDB itself whether the key is accepted: ✅ accepted, ❌ REJECTED (one wrong digit — copy the key again), ⚠️ could not check (no internet from the host; the key itself is not judged) |
 | `/setposter MOVIE_ID` *(as a reply to a photo)* | that photo becomes the poster. It is stored as `tg://file/<file_id>` and served through the bot itself — no third-party image host, works even if TMDB knows nothing about the movie |
 | `/setposter MOVIE_ID https://image.tmdb.org/…jpg` | poster from an allow-listed image host (TMDB, IMDb/Amazon, graph.org, telegra.ph, imgur, `NEW_UPLOADED_POSTER_HOSTS`) |
 | `/delposter MOVIE_ID` | removes it; the placeholder is back and the worker may look it up again |
