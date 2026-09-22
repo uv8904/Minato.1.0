@@ -15,6 +15,8 @@ pyrogram wrapper lives in ``plugins/poster_admin.py``.
 """
 import html
 import logging
+import os
+import re
 from datetime import timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
@@ -56,17 +58,52 @@ def _web_base() -> str:
 # --------------------------------------------------------------------------- #
 # Diagnostics
 # --------------------------------------------------------------------------- #
-def key_state() -> Tuple[bool, str]:
-    """``(usable, description)`` of the configured ``TMDB_API_KEY``."""
-    from dreamxbotz.util.tmdb_direct import looks_like_key
+#: Variables whose name mentions TMDB but which are *not* the key.
+_TMDB_TOGGLES = {"TMDB_POSTER"}
 
-    key = str(_cfg("TMDB_API_KEY", "") or "").strip()
+
+def key_state() -> Tuple[bool, str]:
+    """``(usable, description)`` of the configured ``TMDB_API_KEY``.
+
+    A wrong key is described precisely ("24 characters instead of 32",
+    "contains 'r'") so a copy/paste slip is obvious from the ``/posters`` reply.
+    """
+    from dreamxbotz.util.tmdb_direct import clean_key, key_problem
+
+    key = clean_key(_cfg("TMDB_API_KEY", ""))
     if not key:
         return False, "missing"
-    if not looks_like_key(key):
-        return False, "set, but it does not look like a TMDB key"
+    problem = key_problem(key)
+    if problem:
+        return False, f"set, but it does not look like a TMDB key: {problem}"
     kind = "v4 token" if key.count(".") >= 2 else "v3 key"
     return True, f"set ({kind}, …{key[-4:]})"
+
+
+def misnamed_key_variables(env=None) -> List[str]:
+    """Environment variables that *mention* TMDB but are not one of the accepted key names.
+
+    ``/posters`` lists them when the key is missing – the usual cause is a
+    typo in the config panel (``TMDBAPI``, ``TMDB`` …).
+    """
+    env = os.environ if env is None else env
+    try:
+        import info  # type: ignore
+
+        accepted = set(getattr(info, "TMDB_KEY_VARIABLES", ("TMDB_API_KEY",)))
+    except Exception:
+        accepted = {"TMDB_API_KEY"}
+    found = []
+    for name, value in env.items():
+        upper = str(name).upper()
+        if "TMDB" not in upper and "MOVIEDB" not in upper:
+            continue
+        normalised = re.sub(r"[^A-Z0-9]+", "_", upper).strip("_")
+        if normalised in accepted or normalised in _TMDB_TOGGLES:
+            continue
+        if str(value or "").strip():
+            found.append(str(name))
+    return sorted(found)
 
 
 async def collect_status(window: int = REPORT_WINDOW) -> Dict[str, Any]:
@@ -84,6 +121,8 @@ async def collect_status(window: int = REPORT_WINDOW) -> Dict[str, Any]:
         "tmdb_helper": bool(_cfg("TMDB_POSTER", True)),
         "tmdb_key_ok": usable,
         "tmdb_key": key_text,
+        "tmdb_key_set": key_text != "missing",
+        "misnamed_vars": misnamed_key_variables() if key_text == "missing" else [],
         "retry_hours": int(_cfg("NEW_UPLOADED_POSTER_RETRY_HOURS", 48) or 48),
         "window": len(rows),
         "with_poster": len(rows) - len(missing),
@@ -145,10 +184,22 @@ def format_report(status: Dict[str, Any]) -> str:
     lines.append("<b>How to get posters:</b>")
     step = 1
     if not status["tmdb_key_ok"]:
-        lines.append(
-            f"{step}. Set <code>TMDB_API_KEY</code> (free: themoviedb.org → Settings → API), "
-            "restart the bot, then send <code>/posters retry</code>."
-        )
+        if status.get("tmdb_key_set"):
+            lines.append(
+                f"{step}. <code>TMDB_API_KEY</code> is set but wrong ({esc(status['tmdb_key'].split(': ', 1)[-1])}). "
+                "Open themoviedb.org → Settings → API and paste the <b>API Key</b> again exactly – "
+                "32 characters, only 0-9 and a-f, no spaces, quotes or <code>*</code> – "
+                "then restart the bot and send <code>/posters retry</code>."
+            )
+        else:
+            hint = ""
+            if status.get("misnamed_vars"):
+                names = ", ".join(f"<code>{esc(n)}</code>" for n in status["misnamed_vars"][:3])
+                hint = f" Found {names} – the variable must be called <code>TMDB_API_KEY</code>."
+            lines.append(
+                f"{step}. Set <code>TMDB_API_KEY</code> (free: themoviedb.org → Settings → API), "
+                f"restart the bot, then send <code>/posters retry</code>.{hint}"
+            )
         step += 1
     if not status["poster_fetch"]:
         lines.append(f"{step}. Set <code>NEW_UPLOADED_POSTER_FETCH=True</code> and restart.")

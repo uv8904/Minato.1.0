@@ -117,8 +117,10 @@ The streaming/download pages now open with a responsive, dark + gold
 - no file ids, download links or the bot token ever reach the browser
 
 **Posters need one thing: a free `TMDB_API_KEY`** (themoviedb.org → Settings →
-API). Set it, restart, and every new upload gets its poster + backdrop
-automatically (IMDb is the fallback). `/posters` tells you what is missing and
+API). Set it — variable name `TMDB_API_KEY`, value = the whole 32-character
+key as one word, nothing else — restart, and every new upload gets its poster +
+backdrop automatically (IMDb is the fallback). `/posters` tells you what is
+missing (including a cut-off or mistyped key) and
 lists the movies without artwork; `/posters retry` re-queues them; for a movie
 TMDB does not know, reply to a poster photo with `/setposter MOVIE_ID` — the
 photo is served through the bot itself, no image host needed.

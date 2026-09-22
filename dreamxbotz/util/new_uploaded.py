@@ -509,8 +509,10 @@ async def lookup_art(
 
 
 def tmdb_api_key() -> str:
-    """The owner's ``TMDB_API_KEY`` (empty when not configured)."""
-    return str(_cfg("TMDB_API_KEY", "") or "").strip()
+    """The owner's ``TMDB_API_KEY`` (empty when not configured), stripped of pasted quotes/markdown."""
+    from dreamxbotz.util.tmdb_direct import clean_key
+
+    return clean_key(_cfg("TMDB_API_KEY", ""))
 
 
 async def _tmdb_direct(query: str, timeout: float) -> Dict[str, Any]:

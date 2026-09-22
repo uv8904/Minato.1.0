@@ -502,7 +502,7 @@ the page.
 
 | Need | Why |
 | --- | --- |
-| `TMDB_API_KEY` | the poster/backdrop source. Free: themoviedb.org → *Settings → API* (the v3 “API Key” **or** the v4 “Read Access Token” both work). Without it only the slow IMDb scrape is left and no 16:9 backdrops exist |
+| `TMDB_API_KEY` | the poster/backdrop source. Free: themoviedb.org → *Settings → API* (the v3 “API Key” **or** the v4 “Read Access Token” both work). Paste the whole value as one word — a v3 key is exactly 32 characters of `0-9a-f`; `/posters` tells you when it is cut off or mistyped. The variable should be called `TMDB_API_KEY`, but `TMDB_KEY`, `TMDB_TOKEN`, `tmdb api key` and other close spellings are accepted too (`info.TMDB_KEY_VARIABLES`). Without it only the slow IMDb scrape is left and no 16:9 backdrops exist |
 | outbound internet from the host | `api.themoviedb.org`, `image.tmdb.org`, `m.media-amazon.com` (IMDb images) must be reachable; the browser never talks to them — the bot proxies and resizes every image |
 | a **real, clean release name** | `Jawan (2023) 1080p WEB-DL.mkv` → title *Jawan*, 2023. A made-up name such as `hmm.mkv` has no poster anywhere — use `/setposter` for those |
 | switches at their defaults | `NEW_UPLOADED_POSTER_FETCH=True`, `TMDB_POSTER=True`, `WATCH_HERO_ART_FETCH=True` |

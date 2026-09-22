@@ -86,6 +86,40 @@ def test_auth_supports_v3_keys_and_v4_tokens():
     assert not tmdb_direct.looks_like_key("my key")
 
 
+def test_key_problem_explains_copy_paste_mistakes():
+    good = "0123456789abcdef0123456789abcdef"
+    assert tmdb_direct.key_problem(good) == ""
+    # Markdown / quotes / the variable name pasted along with the key are harmless.
+    for wrapped in (f"**{good}**", f'"{good}"', f"`{good}`", f"TMDB_API_KEY={good}", f" {good}\n"):
+        assert tmdb_direct.clean_key(wrapped) == good, wrapped
+        assert tmdb_direct.looks_like_key(wrapped), wrapped
+        assert tmdb_direct.auth_for(wrapped) == ({"api_key": good}, {})
+    # A garbled key (a real support case: 24 characters with an "r" in it) is rejected with a reason.
+    problem = tmdb_direct.key_problem("ed52bfafe0bba9cbf8radab1")
+    assert "'r'" in problem and "0-9" in problem
+    assert not tmdb_direct.looks_like_key("ed52bfafe0bba9cbf8radab1")
+    assert "30 characters instead of 32" in tmdb_direct.key_problem(good[:30])
+    assert "spaces" in tmdb_direct.key_problem(good[:16] + " " + good[16:])
+    assert "cut off" in tmdb_direct.key_problem("eyJhbGciOiJIUzI1NiJ9.short")
+    assert tmdb_direct.key_problem("") == "missing"
+    assert tmdb_direct.key_problem("eyJhbGciOiJIUzI1NiJ9." + "a" * 60 + "." + "b" * 40) == ""
+
+
+def test_info_accepts_common_spellings_of_the_key_variable():
+    import info
+
+    good = "ed52bfafe0bba9cbf8904dd783d7dab1"
+    assert info.tmdb_key_from_env({"TMDB_API_KEY": good}) == good
+    assert info.tmdb_key_from_env({"TMDB_API_KEY": f' **"{good}"** '}) == good
+    assert info.tmdb_key_from_env({"TMDB_API_KEY": f"TMDB_API_KEY={good}"}) == good
+    for name in ("TMDB_KEY", "TMDB_TOKEN", "tmdb api key", "Tmdb-Api-Key", "tmdb_api_key"):
+        assert info.tmdb_key_from_env({name: good}) == good, name
+    # The documented name wins over an alias; generic names are never used.
+    assert info.tmdb_key_from_env({"TMDB_KEY": "x" * 32, "TMDB_API_KEY": good}) == good
+    assert info.tmdb_key_from_env({"API": good, "API_KEY": good, "KEY": good}) == ""
+    assert info.tmdb_key_from_env({}) == ""
+
+
 class FakeResponse:
     def __init__(self, status, payload):
         self.status = status
@@ -318,6 +352,30 @@ def test_status_report_explains_what_is_missing(monkeypatch):
     assert "TMDB_API_KEY: ✅ set (v3 key, …cdef)" in report
     assert "Set <code>TMDB_API_KEY</code>" not in report
     assert poster_admin.poster_preview_url("hmm-2024") == "https://bot.example/api/movies/poster/hmm-2024"
+
+
+def test_status_report_calls_out_a_garbled_or_misnamed_key(monkeypatch):
+    store = run(seed(make_store()))
+    monkeypatch.setattr(poster_admin, "_store", lambda: store)
+    settings = {"TMDB_API_KEY": "ed52bfafe0bba9cbf8radab1", "NEW_UPLOADED_POSTER_FETCH": True, "TMDB_POSTER": True}
+    monkeypatch.setattr(poster_admin, "_cfg", lambda name, default: settings.get(name, default))
+
+    # Set, but mistyped → say exactly what is wrong instead of a bare "invalid".
+    status = run(poster_admin.collect_status())
+    assert status["tmdb_key_ok"] is False and status["tmdb_key_set"] is True
+    report = poster_admin.format_report(status)
+    assert "TMDB_API_KEY: ❌ set, but it does not look like a TMDB key: contains 'r'" in report
+    assert "is set but wrong" in report and "32 characters" in report
+    assert "Set <code>TMDB_API_KEY</code>" not in report
+
+    # Missing, but a look-alike variable exists → point at the misspelt name.
+    settings["TMDB_API_KEY"] = ""
+    monkeypatch.setenv("TMDBAPI", "0123456789abcdef0123456789abcdef")
+    monkeypatch.setenv("TMDB_POSTER", "True")  # a toggle, not a key – must not be listed
+    assert poster_admin.misnamed_key_variables() == ["TMDBAPI"]
+    assert poster_admin.misnamed_key_variables({"tmdb api key": "x", "TMDB_API_KEY": ""}) == []
+    report = poster_admin.format_report(run(poster_admin.collect_status()))
+    assert "Found <code>TMDBAPI</code> – the variable must be called <code>TMDB_API_KEY</code>" in report
 
 
 def test_manual_poster_is_stored_as_manual_and_evicts_the_cache(monkeypatch):

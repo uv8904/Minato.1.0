@@ -119,7 +119,40 @@ MOVIE_UPDATE_CHANNEL = int(environ.get('MOVIE_UPDATE_CHANNEL', '-1003192727274')
 DREAMXBOTZ_IMAGE_FETCH = is_enabled(environ.get('DREAMXBOTZ_IMAGE_FETCH', 'True'), True)  # On / Off
 LINK_PREVIEW = is_enabled(environ.get('LINK_PREVIEW', 'True'), True) # Shows link preview in notification msg instead of image
 ABOVE_PREVIEW = is_enabled(environ.get('ABOVE_PREVIEW', 'True'), True) # Shows link preview above the text in notification msg if True else below the msg
-TMDB_API_KEY = environ.get('TMDB_API_KEY', '') # prefer to use your own tmdb API Key get it from https://www.themoviedb.org/settings/api
+# Accepted spellings of the TMDB key variable.  ``TMDB_API_KEY`` is the documented
+# one; the rest are forgiving fall-backs for owners who typed the name slightly
+# differently in their host's config panel ("tmdb api key", "TMDB_KEY", …).
+TMDB_KEY_VARIABLES = ('TMDB_API_KEY', 'TMDB_KEY', 'TMDB_API', 'TMDB_TOKEN', 'TMDB_API_TOKEN',
+                      'TMDB_READ_ACCESS_TOKEN', 'TMDB_V4_TOKEN', 'TMDB_BEARER_TOKEN')
+_KEY_JUNK = ' \t\r\n*`"\'<>«»“”‘’'
+
+
+def _clean_tmdb_key(raw):
+    """Drop quotes/markdown/`TMDB_API_KEY=` that get pasted along with the key."""
+    key = str(raw or '').strip().strip(_KEY_JUNK)
+    for _ in range(2):
+        key = re.sub(r'^(?:tmdb[_ -]?api[_ -]?key|api[_ -]?key|bearer)\s*[:=]?\s*', '', key, flags=re.IGNORECASE).strip(_KEY_JUNK)
+    return key
+
+
+def tmdb_key_from_env(env=None):
+    """First non-empty TMDB key in ``env`` – exact names first, then case/space-insensitive ones."""
+    env = environ if env is None else env
+    for name in TMDB_KEY_VARIABLES:
+        key = _clean_tmdb_key(env.get(name))
+        if key:
+            return key
+    wanted = set(TMDB_KEY_VARIABLES)
+    for name, value in env.items():  # "tmdb api key", "Tmdb-Api-Key", "tmdb_api_key" …
+        normalised = re.sub(r'[^A-Z0-9]+', '_', str(name).upper()).strip('_')
+        if normalised in wanted:
+            key = _clean_tmdb_key(value)
+            if key:
+                return key
+    return ''
+
+
+TMDB_API_KEY = tmdb_key_from_env() # prefer to use your own tmdb API Key get it from https://www.themoviedb.org/settings/api
 TMDB_POSTER = is_enabled(environ.get('TMDB_POSTER', 'True'), True) # Shows TMDB poster in notification msg
 LANDSCAPE_POSTER = is_enabled(environ.get('LANDSCAPE_POSTER', 'True'), True) # Shows landscape poster in notification msg
 

@@ -32,7 +32,46 @@ DEFAULT_TIMEOUT = 8.0
 USER_AGENT = "MinatoVerse-Poster-Worker/1.0 (+https://t.me)"
 
 _YEAR_RE = re.compile(r"(?<!\d)(19\d{2}|20\d{2})(?!\d)")
-_V3_KEY_RE = re.compile(r"^[A-Za-z0-9]{20,64}$")
+#: A v3 API key is exactly 32 hexadecimal characters.
+V3_KEY_LENGTH = 32
+_V3_KEY_RE = re.compile(r"^[0-9a-fA-F]{32}$")
+_V3_BAD_CHARS_RE = re.compile(r"[^0-9a-fA-F]")
+#: Characters people accidentally paste around a key (markdown, quotes, angle brackets).
+_KEY_JUNK = " \t\r\n*`\"'<>«»“”‘’"
+_KEY_PREFIX_RE = re.compile(r"^(?:tmdb[_ -]?api[_ -]?key|api[_ -]?key|bearer)\s*[:=]?\s*", re.IGNORECASE)
+
+
+def clean_key(raw: Any) -> str:
+    """Strip the junk that ends up around a pasted key (quotes, ``*``, ``TMDB_API_KEY=`` …)."""
+    key = str(raw or "").strip().strip(_KEY_JUNK)
+    for _ in range(2):  # "TMDB_API_KEY=\"abc\"" → abc
+        key = _KEY_PREFIX_RE.sub("", key).strip(_KEY_JUNK)
+    return key
+
+
+def key_problem(api_key: Any) -> str:
+    """Why ``api_key`` cannot be a TMDB credential – ``""`` when it looks fine.
+
+    Written for the ``/posters`` report, so the text tells the owner what to
+    fix ("24 characters instead of 32", "contains 'r'") instead of a bare
+    "invalid".
+    """
+    key = clean_key(api_key)
+    if not key:
+        return "missing"
+    if re.search(r"\s", key):
+        return "contains spaces or line breaks – paste it as one word"
+    if key.startswith("eyJ") or key.count(".") >= 2:  # v4 read access token (JWT)
+        if key.count(".") < 2 or len(key) <= 64:
+            return "the v4 token is cut off – copy the whole eyJ… token"
+        return ""
+    bad = sorted(set(_V3_BAD_CHARS_RE.findall(key)))
+    if bad:
+        shown = ", ".join(repr(ch) for ch in bad[:5])
+        return f"contains {shown} – a v3 key only has the digits 0-9 and letters a-f (copy/paste typo?)"
+    if len(key) != V3_KEY_LENGTH:
+        return f"{len(key)} characters instead of {V3_KEY_LENGTH} – the key is cut off or mistyped"
+    return ""
 
 
 def split_title_year(query: str) -> Tuple[str, Optional[int]]:
@@ -53,7 +92,7 @@ def split_title_year(query: str) -> Tuple[str, Optional[int]]:
 
 def auth_for(api_key: str) -> Tuple[Dict[str, str], Dict[str, str]]:
     """``(params, headers)`` for a v3 key or a v4 bearer token."""
-    key = str(api_key or "").strip().strip('"').strip("'")
+    key = clean_key(api_key)
     if not key:
         return {}, {}
     if key.count(".") >= 2 and len(key) > 64:  # v4 read access token (JWT)
@@ -62,13 +101,8 @@ def auth_for(api_key: str) -> Tuple[Dict[str, str], Dict[str, str]]:
 
 
 def looks_like_key(api_key: str) -> bool:
-    """Cheap sanity check used by the ``/posters`` diagnostics."""
-    key = str(api_key or "").strip()
-    if not key:
-        return False
-    if key.count(".") >= 2 and len(key) > 64:
-        return True
-    return bool(_V3_KEY_RE.match(key))
+    """Cheap sanity check used by the ``/posters`` diagnostics (see :func:`key_problem`)."""
+    return not key_problem(api_key)
 
 
 def _image(path: Optional[str], size: str) -> Optional[str]:
