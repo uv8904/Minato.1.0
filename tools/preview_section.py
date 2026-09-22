@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Local preview for the Stream Mode "Newly Uploaded Movies" section.
+"""Local preview for the Stream Mode web pages.
 
-Renders the **real** ``dreamxbotz/template/dl.html`` page (navbar, hero,
-trending and poster wall included) and serves the **real** section assets, with
-a fake ``/api/movies/new`` feed instead of MongoDB – so the design, the UI
-states and the deep links can be checked in a browser without a running bot.
+Renders the **real** templates (``dl.html`` for the "Newly Uploaded Movies"
+rail, ``req.html`` for the watch page with its movie hero) and serves the
+**real** assets, with fake JSON feeds instead of MongoDB – so the design, the
+UI states and the deep links can be checked in a browser without a running bot.
 
 Usage::
 
@@ -13,12 +13,18 @@ Usage::
 
 Handy URLs::
 
-    /                     normal feed (12 sample movies)
-    /?state=empty         "No new movies uploaded yet"
-    /?state=error         error state + retry button
-    /?state=loading       keeps the skeleton cards visible
-    /?state=hostile       feed full of malicious values (hardening demo)
-    /?limit=6             fewer cards
+    /                         rail page, normal feed (12 sample movies)
+    /?state=empty             "No new movies uploaded yet"
+    /?state=error             error state + retry button
+    /?state=loading           keeps the skeleton cards visible
+    /?state=hostile           feed full of malicious values (hardening demo)
+    /?limit=6                 fewer cards
+
+    /watch/demo               watch page + movie hero (poster, backdrop,
+                              chips, Telegram deep link, copy button)
+    /watch/demo?state=error   hero when the artwork API is down
+    /watch/demo?state=noart   hero when no poster exists (placeholder card)
+    /watch/demo?state=hostile hero against a hostile artwork API
 
 This file is a **development tool only** – it is not imported by the bot.
 """
@@ -35,10 +41,15 @@ sys.path.insert(0, str(ROOT))
 
 from dreamxbotz.server import movie_api, static_assets  # noqa: E402
 from dreamxbotz.util.movie_titles import utcnow  # noqa: E402
+from dreamxbotz.util.watch_hero import build_context as build_hero  # noqa: E402
 
 BOT_USERNAME = "MyMovieBot"
 DEFAULT_LIMIT = 20
 TEMPLATE = ROOT / "dreamxbotz" / "template" / "dl.html"
+TEMPLATE_WATCH = ROOT / "dreamxbotz" / "template" / "req.html"
+#: The file name of the "movie" that is being streamed on /watch/demo.
+WATCH_FILE = "[CK] - Marco (2024) Malayalam HQ 1080p BR-Rip - x264 - (AA.mkv"
+WATCH_SIZE = "475.31 MiB"
 
 SAMPLE_MOVIES = [
     ("Jawan", 2023, ["1080p", "720p", "480p"], "#f5c518", 0.2),
@@ -108,6 +119,39 @@ def demo_poster_svg(title, hue, quality):
 """
 
 
+def demo_backdrop_svg(title, hue, quality):
+    """16:9 stand-in for a TMDB backdrop so the hero band looks real."""
+    safe_title = str(title).replace("&", "and")
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <defs>
+    <linearGradient id="b" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="{hue}"/>
+      <stop offset="0.5" stop-color="#1b1f31"/>
+      <stop offset="1" stop-color="#07080c"/>
+    </linearGradient>
+    <radialGradient id="g" cx="0.78" cy="0.18" r="0.7">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#b)"/>
+  <rect width="1280" height="720" fill="url(#g)"/>
+  <circle cx="1010" cy="150" r="230" fill="#000000" opacity="0.18"/>
+  <circle cx="210" cy="560" r="260" fill="#000000" opacity="0.16"/>
+  <text x="80" y="386" font-family="Sora, Segoe UI, system-ui, sans-serif" font-size="60"
+        font-weight="700" fill="#f7f8fb" opacity="0.92">{safe_title}</text>
+  <text x="82" y="430" font-family="Inter, Segoe UI, system-ui, sans-serif" font-size="22"
+        fill="#e7eaf3" opacity="0.8">{quality or "HD"} · demo backdrop · 16:9</text>
+</svg>
+"""
+
+
+def _hue_for(value: str) -> str:
+    """Stable demo colour per movie id."""
+    palette = ["#f5c518", "#ff8a4c", "#54c1ff", "#b46cff", "#ff4d6d", "#38e8b0", "#ff7ab8"]
+    return palette[sum(ord(char) for char in str(value)) % len(palette)]
+
+
 def limit_default(request) -> int:
     try:
         return max(1, min(int(request.rel_url.query.get("limit", 20)), 20))
@@ -174,7 +218,13 @@ async def demo_poster(request):
     movie_id = request.match_info["movie_id"]
     doc = next((d for d in DOCS if d["_id"] == movie_id), None)
     if not doc:
-        return web.Response(status=404, body=movie_api.placeholder_svg(""), content_type="image/svg+xml")
+        # The watch-page hero asks for its own movie – make it look real too.
+        title = (request.rel_url.query.get("q") or WATCH_FILE).strip()[:60]
+        quality = "1080p" if request.rel_url.query.get("y") else "BR-Rip"
+        return web.Response(
+            body=demo_poster_svg(title, _hue_for(movie_id), quality),
+            content_type="image/svg+xml",
+        )
     if not doc.get("poster_url"):
         return web.Response(
             body=movie_api.placeholder_svg(doc["title"]),
@@ -184,6 +234,96 @@ async def demo_poster(request):
     return web.Response(
         body=demo_poster_svg(doc["title"], hue, doc["qualities"][0]),
         content_type="image/svg+xml",
+    )
+
+
+async def demo_art(request):
+    """Same JSON contract as ``GET /api/movies/art/<MOVIE_ID>`` (watch-page hero)."""
+    state = request.match_info.get("state") or request.rel_url.query.get("state")
+    movie_id = request.match_info["movie_id"]
+    if state == "error":
+        return web.json_response({"ok": False, "error": "database_unavailable"}, status=503)
+    if state == "hostile":
+        # Security demo: every URL below must be rejected by watch_hero.js.
+        return web.json_response(
+            {
+                "ok": True,
+                "id": "<script>alert(1)</script>",
+                "title": "<img src=x onerror=alert(1)>Evil",
+                "year": 2024,
+                "poster": "https://evil.example/poster.jpg",
+                "backdrop": "//evil.example/tracker.jpg",
+                "has_poster": True,
+                "has_backdrop": True,
+            }
+        )
+    if state == "noart":
+        return web.json_response(
+            {
+                "ok": True,
+                "id": movie_id,
+                "title": "Marco",
+                "year": 2024,
+                "poster": f"/api/movies/poster/{movie_id}?v=demo",
+                "backdrop": f"/api/movies/backdrop/{movie_id}?v=demo",
+                "has_poster": False,
+                "has_backdrop": False,
+            }
+        )
+    return web.json_response(
+        {
+            "ok": True,
+            "id": movie_id,
+            "title": "Marco",
+            "year": 2024,
+            "poster": f"/api/movies/poster/{movie_id}?v=demo",
+            "backdrop": f"/api/movies/backdrop/{movie_id}?v=demo",
+            "has_poster": True,
+            "has_backdrop": True,
+            "source": "tmdb",
+        }
+    )
+
+
+async def demo_backdrop(request):
+    """16:9 demo artwork for the hero band."""
+    movie_id = request.match_info["movie_id"]
+    title = (request.rel_url.query.get("q") or "Marco").strip()[:60]
+    return web.Response(
+        body=demo_backdrop_svg(title, _hue_for(movie_id), "1080p"),
+        content_type="image/svg+xml",
+    )
+
+
+def render_watch_html(state: str = "") -> str:
+    """Render the real ``req.html`` watch page together with its movie hero."""
+    import jinja2
+
+    hero = build_hero(
+        WATCH_FILE,
+        BOT_USERNAME,
+        utcnow() - timedelta(hours=5),
+        api_base="",
+    )
+    # The demo states live in the path (watch_hero.js appends the movie id to the
+    # endpoint, so a query string would break the URL it builds).
+    hero["watch_hero_art_url"] = "/api/movies/art" + (
+        f"-{state}" if state in ("error", "noart", "hostile") else ""
+    )
+
+    template = jinja2.Template(TEMPLATE_WATCH.read_text(encoding="utf-8"))
+    return template.render(
+        **hero,
+        file_name=WATCH_FILE.replace("_", " "),
+        file_url="https://files.example/42/Marco.2024.1080p.mkv?hash=abcdef",
+        file_size=WATCH_SIZE,
+        file_unique_id="abcdef123456",
+        update_channel_url="https://t.me/wanda_movies_update",
+        bot_username=BOT_USERNAME,
+        newly_uploaded_enabled=True,
+        newly_uploaded_api="/api/movies/new",
+        newly_uploaded_limit=DEFAULT_LIMIT,
+        asset_version=static_assets.version_token(),
     )
 
 
@@ -219,11 +359,24 @@ def index(request):
     return web.Response(text=render_page_html(limit, api), content_type="text/html")
 
 
+def watch_index(request):
+    """The real watch page (req.html) with the movie hero on top."""
+    state = request.rel_url.query.get("state")
+    return web.Response(
+        text=render_watch_html(state if state in ("error", "noart", "hostile") else ""),
+        content_type="text/html",
+    )
+
+
 def build_app(limit: int = DEFAULT_LIMIT) -> web.Application:
     app = web.Application()
     app.router.add_get("/", index)
+    app.router.add_get("/watch/demo", watch_index)
     app.router.add_get("/api/movies/new", demo_feed)
+    app.router.add_get("/api/movies/art/{movie_id}", demo_art)
+    app.router.add_get("/api/movies/art-{state}/{movie_id}", demo_art)
     app.router.add_get("/api/movies/poster/{movie_id}", demo_poster)
+    app.router.add_get("/api/movies/backdrop/{movie_id}", demo_backdrop)
     app.add_routes(static_assets.routes)
     return app
 
@@ -237,6 +390,8 @@ def main() -> None:
 
     print(f"Newly Uploaded Movies preview → http://{args.host}:{args.port}/")
     print("States: /?state=empty · /?state=error · /?state=loading · /?state=hostile")
+    print(f"Watch page + movie hero      → http://{args.host}:{args.port}/watch/demo")
+    print("Matches: /watch/demo?state=error · ?state=noart · ?state=hostile")
     web.run_app(build_app(args.limit), host=args.host, port=args.port, print=None)
 
 

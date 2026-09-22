@@ -146,6 +146,45 @@ class FakeCollection:
         return "index"
 
 
+class FakeArtStore:
+    """In-memory stand-in for ``MovieArtStore`` (no MongoDB, no network)."""
+
+    def __init__(self, docs=None):
+        self.docs = {doc["_id"]: dict(doc) for doc in (docs or [])}
+        self.calls = []
+
+    async def get(self, movie_id):
+        self.calls.append(("get", movie_id))
+        return self.docs.get(movie_id)
+
+    async def set_art(
+        self,
+        movie_id,
+        *,
+        title=None,
+        year=None,
+        poster_url=None,
+        backdrop_url=None,
+        source=None,
+        now=None,
+    ):
+        self.calls.append(("set", movie_id))
+        self.docs[movie_id] = {
+            "_id": movie_id,
+            "title": title,
+            "year": year,
+            "poster_url": poster_url,
+            "backdrop_url": backdrop_url,
+            "poster_source": source,
+            # like the real store: "when was this lookup attempted"
+            "checked_at": now or datetime.now(timezone.utc),
+        }
+        return True
+
+    async def count(self):
+        return len(self.docs)
+
+
 class FakeResponse:
     def __init__(self, body=b"", status=200, headers=None):
         self.status = status
@@ -173,13 +212,15 @@ class FakeSession:
         return self.response
 
 
-def make_client(app_docs=None, store=None, bot_username="TestBot", error=None):
+def make_client(app_docs=None, store=None, bot_username="TestBot", error=None, art=None):
     """Build an aiohttp app around the poster/list handlers with a fake store."""
     fake = store or FakeStore(app_docs or [], error=error)
+    art_store = art or FakeArtStore()
     app = web.Application()
     app.add_routes(movie_api.routes)
     app["nu_bot_username"] = bot_username
     movie_api._store = lambda: fake
+    movie_api._art_store = lambda: art_store
     return app, fake
 
 

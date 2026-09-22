@@ -33,6 +33,29 @@ Endpoints
     Poster bytes (JPEG, resized + re-encoded) served from our own origin, or an
     inline SVG placeholder when the movie has no poster / upstream fails.
 
+``GET /api/movies/art/<MOVIE_ID>?q=<title>&y=<year>``
+    Artwork URLs of one movie for the watch-page hero: the 2:3 poster path and
+    the 16:9 backdrop path (both on our own origin, so the browser never talks
+    to TMDB/IMDb directly):
+
+    .. code-block:: json
+
+        {
+          "ok": true,
+          "id": "marco-2024",
+          "title": "Marco",
+          "year": 2024,
+          "poster": "/api/movies/poster/marco-2024?v=8f2c1d",
+          "backdrop": "/api/movies/backdrop/marco-2024?v=8f2c1d",
+          "has_poster": true,
+          "has_backdrop": true,
+          "source": "tmdb"
+        }
+
+``GET /api/movies/backdrop/<MOVIE_ID>?w=1280``
+    Wide (16:9) artwork for the hero band – the TMDB backdrop when there is
+    one, the poster otherwise, and a clean SVG placeholder as the last resort.
+
 Security notes
 --------------
 * The response never contains ``file_ids``, ``file_names``, download URLs or the
@@ -48,8 +71,10 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import time
 from collections import OrderedDict
+from datetime import timedelta
 from io import BytesIO
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
@@ -66,6 +91,7 @@ from dreamxbotz.util.movie_titles import (
     quality_label,
     relative_time_label,
     sanitize_movie_id,
+    utcnow,
 )
 
 logger = logging.getLogger(__name__)
@@ -78,11 +104,21 @@ routes = web.RouteTableDef()
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 20
 POSTER_PATH = "/api/movies/poster"
-ALLOWED_POSTER_WIDTHS = (200, 320, 480, 640)
+ART_PATH = "/api/movies/art"
+BACKDROP_PATH = "/api/movies/backdrop"
+#: 2:3 poster art (200 = thumbnail, 1600 = big desktop card).
+ALLOWED_POSTER_WIDTHS = (200, 320, 480, 640, 800, 1600)
+#: 16:9 hero band artwork.
+ALLOWED_BACKDROP_WIDTHS = (480, 720, 960, 1280, 1920)
 MAX_POSTER_BYTES = 8 * 1024 * 1024
 POSTER_CACHE_BYTES = 24 * 1024 * 1024
 POSTER_TTL = 86400  # seconds – posters are immutable in practice
 PLACEHOLDER_TTL = 300
+#: Remembering a miss keeps the upstream TMDB/IMDb APIs from being hammered.
+ART_TTL = 3600
+ART_MISS_TTL = 60
+ART_RETRY_HOURS = 24
+ART_LOOKUP_TIMEOUT = 8.0
 POSTER_USER_AGENT = "MinatoVerse-Poster-Proxy/1.0 (+https://t.me)"
 DEFAULT_POSTER_HOSTS = (
     "image.tmdb.org",
@@ -220,6 +256,190 @@ def public_movie(doc: Dict[str, Any], bot_username: str = "") -> Dict[str, Any]:
     }
 
 
+# --------------------------------------------------------------------------- #
+# Artwork for the watch-page movie hero
+# --------------------------------------------------------------------------- #
+def _art_fetch_enabled() -> bool:
+    """May the hero look artwork up online?  ``WATCH_HERO_ART_FETCH`` (default on)."""
+    return bool(_cfg("WATCH_HERO_ART_FETCH", True))
+
+
+def _art_timeout() -> float:
+    """Per-lookup timeout for an on-demand hero lookup (web requests must stay snappy)."""
+    try:
+        return max(2.0, float(_cfg("WATCH_HERO_ART_TIMEOUT", ART_LOOKUP_TIMEOUT)))
+    except (TypeError, ValueError):
+        return ART_LOOKUP_TIMEOUT
+
+
+def _art_retry_hours() -> int:
+    try:
+        return max(1, int(_cfg("WATCH_HERO_ART_RETRY_HOURS", ART_RETRY_HOURS)))
+    except (TypeError, ValueError):
+        return ART_RETRY_HOURS
+
+
+def _art_store():
+    """The artwork cache (imported lazily so tests can swap it out)."""
+    from database.movie_art_db import movie_art
+
+    return movie_art
+
+
+def _safe_year(value) -> Optional[int]:
+    try:
+        year = int(value)
+    except (TypeError, ValueError):
+        return None
+    return year if 1900 <= year <= 2100 else None
+
+
+def _art_version(movie_id: str, art: Dict[str, Any]) -> str:
+    """Cache-busting token – changes as soon as better artwork is known."""
+    raw = f"{movie_id}|{art.get('poster') or ''}|{art.get('backdrop') or ''}"
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:8]
+
+
+def _art_checked_recently(doc, title: str = "") -> bool:
+    """``True`` when a previous lookup may not be repeated yet (hit **or** miss).
+
+    A *different* – usually better – title than the one that was looked up last
+    time is a reason to try once more, so a slug-only attempt cannot block the
+    real title for a whole day.
+    """
+    if not doc:
+        return False
+    cached_title = str(doc.get("title") or "").strip().lower()
+    wanted = str(title or "").strip().lower()
+    if wanted and cached_title and wanted != cached_title:
+        return False
+    checked = as_utc(doc.get("checked_at"))
+    if checked is None:
+        return False
+    return (utcnow() - checked) < timedelta(hours=_art_retry_hours())
+
+
+_HEX_TOKEN_RE = re.compile(r"^[0-9a-f]{8,}$")
+
+
+def _title_hint_from_id(movie_id: str) -> str:
+    """``"jawan-2023"`` -> ``"jawan 2023"``; ``""`` for hash-only ids."""
+    parts = [part for part in str(movie_id or "").split("-") if part]
+    if not parts or any(_HEX_TOKEN_RE.match(part) for part in parts):
+        return ""
+    words = [part for part in parts if len(part) > 1] or parts
+    return " ".join(words).strip()
+
+
+async def resolve_art(
+    movie_id: str,
+    title: str = "",
+    year=None,
+    *,
+    want_backdrop: bool = True,
+    allow_lookup: bool = True,
+) -> Dict[str, Any]:
+    """Poster/backdrop of one movie: rail → artwork cache → TMDB/IMDb.
+
+    Returns ``{"poster", "backdrop", "source", "title", "year"}``; missing
+    artwork is simply ``None`` (the hero then shows its placeholder).  Never
+    raises – a lookup problem must not break a page view.
+
+    ``want_backdrop=False`` is used by the poster proxy of the "Newly Uploaded
+    Movies" rail, which only needs the 2:3 artwork: a movie that already has a
+    poster then triggers no network call at all.  ``allow_lookup=False`` keeps
+    that proxy from ever starting an upstream request – it serves what the rail
+    or the artwork cache already knows, and the hero's JSON call is what warms
+    the cache.
+    """
+    art: Dict[str, Any] = {"poster": None, "backdrop": None, "source": None}
+    safe_id = sanitize_movie_id(movie_id)
+    if not safe_id:
+        return art
+
+    # 1. the "Newly Uploaded Movies" rail may already know this movie's poster
+    try:
+        doc = await _store().get(safe_id)
+    except Exception:
+        doc = None
+    if doc:
+        art["poster"] = doc.get("poster_url") or None
+        art["source"] = doc.get("poster_source") or None
+        title = title or doc.get("title") or ""
+        year = year or doc.get("year")
+
+    # 2. artwork resolved on an earlier visit (also remembers failed lookups).
+    #    The rail's poster path (want_backdrop=False) skips this read when the
+    #    rail already has a poster, so a page view costs no extra round trip.
+    cached = None
+    if want_backdrop or not art["poster"]:
+        try:
+            cached = await _art_store().get(safe_id)
+        except Exception:
+            cached = None
+    if cached:
+        art["poster"] = art["poster"] or cached.get("poster_url")
+        art["backdrop"] = cached.get("backdrop_url") or None
+        art["source"] = art["source"] or cached.get("poster_source")
+        title = title or cached.get("title") or ""
+        year = year or cached.get("year")
+
+    # 3. a fresh lookup – only when something is missing and it is due again
+    needs_lookup = not art["poster"] or (want_backdrop and not art["backdrop"])
+    if needs_lookup and allow_lookup and _art_fetch_enabled() and not _art_checked_recently(cached, title):
+        query = f"{title} {year}".strip() if title else _title_hint_from_id(safe_id)
+        if query:
+            try:
+                from dreamxbotz.util.new_uploaded import lookup_art  # lazy: heavy deps
+
+                found = await lookup_art(query, title or query, timeout=_art_timeout())
+            except Exception as exc:
+                logger.debug("Hero artwork lookup failed for %s: %s", safe_id, exc)
+                found = {}
+            art["poster"] = found.get("poster") or art["poster"]
+            art["backdrop"] = found.get("backdrop") or art["backdrop"]
+            art["source"] = found.get("source") or art["source"]
+            try:
+                await _art_store().set_art(
+                    safe_id,
+                    title=title or "",
+                    year=year,
+                    poster_url=art["poster"],
+                    backdrop_url=art["backdrop"],
+                    source=art["source"],
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.debug("Could not cache hero artwork for %s: %s", safe_id, exc)
+
+    art["title"] = clean_title_text(
+        title or _title_hint_from_id(safe_id).title(), limit=MAX_TITLE_LENGTH
+    )
+    art["year"] = _safe_year(year)
+    # "known" separates "this movie exists, it just has no artwork (yet)" from
+    # "no idea what this id is" – the poster proxy answers 404 for the latter.
+    art["known"] = bool(doc or cached or art["poster"] or art["backdrop"])
+    return art
+
+
+def public_art(movie_id: str, art: Dict[str, Any]) -> Dict[str, Any]:
+    """Whitelisted JSON shape for the hero – upstream URLs never leave the server."""
+    safe_id = sanitize_movie_id(movie_id)
+    if not safe_id:
+        return {"ok": False, "error": "invalid_id"}
+    version = _art_version(safe_id, art)
+    return {
+        "ok": True,
+        "id": safe_id,
+        "title": clean_title_text(art.get("title") or "", limit=MAX_TITLE_LENGTH),
+        "year": _safe_year(art.get("year")),
+        "poster": f"{POSTER_PATH}/{safe_id}?v={version}",
+        "backdrop": f"{BACKDROP_PATH}/{safe_id}?v={version}",
+        "has_poster": bool(art.get("poster")),
+        "has_backdrop": bool(art.get("backdrop")),
+        "source": clean_title_text(art.get("source") or "", limit=24),
+    }
+
+
 def _json_response(payload: Dict[str, Any], status: int = 200, ttl: int = 0, request=None):
     body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     headers = {
@@ -324,40 +544,105 @@ async def movie_poster(request: web.Request) -> web.Response:
         return _image_response(payload, content_type, request=request, ttl=ttl)
 
     try:
-        doc = await _store().get(movie_id)
+        # The rail already knows most posters; resolve_art() only falls back to
+        # the artwork cache / a lookup, and never asks for a 16:9 backdrop here.
+        art = await resolve_art(movie_id, want_backdrop=False, allow_lookup=False)
     except Exception as exc:
         logger.error("Poster lookup failed for %s: %s", movie_id, exc)
-        doc = None
+        art = {}
 
-    if not doc:
-        return _not_found_poster(request)
-
-    poster_url = doc.get("poster_url")
+    poster_url = art.get("poster")
+    title = art.get("title")
     if not poster_url:
-        payload = (placeholder_svg(doc.get("title")), "image/svg+xml")
+        if not art.get("known"):
+            return _not_found_poster(request)
+        payload = (placeholder_svg(title), "image/svg+xml")
         _cache_put(cache_key, payload[0], payload[1], PLACEHOLDER_TTL)
         return _image_response(payload[0], payload[1], request=request)
 
     image = await _fetch_poster(cache_key, poster_url, width, _session(request))
     if image is None:
-        payload = (placeholder_svg(doc.get("title")), "image/svg+xml")
+        payload = (placeholder_svg(title), "image/svg+xml")
         _cache_put(cache_key, payload[0], payload[1], PLACEHOLDER_TTL)
         return _image_response(payload[0], payload[1], request=request)
 
     return _image_response(image[0], image[1], request=request)
 
 
-def _safe_width(value) -> int:
+@routes.get(ART_PATH + "/{movie_id}", allow_head=True)
+async def movie_art_info(request: web.Request) -> web.Response:
+    """Artwork URLs (poster + backdrop) of one movie for the watch-page hero."""
+    movie_id = sanitize_movie_id(request.match_info.get("movie_id"))
+    if not movie_id:
+        return _json_response(
+            {"ok": False, "error": "invalid_id"}, status=400, request=request
+        )
+
+    title = clean_title_text(request.rel_url.query.get("q") or "", limit=MAX_TITLE_LENGTH)
+    year = _safe_year(request.rel_url.query.get("y"))
+    try:
+        art = await resolve_art(movie_id, title, year)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("Artwork lookup failed for %s: %s", movie_id, exc)
+        art = {}
+
+    payload = public_art(movie_id, art)
+    has_art = bool(art.get("poster") or art.get("backdrop"))
+    return _json_response(
+        payload, ttl=ART_TTL if has_art else ART_MISS_TTL, request=request
+    )
+
+
+@routes.get(BACKDROP_PATH + "/{movie_id}", allow_head=True)
+async def movie_backdrop(request: web.Request) -> web.Response:
+    """Wide (16:9) hero artwork: TMDB backdrop → poster → SVG placeholder."""
+    movie_id = sanitize_movie_id(request.match_info.get("movie_id"))
+    if not movie_id:
+        return _not_found_art(request)
+
+    width = _safe_width(request.rel_url.query.get("w"), ALLOWED_BACKDROP_WIDTHS)
+    cache_key = f"backdrop:{movie_id}:{width}"
+    cached = _cache_get(cache_key)
+    if cached:
+        payload, content_type, ttl = cached
+        return _image_response(payload, content_type, request=request, ttl=ttl)
+
+    title = clean_title_text(request.rel_url.query.get("q") or "", limit=MAX_TITLE_LENGTH)
+    year = _safe_year(request.rel_url.query.get("y"))
+    try:
+        art = await resolve_art(movie_id, title, year)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("Backdrop lookup failed for %s: %s", movie_id, exc)
+        art = {}
+
+    source_url = art.get("backdrop") or art.get("poster")
+    if not source_url:
+        if not art.get("known"):
+            return _not_found_art(request)
+        payload = (placeholder_backdrop_svg(art.get("title")), "image/svg+xml")
+        _cache_put(cache_key, payload[0], payload[1], PLACEHOLDER_TTL)
+        return _image_response(payload[0], payload[1], request=request)
+
+    image = await _fetch_poster(cache_key, source_url, width, _session(request))
+    if image is None:
+        payload = (placeholder_backdrop_svg(art.get("title")), "image/svg+xml")
+        _cache_put(cache_key, payload[0], payload[1], PLACEHOLDER_TTL)
+        return _image_response(payload[0], payload[1], request=request)
+
+    return _image_response(image[0], image[1], request=request)
+
+
+def _safe_width(value, allowed=ALLOWED_POSTER_WIDTHS) -> int:
     try:
         width = int(value)
     except (TypeError, ValueError):
-        return ALLOWED_POSTER_WIDTHS[1]
-    if width < ALLOWED_POSTER_WIDTHS[0]:
-        return ALLOWED_POSTER_WIDTHS[0]
-    for allowed in ALLOWED_POSTER_WIDTHS:
-        if width <= allowed:
-            return allowed
-    return ALLOWED_POSTER_WIDTHS[-1]
+        return allowed[1]
+    if width < allowed[0]:
+        return allowed[0]
+    for candidate in allowed:
+        if width <= candidate:
+            return candidate
+    return allowed[-1]
 
 
 def _image_response(payload: bytes, content_type: str, request=None, ttl: Optional[int] = None):
@@ -376,6 +661,21 @@ def _image_response(payload: bytes, content_type: str, request=None, ttl: Option
 
 def _not_found_poster(request=None):
     payload = placeholder_svg("")
+    headers = {
+        "Content-Type": "image/svg+xml",
+        "Cache-Control": "public, max-age=60",
+        "X-Content-Type-Options": "nosniff",
+        "X-Robots-Tag": "noindex, nofollow",
+    }
+    _apply_cors(headers, request)
+    if request is not None and request.method == "HEAD":
+        return web.Response(status=404, headers=headers)
+    return web.Response(body=payload, status=404, headers=headers)
+
+
+def _not_found_art(request=None):
+    """16:9 placeholder for an unusable movie id."""
+    payload = placeholder_backdrop_svg("")
     headers = {
         "Content-Type": "image/svg+xml",
         "Cache-Control": "public, max-age=60",
@@ -460,6 +760,75 @@ def placeholder_svg(title: Optional[str] = None) -> bytes:
   {text_markup}
   <text x="240" y="640" text-anchor="middle" font-family="Inter, Segoe UI, system-ui, sans-serif" font-size="15" letter-spacing="3" fill="#f5c518">MINATOVERSE</text>
   <text x="240" y="666" text-anchor="middle" font-family="Inter, Segoe UI, system-ui, sans-serif" font-size="12" fill="#9aa1b9">open in Telegram to get it</text>
+</svg>
+"""
+    return svg.encode("utf-8")
+
+
+def placeholder_backdrop_svg(title: Optional[str] = None) -> bytes:
+    """Clean, on-brand **16:9** placeholder for the watch-page hero band."""
+    label = clean_title_text(title or "", limit=34)
+    lines = []
+    if label:
+        words = label.split()
+        line = ""
+        for word in words:
+            candidate = f"{line} {word}".strip()
+            if len(candidate) > 22 and line:
+                lines.append(line)
+                line = word
+            else:
+                line = candidate
+        if line:
+            lines.append(line)
+    lines = lines[:2]
+    if lines:
+        start_y = 372 - (len(lines) - 1) * 20
+        text_markup = "".join(
+            f'<text x="640" y="{start_y + index * 42}" text-anchor="middle" '
+            f'font-family="Sora, Segoe UI, system-ui, sans-serif" font-size="34" '
+            f'font-weight="600" fill="#f4f6fb">{xml_escape(line)}</text>'
+            for index, line in enumerate(lines)
+        )
+    else:
+        text_markup = (
+            '<text x="640" y="378" text-anchor="middle" '
+            'font-family="Sora, Segoe UI, system-ui, sans-serif" font-size="30" '
+            'fill="#9aa1b9">Artwork coming soon</text>'
+        )
+
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Movie artwork placeholder">
+  <defs>
+    <linearGradient id="mh-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#171b2c"/>
+      <stop offset="0.55" stop-color="#0d101b"/>
+      <stop offset="1" stop-color="#07080d"/>
+    </linearGradient>
+    <linearGradient id="mh-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f5c518"/>
+      <stop offset="1" stop-color="#ffdd7a"/>
+    </linearGradient>
+    <radialGradient id="mh-glow" cx="0.2" cy="0.15" r="0.8">
+      <stop offset="0" stop-color="#f5c518" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#f5c518" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#mh-bg)"/>
+  <rect width="1280" height="720" fill="url(#mh-glow)"/>
+  <g opacity="0.85" transform="translate(518 150)">
+    <rect x="0" y="12" width="244" height="196" rx="20" fill="none" stroke="url(#mh-gold)" stroke-width="5"/>
+    <rect x="-26" y="0" width="18" height="22" rx="5" fill="url(#mh-gold)"/>
+    <rect x="-26" y="48" width="18" height="22" rx="5" fill="url(#mh-gold)"/>
+    <rect x="-26" y="96" width="18" height="22" rx="5" fill="url(#mh-gold)"/>
+    <rect x="-26" y="144" width="18" height="22" rx="5" fill="url(#mh-gold)"/>
+    <rect x="252" y="0" width="18" height="22" rx="5" fill="url(#mh-gold)"/>
+    <rect x="252" y="48" width="18" height="22" rx="5" fill="url(#mh-gold)"/>
+    <rect x="252" y="96" width="18" height="22" rx="5" fill="url(#mh-gold)"/>
+    <rect x="252" y="144" width="18" height="22" rx="5" fill="url(#mh-gold)"/>
+    <path d="M96 62 L166 110 L96 158 Z" fill="url(#mh-gold)"/>
+  </g>
+  {text_markup}
+  <text x="640" y="486" text-anchor="middle" font-family="Inter, Segoe UI, system-ui, sans-serif" font-size="16" letter-spacing="6" fill="#f5c518">MINATOVERSE</text>
 </svg>
 """
     return svg.encode("utf-8")

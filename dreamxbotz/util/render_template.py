@@ -43,6 +43,14 @@ try:
     ASSET_VERSION = f"{_MV_VERSION}-{_asset_token()}"
 except Exception:  # pragma: no cover - defensive
     ASSET_VERSION = str(_MV_VERSION)
+try:
+    from dreamxbotz.util.watch_hero import build_context as _build_watch_hero
+    from dreamxbotz.util.watch_hero import hero_enabled as _hero_enabled
+except Exception:  # pragma: no cover - defensive
+    _build_watch_hero = None
+
+    def _hero_enabled() -> bool:  # pragma: no cover - defensive
+        return False
 
 
 def newly_uploaded_api_url() -> str:
@@ -88,7 +96,27 @@ async def render_page(id, secure_hash, src=None):
 
     bot_username = str(getattr(dreamxbotz, "username", "") or "").lstrip("@")
 
+    # Watch-page movie hero (req.html): title/year/quality chips, the upload
+    # date of the streamed file and its Telegram deep link, rendered server
+    # side; only the artwork is fetched by watch_hero.js afterwards.
+    # Docs: docs/NEWLY_UPLOADED_MOVIES.md
+    hero_context: dict = {}
+    if _build_watch_hero is not None:
+        try:
+            hero_context = _build_watch_hero(
+                file_name,
+                bot_username,
+                getattr(file, "date", None),
+                api_base=_NU_API_URL,
+                # Only video gets the movie hero: req.html also renders audio
+                # files (songs), where a poster strip would be misleading.
+                enabled=_hero_enabled() and tag != "audio",
+            )
+        except Exception as exc:  # never break a page view because of the hero
+            logging.debug("Watch hero context unavailable: %s", exc)
+
     return template.render(
+        **hero_context,
         file_name=file_name,
         file_url=src,
         file_size=file_size,

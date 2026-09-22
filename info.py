@@ -241,6 +241,21 @@ NEW_UPLOADED_CORS_ORIGIN = environ.get('NEW_UPLOADED_CORS_ORIGIN', '')  # Only n
 API_URL = env_str('API_URL', 'NEW_UPLOADED_API_URL', default='')
 NEW_UPLOADED_API_PATH = env_str('NEW_UPLOADED_API_PATH', default='/api/movies/new')
 
+# ----- Watch-page movie hero (strip above the video player) ----------------- #
+#   Shows the poster of the movie that is streaming plus its Telegram deep link
+#   (https://t.me/BOT_USERNAME?start=movie_MOVIE_ID).  The strip itself is
+#   rendered server side by render_template.py; only the artwork is fetched by
+#   /static/watch_hero.js from WATCH_HERO_API_PATH.
+WATCH_HERO = is_enabled(environ.get('WATCH_HERO', "True"), True)  # Master switch for the hero strip
+WATCH_HERO_ART_FETCH = is_enabled(environ.get('WATCH_HERO_ART_FETCH', "True"), True)  # Look missing artwork up on demand (TMDB → IMDb)
+try:
+    WATCH_HERO_ART_TIMEOUT = float(environ.get('WATCH_HERO_ART_TIMEOUT') or 8)  # Per-lookup timeout (seconds) - a page view must stay snappy
+except (TypeError, ValueError):
+    WATCH_HERO_ART_TIMEOUT = 8.0
+WATCH_HERO_ART_RETRY_HOURS = max(env_int('WATCH_HERO_ART_RETRY_HOURS', 24), 1)  # Re-try missing artwork after N hours
+WATCH_HERO_API_PATH = env_str('WATCH_HERO_API_PATH', default='/api/movies/art')  # Artwork endpoint (API_URL + this path)
+MOVIE_ART_COLLECTION = environ.get('MOVIE_ART_COLLECTION', 'movie_art')  # Mongo collection caching poster/backdrop URLs
+
 
 # ============================
 # Bot Configuration

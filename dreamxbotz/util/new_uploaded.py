@@ -235,9 +235,12 @@ async def start_worker() -> None:
         return
     _STARTED = True
     try:
+        from database.movie_art_db import movie_art
         from database.recent_movies_db import recent_movies
 
         await recent_movies.ensure_indexes()
+        # Artwork cache behind the watch-page movie hero.
+        await movie_art.ensure_indexes()
         _ensure_workers()
         task = asyncio.get_running_loop().create_task(refresh_posters())
         _BACKGROUND.add(task)
@@ -419,7 +422,26 @@ async def _resolve_and_store_poster(movie_id: str) -> None:
 
 async def _lookup_poster(query: str, title: str) -> tuple:
     """Return ``(poster_url, source)`` – never raises."""
-    timeout = _poster_timeout()
+    art = await lookup_art(query, title)
+    return art.get("poster"), art.get("source")
+
+
+async def lookup_art(
+    query: str, title: str = "", *, timeout: Optional[float] = None
+) -> Dict[str, Optional[str]]:
+    """Resolve the artwork of one movie – **never raises**.
+
+    Returns ``{"poster": url|None, "backdrop": url|None, "source": str|None}``:
+
+    * TMDB (``get_movie_detailsx``) is asked first – it is the only source that
+      returns a 16:9 ``backdrop_url`` as well as the 2:3 poster,
+    * IMDb (``get_movie_details``) is the fallback when TMDB has no poster.
+
+    Only ``https://`` URLs are returned; everything else is rejected so a
+    hostile upstream answer can never reach the poster proxy.
+    """
+    title = title or query
+    art: Dict[str, Optional[str]] = {"poster": None, "backdrop": None, "source": None}
     try:
         from plugins.Dreamxfutures.Imdbposter import (  # heavy imports kept lazy
             get_movie_details,
@@ -427,8 +449,10 @@ async def _lookup_poster(query: str, title: str) -> tuple:
         )
     except Exception as exc:
         logger.debug("Poster helpers unavailable: %s", exc)
-        return None, None
+        return art
 
+    if timeout is None:
+        timeout = _poster_timeout()
     use_tmdb = bool(_cfg("TMDB_POSTER", True))
     details: Optional[dict] = None
 
@@ -447,12 +471,21 @@ async def _lookup_poster(query: str, title: str) -> tuple:
             logger.debug("IMDb lookup failed for '%s': %s", title, exc)
 
     if not details:
-        return None, None
-    poster = details.get("poster_url") or details.get("backdrop_url")
-    if not poster or not re.match(r"^https://", str(poster)):
-        return None, None
-    source = "tmdb" if "tmdb" in str(poster).lower() or (use_tmdb and details.get("tmdb_url")) else "imdb"
-    return str(poster), source
+        return art
+
+    poster = details.get("poster_url")
+    backdrop = details.get("backdrop_url")
+    # A TMDB answer without a poster but with a backdrop still deserves a card.
+    if not poster:
+        poster = backdrop
+        backdrop = None
+
+    art["poster"] = str(poster) if poster and re.match(r"^https://", str(poster)) else None
+    art["backdrop"] = str(backdrop) if backdrop and re.match(r"^https://", str(backdrop)) else None
+    if art["poster"] or art["backdrop"]:
+        tmdb_hint = "tmdb" in str(poster or backdrop).lower() or bool(details.get("tmdb_url"))
+        art["source"] = "tmdb" if (use_tmdb and tmdb_hint) else "imdb"
+    return art
 
 
 # --------------------------------------------------------------------------- #

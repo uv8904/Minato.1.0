@@ -122,6 +122,13 @@ _BRAND_JUNK_RE = re.compile(
     re.IGNORECASE,
 )
 _BRACKET_RE = re.compile(r"[\[\]{}()<>|~`^*#+=:;!?,]")
+#: Leading short ALL-CAPS tag in brackets – release-group markers such as
+#: ``[CK] Marco (2024)`` or ``[YTS]``.  Only very short, upper-case tags are
+#: dropped so real titles like ``K.G.F`` or ``[REC]``-style names stay intact
+#: (a name that ends up empty still falls back to the raw input below).
+_LEADING_TAG_RE = re.compile(
+    r"^\s*[\[\(\{<]\s*([A-Z0-9][A-Z0-9 ._-]{0,3})\s*[\]\)\}>]\s*[-–—:.]*\s*"
+)
 _SEPARATOR_RE = re.compile(r"[._]+")
 _WHITESPACE_RE = re.compile(r"\s+")
 
@@ -260,6 +267,12 @@ def normalize_title(
     raw = str(title or "")
     raw = _JUNK_EXT_RE.sub(" ", raw)
     raw = _VIDEO_EXT_RE.sub(" ", raw)
+    # "[CK] Marco (2024) …" -> "Marco (2024) …" (release-group tag, not a title)
+    for _ in range(2):
+        stripped = _LEADING_TAG_RE.sub("", raw)
+        if stripped == raw or not stripped.strip():
+            break
+        raw = stripped
     raw = raw.replace("_", " ").replace(".", " ")
     raw = _SITE_JUNK_RE.sub(" ", raw)
     raw = _BRAND_JUNK_RE.sub(" ", raw)

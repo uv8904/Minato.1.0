@@ -14,6 +14,9 @@ movie — the visitor never has to search again.
 * Bot deep link: `dreamxbotz/util/movie_deeplink.py` + `plugins/commands.py` (`/start movie_…`)
 * Local preview: `python tools/preview_section.py`
 
+The same database also powers the **movie hero** above the video player on
+`/watch/…` (poster card, 16:9 backdrop, chips, deep link) — see section 9.
+
 ---
 
 ## 1. How it works
@@ -66,6 +69,11 @@ movie — the visitor never has to search again.
 
 > Replace the placeholders above with your own values and keep them in the
 > environment (Koyeb/Heroku/Docker), never hard-coded in the repository.
+>
+> The watch-page movie hero (section 9) uses exactly the same placeholders:
+> it derives `MOVIE_ID` from the title, builds the `BOT_USERNAME` deep link,
+> stores its artwork cache in the same `DATABASE_CONNECTION` and never touches
+> `TELEGRAM_BOT_TOKEN` in the browser.
 
 ---
 
@@ -176,9 +184,46 @@ Newest uploads first, max 20, sanitized.
 ### `GET /api/movies/poster/<MOVIE_ID>?w=320`
 
 Poster bytes (JPEG, resized + re-encoded — EXIF stripped) served from **your**
-origin so the browser never talks to a third-party CDN. `w` ∈ `200/320/480/640`.
-Unknown id → `404`. No poster, disallowed host or upstream failure → a branded
-SVG placeholder (`image/svg+xml`) with the movie title.
+origin so the browser never talks to a third-party CDN.
+`w` ∈ `200/320/480/640/800/1600` (snapped to the nearest allowed value).
+
+* unknown id → `404` (the rail/hero then keeps its own placeholder),
+* movie known but without artwork, disallowed host, or upstream failure → a
+  branded SVG placeholder (`image/svg+xml`) carrying the movie title.
+
+This route never starts an upstream lookup by itself: the rail’s posters come
+from `recent_movies` and the hero’s from the `movie_art` cache (filled by the
+artwork endpoint below), so a page view can never stall on TMDB.
+
+### `GET /api/movies/art/<MOVIE_ID>?q=<title>&y=<year>`
+
+Artwork URLs for the watch-page hero (section 9).
+
+```json
+{
+  "ok": true,
+  "id": "marco-2024",
+  "title": "Marco",
+  "year": 2024,
+  "poster": "/api/movies/poster/marco-2024?v=8f2c1d3a",
+  "backdrop": "/api/movies/backdrop/marco-2024?v=8f2c1d3a",
+  "has_poster": true,
+  "has_backdrop": true,
+  "source": "tmdb"
+}
+```
+
+Resolution order: `recent_movies` → `movie_art` → TMDB (`get_movie_detailsx`)
+→ IMDb (`get_movie_details`). A miss is remembered in `movie_art`
+(`checked_at`) and only retried after `WATCH_HERO_ART_RETRY_HOURS`, so the
+upstream APIs are never hammered. `400` for an unusable id; the on-demand
+lookup can be switched off with `WATCH_HERO_ART_FETCH=False`.
+
+### `GET /api/movies/backdrop/<MOVIE_ID>?w=1280`
+
+Wide (16:9) artwork for the hero band: the TMDB backdrop, else the poster, else
+a branded 16:9 SVG placeholder. `w` ∈ `480/720/960/1280/1920`. Unknown id →
+`404`.
 
 ### Never exposed
 
@@ -225,6 +270,28 @@ Housekeeping: every 100 registrations the collection is trimmed to the newest
 
 ---
 
+## 6b. Database schema (`movie_art`)
+
+Artwork cache behind the watch-page hero — same database (`DATABASE_CONNECTION`),
+collection name `MOVIE_ART_COLLECTION` (default `movie_art`).
+
+| field | type | notes |
+| --- | --- | --- |
+| `_id` | str | **`MOVIE_ID`** (same deterministic id as everywhere) |
+| `title` | str | clean title (used as the lookup hint) |
+| `year` | int \| null | release year |
+| `poster_url` | str \| null | upstream 2:3 artwork — **internal**, never sent to the browser |
+| `backdrop_url` | str \| null | upstream 16:9 artwork — **internal** |
+| `poster_source` | str \| null | `tmdb` / `imdb` |
+| `checked_at` | datetime | when the lookup was last attempted (hit **or** miss) |
+| `updated_at` | datetime | last write |
+
+Documents are created lazily (first time a streamed movie is opened), so the
+collection stays small; it is never trimmed automatically and a hero lookup
+never bumps a movie into the “Newly Uploaded” rail.
+
+---
+
 ## 7. Telegram bot deep-link flow
 
 1. Visitor taps a poster → the browser opens
@@ -258,9 +325,13 @@ Nothing here duplicates the existing `msrch_` (web search) or `getfile-`
 # Local visual preview (real page + real assets + fake feed)
 python tools/preview_section.py            # http://127.0.0.1:8080
 #   /?state=empty | /?state=error | /?state=loading | /?state=hostile | /?limit=6
+#   /watch/demo              watch page + movie hero (real req.html)
+#   /watch/demo?state=error  artwork API down    ?state=noart  no poster yet
+#   /watch/demo?state=hostile hostile artwork API (hardening demo)
 
 # Test suite
 pytest tests/test_newly_uploaded.py tests/test_newly_uploaded_ui.py -q
+pytest tests/test_watch_hero.py -q         # the watch-page hero
 pytest tests/ -q                           # whole suite
 ```
 
@@ -269,10 +340,83 @@ badges, the store’s de-duplication, the JSON/poster API (including 30-odd
 sanitization and security cases) and the `/start movie_…` handler.
 `tests/test_newly_uploaded_ui.py` renders both real templates and checks the
 markup, the assets’ states and that no secret can leak into the page.
+`tests/test_watch_hero.py` covers the hero: the server-rendered context
+(title/year/quality/deep link), the artwork + backdrop endpoints (resolution
+order, caching, misses, hostile ids), the `movie_art` store and the markup
+(above the player, single `<h1>`, asset links, no secrets).
 
 ---
 
-## 9. Troubleshooting
+## 9. Movie hero on the watch page
+
+`/watch/<id>/<file>?hash=…` opens with a full-width **movie hero** above the
+player: a 16:9 backdrop band, the 2:3 poster card of the movie that is being
+streamed, its year/quality/language chips, the upload date, and the same
+Telegram deep link as the rail (`https://t.me/BOT_USERNAME?start=movie_MOVIE_ID`)
+— plus a *Copy search link* button and a *Play here* jump back to the player.
+
+* Frontend: `dreamxbotz/static/watch_hero.css`, `dreamxbotz/static/watch_hero.js`
+* Page markup: `dreamxbotz/template/req.html` → `<section id="movieHero">`
+* Server-rendered context: `dreamxbotz/util/watch_hero.py` (`build_context`)
+* API: `/api/movies/art/<MOVIE_ID>` + `/api/movies/backdrop/<MOVIE_ID>` (§5)
+* Artwork cache: `database/movie_art_db.py` → collection `movie_art` (§6b)
+* Preview: `python tools/preview_section.py` → `/watch/demo`
+
+### How the artwork is resolved
+
+```
+  /watch/... page view
+        │  render_template.render_page()   ← title / year / quality / upload date /
+        │  deep link are derived from the file name + its Telegram message, so the
+        │  strip is complete before any JavaScript runs
+        ▼
+  <section id="movieHero" data-movie-id="marco-2024" data-art="/api/movies/art">
+        │  watch_hero.js
+        ▼
+  GET /api/movies/art/marco-2024?q=Marco&y=2024
+        │
+        ├─ 1. recent_movies document    (poster already known → no network call)
+        ├─ 2. movie_art document        (resolved on an earlier visit)
+        └─ 3. TMDB (poster + backdrop)  →  IMDb fallback (poster)
+                 │  8 s timeout, https-only, allow-listed image hosts
+                 ▼
+           movie_art (cached)  →  bytes proxied from our own origin:
+           /api/movies/poster/<id>?w=…  ·  /api/movies/backdrop/<id>?w=…
+```
+
+The browser never talks to TMDB/IMDb, never receives an upstream URL and never
+sees the bot token: the strip carries only the public `BOT_USERNAME`.
+
+### Settings
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `WATCH_HERO` | `True` | master switch for the strip (the player page is untouched when off) |
+| `WATCH_HERO_ART_FETCH` | `True` | allow on-demand poster/backdrop lookups |
+| `WATCH_HERO_ART_TIMEOUT` | `8.0` | seconds per lookup — a page view must stay snappy |
+| `WATCH_HERO_ART_RETRY_HOURS` | `24` | how long a failed lookup is remembered before retrying |
+| `WATCH_HERO_API_PATH` | `/api/movies/art` | artwork endpoint (`API_URL` + this path) |
+| `MOVIE_ART_COLLECTION` | `movie_art` | Mongo collection of the artwork cache |
+
+### Behaviour
+
+| Situation | What the visitor sees |
+| --- | --- |
+| Movie uploaded moments ago (already in the rail) | poster immediately, 16:9 backdrop fills in right after |
+| Older movie, first visit | skeleton shimmer, then poster + backdrop |
+| No artwork found anywhere | branded placeholder card + “Poster coming soon” note |
+| TMDB/IMDb unreachable | placeholder stays, the note says so, the deep link still works |
+| JavaScript disabled | title, chips, upload date and the deep-link button still render |
+| Repeat visit / cached artwork | served from the process cache + `movie_art`, no upstream call |
+| Hostile API answer | every URL is re-validated in the browser: only our own `/api/movies/` paths are ever loaded |
+
+Tapping the poster card or *Open in Telegram* opens that exact movie inside the
+bot (`?start=movie_<MOVIE_ID>`, section 7) — no searching, no download link on
+the page.
+
+---
+
+## 10. Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
@@ -284,4 +428,8 @@ markup, the assets’ states and that no secret can leak into the page.
 | Section missing on the page | `NEW_UPLOADED_MOVIES=True` (restart required) and the page must be rendered by `render_template.render_page` |
 | `404` on `/static/newly_uploaded.js` | the assets must exist in `dreamxbotz/static/` (they are whitelisted by `dreamxbotz/server/static_assets.py`) |
 | Website on another domain | set `API_URL` and `NEW_UPLOADED_CORS_ORIGIN`, then restart |
-| Want it gone quickly | `NEW_UPLOADED_MOVIES=False` — the section, the API and all writes disappear; existing data is left untouched |
+| Hero strip missing on `/watch/…` | `WATCH_HERO=True` (restart required) and the page must be rendered by `render_template.render_page` |
+| Hero shows “Poster coming soon” | no artwork was found: check `TMDB_API_KEY` / `WATCH_HERO_ART_FETCH`, or allow-list the host with `NEW_UPLOADED_POSTER_HOSTS` |
+| Hero shows “Artwork unavailable” | `curl /api/movies/art/<MOVIE_ID>` — a non-200 means the API/Mongo is down; the strip keeps working without artwork |
+| Wrong movie name/quality in the hero | the title is parsed from the file name — use clean release names (`Marco (2024) 1080p …`); see `dreamxbotz/util/movie_titles.py` |
+| Want it gone quickly | `NEW_UPLOADED_MOVIES=False` — the section, the API and all writes disappear; existing data is left untouched. `WATCH_HERO=False` removes only the watch-page strip |

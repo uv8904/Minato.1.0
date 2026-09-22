@@ -120,6 +120,26 @@
         "NEW_UPLOADED_CORS_ORIGIN": {
             "description": "Stream Mode website: only needed when API_URL is used from another origin - comma separated origins.",
             "required": false
+        },
+        "WATCH_HERO": {
+            "description": "Stream Mode website: show the movie hero strip (poster + Telegram deep link) above the player on the /watch page (true/false).",
+            "required": false
+        },
+        "WATCH_HERO_ART_FETCH": {
+            "description": "Stream Mode website: look missing hero posters/backdrops up on demand from TMDB/IMDb (true/false).",
+            "required": false
+        },
+        "WATCH_HERO_ART_TIMEOUT": {
+            "description": "Stream Mode website: timeout in seconds for a single hero artwork lookup.",
+            "required": false
+        },
+        "WATCH_HERO_ART_RETRY_HOURS": {
+            "description": "Stream Mode website: re-try missing hero artwork after N hours.",
+            "required": false
+        },
+        "MOVIE_ART_COLLECTION": {
+            "description": "Stream Mode website: Mongo collection caching hero poster/backdrop URLs (default movie_art).",
+            "required": false
         }
     },
     "addons": [],
