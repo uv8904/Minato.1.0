@@ -256,7 +256,10 @@ async def refresh_posters(limit: Optional[int] = None) -> int:
     try:
         from database.recent_movies_db import recent_movies
 
-        rows = await recent_movies.list_recent(limit or _poster_lookup_limit())
+        window = _poster_lookup_limit()
+        rows = await recent_movies.list_recent(
+            limit or window, hard_limit=max(window, _limit())
+        )
         queued = 0
         for row in rows:
             if row.get("poster_url"):

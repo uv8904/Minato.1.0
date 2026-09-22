@@ -234,15 +234,17 @@ class RecentMoviesStore:
     # Reads
     # ------------------------------------------------------------------ #
     async def list_recent(
-        self, limit: int = 20, *, raise_on_error: bool = False
+        self, limit: int = 20, *, raise_on_error: bool = False, hard_limit: int = 20
     ) -> List[Dict[str, Any]]:
         """Newest uploads first, internal fields stripped.
 
         ``raise_on_error`` is used by the HTTP API so a database outage is
         reported as an error state instead of a misleading "no movies yet".
+        ``hard_limit`` defaults to the 20 cards the website shows; the poster
+        worker raises it to pre-fetch artwork for a few more entries.
         """
         try:
-            limit = max(1, min(int(limit), 20))
+            limit = max(1, min(int(limit), max(1, int(hard_limit))))
         except (TypeError, ValueError):
             limit = 20
         try:

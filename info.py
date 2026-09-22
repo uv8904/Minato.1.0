@@ -222,7 +222,10 @@ NEW_UPLOADED_ONLY_MOVIES = is_enabled(environ.get('NEW_UPLOADED_ONLY_MOVIES', "T
 NEW_UPLOADED_POSTER_FETCH = is_enabled(environ.get('NEW_UPLOADED_POSTER_FETCH', "True"), True)  # Look posters up automatically (TMDB → IMDb)
 NEW_UPLOADED_POSTER_LOOKUPS = min(max(env_int('NEW_UPLOADED_POSTER_LOOKUPS', 60), 1), 200)  # Max posters backfilled per run
 NEW_UPLOADED_POSTER_RETRY_HOURS = max(env_int('NEW_UPLOADED_POSTER_RETRY_HOURS', 48), 1)  # Re-try a failed poster after N hours
-NEW_UPLOADED_POSTER_TIMEOUT = float(environ.get('NEW_UPLOADED_POSTER_TIMEOUT', 25) or 25)  # Per-lookup timeout (seconds)
+try:
+    NEW_UPLOADED_POSTER_TIMEOUT = float(environ.get('NEW_UPLOADED_POSTER_TIMEOUT') or 25)  # Per-lookup timeout (seconds)
+except (TypeError, ValueError):
+    NEW_UPLOADED_POSTER_TIMEOUT = 25.0
 NEW_UPLOADED_POSTER_HOSTS = environ.get('NEW_UPLOADED_POSTER_HOSTS', '')  # Extra allowed poster hosts (space separated)
 NEW_UPLOADED_POSTER_ANY_HOST = is_enabled(environ.get('NEW_UPLOADED_POSTER_ANY_HOST', "False"), False)  # Allow any https poster host (trusted sources only)
 NEW_UPLOADED_CACHE_TTL = min(max(env_int('NEW_UPLOADED_CACHE_TTL', 60), 0), 3600)  # Browser cache for /api/movies/new (seconds)
