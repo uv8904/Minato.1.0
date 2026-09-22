@@ -1,0 +1,462 @@
+/* ==========================================================================
+   Stream Mode · "Newly Uploaded Movies"
+   Served from the bot's own web server (/static/newly_uploaded.css).
+   Everything is scoped under .nu-* and uses its own CSS variables, so the
+   existing navbar / hero / trending / poster-wall styles stay untouched.
+   Theme: dark background + gold/yellow accent, matching the MinatoVerse pages.
+   ========================================================================== */
+
+.nu-section {
+    --nu-gold: #f5c518;
+    --nu-gold-2: #ffdd7a;
+    --nu-ink: #f4f6fb;
+    --nu-muted: #9aa1b9;
+    --nu-card: #0b0d15;
+    --nu-line: rgba(255, 255, 255, 0.09);
+    --nu-line-gold: rgba(245, 197, 24, 0.5);
+    --nu-glow: 0 24px 46px -26px rgba(245, 197, 24, 0.55);
+    --nu-font: var(--font-display, "Sora", "Segoe UI", system-ui, sans-serif);
+    position: relative;
+    margin: 46px 0 10px;
+}
+
+/* ---------- header ---------- */
+.nu-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.nu-title {
+    margin: 0;
+    font-family: var(--nu-font);
+    font-size: clamp(20px, 3.4vw, 27px);
+    font-weight: 600;
+    letter-spacing: -0.4px;
+    color: var(--nu-ink);
+}
+
+.nu-title span {
+    background: linear-gradient(135deg, var(--nu-gold) 0%, var(--nu-gold-2) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+
+.nu-sub {
+    margin: 6px 0 0;
+    font-size: 13.5px;
+    color: var(--muted, var(--nu-muted));
+}
+
+.nu-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+    padding: 7px 13px;
+    border-radius: 999px;
+    border: 1px solid rgba(245, 197, 24, 0.32);
+    background: rgba(245, 197, 24, 0.08);
+    color: var(--nu-gold-2);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.nu-chip i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--nu-gold);
+    box-shadow: 0 0 0 0 rgba(245, 197, 24, 0.65);
+    animation: nu-pulse 2.4s ease-out infinite;
+}
+
+@keyframes nu-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(245, 197, 24, 0.55); }
+    70% { box-shadow: 0 0 0 9px rgba(245, 197, 24, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(245, 197, 24, 0); }
+}
+
+/* ---------- grid (auto-fill) ---------- */
+.nu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+    gap: 16px;
+}
+
+.nu-grid.nu-grid--state {
+    display: block;
+}
+
+/* ---------- card ---------- */
+.nu-card {
+    position: relative;
+    display: block;
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--nu-card);
+    border: 1px solid var(--nu-line);
+    box-shadow: 0 18px 34px -28px rgba(0, 0, 0, 0.95);
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.nu-card:hover,
+.nu-card:focus-visible {
+    transform: translateY(-6px);
+    border-color: var(--nu-line-gold);
+    box-shadow: var(--nu-glow);
+    outline: none;
+}
+
+.nu-card:focus-visible {
+    box-shadow: var(--nu-glow), 0 0 0 3px rgba(245, 197, 24, 0.45);
+}
+
+/* Poster keeps a true 2:3 movie-poster ratio at every width. */
+.nu-art {
+    position: relative;
+    display: block;
+    aspect-ratio: 2 / 3;
+    overflow: hidden;
+    background: linear-gradient(160deg, #151928 0%, #080a11 100%);
+}
+
+.nu-art img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    opacity: 0;
+    transform: scale(1);
+    transition: opacity 0.45s ease, transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.nu-art img.nu-on {
+    opacity: 1;
+}
+
+.nu-card:hover .nu-art img,
+.nu-card:focus-visible .nu-art img {
+    transform: scale(1.08);
+}
+
+.nu-shade {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(4, 5, 9, 0.92) 6%, rgba(4, 5, 9, 0.25) 46%, rgba(4, 5, 9, 0) 72%);
+}
+
+.nu-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 5px 9px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    color: #20180a;
+    background: linear-gradient(135deg, var(--nu-gold), var(--nu-gold-2));
+    box-shadow: 0 12px 22px -14px rgba(245, 197, 24, 0.95);
+}
+
+.nu-new {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 5px 9px;
+    border-radius: 8px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: var(--nu-gold-2);
+    background: rgba(12, 14, 22, 0.82);
+    border: 1px solid rgba(245, 197, 24, 0.45);
+    backdrop-filter: blur(4px);
+}
+
+.nu-body {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 12px 12px 13px;
+}
+
+.nu-card-title {
+    font-family: var(--nu-font);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--nu-ink);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.nu-card-sub {
+    font-size: 11.5px;
+    color: var(--nu-muted);
+}
+
+.nu-cta {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -40%);
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #20180a;
+    background: linear-gradient(135deg, var(--nu-gold), var(--nu-gold-2));
+    box-shadow: 0 16px 30px -16px rgba(0, 0, 0, 0.9);
+    opacity: 0;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+}
+
+.nu-card:hover .nu-cta,
+.nu-card:focus-visible .nu-cta {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+}
+
+.nu-cta svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* ---------- skeletons (loading state) ---------- */
+.nu-skel {
+    position: relative;
+    border-radius: 16px;
+    border: 1px solid var(--nu-line);
+    background: linear-gradient(160deg, #12151f 0%, #0a0c13 100%);
+    overflow: hidden;
+}
+
+.nu-skel-art {
+    display: block;
+    aspect-ratio: 2 / 3;
+}
+
+.nu-skel-lines {
+    position: absolute;
+    right: 12px;
+    bottom: 13px;
+    left: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.nu-skel-line {
+    height: 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.nu-skel-line.short {
+    width: 58%;
+    background: rgba(245, 197, 24, 0.14);
+}
+
+.nu-skel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg,
+            transparent 18%,
+            rgba(245, 197, 24, 0.07) 42%,
+            rgba(255, 255, 255, 0.12) 50%,
+            rgba(245, 197, 24, 0.07) 58%,
+            transparent 82%);
+    background-size: 220% 100%;
+    animation: nu-shimmer 1.5s linear infinite;
+}
+
+@keyframes nu-shimmer {
+    from { background-position: 140% 0; }
+    to { background-position: -40% 0; }
+}
+
+/* ---------- empty / error states ---------- */
+.nu-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 34px 18px;
+    text-align: center;
+    border-radius: 18px;
+    border: 1px dashed rgba(245, 197, 24, 0.26);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.nu-state-icon {
+    display: grid;
+    place-items: center;
+    width: 54px;
+    height: 54px;
+    border-radius: 16px;
+    color: var(--nu-gold);
+    background: rgba(245, 197, 24, 0.1);
+    border: 1px solid rgba(245, 197, 24, 0.28);
+}
+
+.nu-state-icon svg {
+    width: 26px;
+    height: 26px;
+}
+
+.nu-state-title {
+    margin: 0;
+    font-family: var(--nu-font);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--nu-ink);
+}
+
+.nu-state-text {
+    margin: 0;
+    max-width: 46ch;
+    font-size: 13px;
+    color: var(--nu-muted);
+}
+
+.nu-state-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11.5px;
+    color: rgba(154, 161, 185, 0.75);
+}
+
+.nu-retry {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    padding: 11px 20px;
+    border: 0;
+    border-radius: 12px;
+    font: inherit;
+    font-weight: 600;
+    color: #20180a;
+    background: linear-gradient(135deg, var(--nu-gold), var(--nu-gold-2));
+    cursor: pointer;
+    box-shadow: 0 16px 30px -18px rgba(245, 197, 24, 0.9);
+    transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+.nu-retry:hover {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+}
+
+.nu-retry:focus-visible {
+    outline: 3px solid rgba(245, 197, 24, 0.5);
+    outline-offset: 2px;
+}
+
+.nu-retry svg {
+    width: 15px;
+    height: 15px;
+}
+
+.nu-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---------- mobile: swipeable slider ---------- */
+@media (max-width: 640px) {
+    .nu-section {
+        margin-top: 34px;
+    }
+
+    .nu-head {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .nu-grid:not(.nu-grid--state) {
+        grid-template-columns: none;
+        grid-auto-flow: column;
+        grid-auto-columns: 44vw;
+        gap: 12px;
+        padding: 2px 2px 12px;
+        margin-inline: -6px;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .nu-grid:not(.nu-grid--state)::-webkit-scrollbar {
+        display: none;
+    }
+
+    .nu-grid:not(.nu-grid--state) > * {
+        scroll-snap-align: start;
+    }
+
+    .nu-card:hover {
+        transform: none;
+    }
+}
+
+/* ---------- devices without hover: keep the CTA visible ---------- */
+@media (hover: none) {
+    .nu-cta {
+        opacity: 0.92;
+        transform: translate(-50%, -50%);
+        font-size: 11.5px;
+        padding: 8px 12px;
+    }
+}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+    .nu-chip i,
+    .nu-skel::after {
+        animation: none;
+    }
+
+    .nu-card,
+    .nu-card:hover,
+    .nu-art img,
+    .nu-cta,
+    .nu-retry {
+        transform: none !important;
+        transition: none !important;
+    }
+}

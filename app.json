@@ -84,6 +84,42 @@
             "description": "Enable Groq/IMDb AI spell check on failed searches (true/false).",
             "value": "True",
             "required": false
+        },
+        "NEW_UPLOADED_MOVIES": {
+            "description": "Stream Mode website: enable the \"Newly Uploaded Movies\" section (auto-tracking + /api/movies/new + gold poster rail). true/false",
+            "required": false
+        },
+        "NEW_UPLOADED_LIMIT": {
+            "description": "Stream Mode website: how many newly uploaded movies the section shows (hard cap 20).",
+            "required": false
+        },
+        "NEW_UPLOADED_ONLY_MOVIES": {
+            "description": "Stream Mode website: skip S01E02-style series in the newly uploaded rail (true/false).",
+            "required": false
+        },
+        "NEW_UPLOADED_POSTER_FETCH": {
+            "description": "Stream Mode website: look missing posters up in the background from TMDB/IMDb (true/false).",
+            "required": false
+        },
+        "NEW_UPLOADED_POSTER_TIMEOUT": {
+            "description": "Stream Mode website: timeout in seconds for a single poster lookup.",
+            "required": false
+        },
+        "NEW_UPLOADED_POSTER_HOSTS": {
+            "description": "Stream Mode website: extra allow-listed poster image hosts, space separated (e.g. cdn.example.com).",
+            "required": false
+        },
+        "NEW_UPLOADED_MAX_MOVIES": {
+            "description": "Stream Mode website: keep only the newest N entries in the recent_movies collection.",
+            "required": false
+        },
+        "API_URL": {
+            "description": "Stream Mode website: base URL of the movie API. Leave empty when the pages are served by this bot (recommended); set e.g. https://my-minato-api.onrender.com when the site is hosted elsewhere.",
+            "required": false
+        },
+        "NEW_UPLOADED_CORS_ORIGIN": {
+            "description": "Stream Mode website: only needed when API_URL is used from another origin - comma separated origins.",
+            "required": false
         }
     },
     "addons": [],

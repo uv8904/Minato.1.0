@@ -65,6 +65,15 @@ async def dreamxbotz_start():
         print("Multiple Database Mode On. Now Files Will Be Save In Second DB If First DB Is Full")
     else:
         print("Single DB Mode On ! Files Will Be Save In First Database")
+    # Stream Mode · "Newly Uploaded Movies" (docs/NEWLY_UPLOADED_MOVIES.md):
+    # prepare the section's collection (indexes + poster backfill for the newest
+    # movies).  Best effort – a failure here never blocks the bot from starting.
+    try:
+        from dreamxbotz.util.new_uploaded import start_worker as start_new_uploaded
+
+        await start_new_uploaded()
+    except Exception as e:
+        logging.warning("Newly-uploaded movies worker not started: %s", e)
     me = await dreamxbotz.get_me()
     temp.ME = me.id
     temp.U_NAME = me.username

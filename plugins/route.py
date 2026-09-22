@@ -17,6 +17,15 @@ from info import *
 
 routes = web.RouteTableDef()
 
+# --------------------------------------------------------------------------- #
+# Stream Mode · "Newly Uploaded Movies"
+# --------------------------------------------------------------------------- #
+# The section's read-only JSON API (`dreamxbotz/server/movie_api.py`) and its
+# CSS/JS (`dreamxbotz/server/static_assets.py`) live in their own route tables.
+# plugins/__init__.py::web_server() registers them *before* this table, because
+# the catch-all "/{path:\S+}" stream route below would otherwise swallow them.
+# Docs: docs/NEWLY_UPLOADED_MOVIES.md
+
 @routes.get("/", allow_head=True)
 async def root_route_handler(request):
     return web.json_response("dreamxbotz")

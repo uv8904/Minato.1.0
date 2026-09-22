@@ -11,6 +11,53 @@ import logging
 import aiohttp
 
 
+# --------------------------------------------------------------------------- #
+# Stream Mode · "Newly Uploaded Movies" section
+# --------------------------------------------------------------------------- #
+# The guarded imports keep this renderer usable even when `info` is replaced by
+# a minimal stub (tests) – the section then falls back to sane defaults.
+# Docs: docs/NEWLY_UPLOADED_MOVIES.md
+try:
+    from info import NEW_UPLOADED_MOVIES as _NU_ENABLED
+except Exception:  # pragma: no cover - defensive
+    _NU_ENABLED = True
+try:
+    from info import NEW_UPLOADED_LIMIT as _NU_LIMIT
+except Exception:  # pragma: no cover - defensive
+    _NU_LIMIT = 20
+try:
+    from info import API_URL as _NU_API_URL
+except Exception:  # pragma: no cover - defensive
+    _NU_API_URL = ""
+try:
+    from info import NEW_UPLOADED_API_PATH as _NU_API_PATH
+except Exception:  # pragma: no cover - defensive
+    _NU_API_PATH = "/api/movies/new"
+try:
+    from dreamxbotz.zzint import __version__ as _MV_VERSION
+except Exception:  # pragma: no cover - defensive
+    _MV_VERSION = "1.1"
+try:
+    from dreamxbotz.server.static_assets import version_token as _asset_token
+
+    ASSET_VERSION = f"{_MV_VERSION}-{_asset_token()}"
+except Exception:  # pragma: no cover - defensive
+    ASSET_VERSION = str(_MV_VERSION)
+
+
+def newly_uploaded_api_url() -> str:
+    """Endpoint the web pages call for the "Newly Uploaded Movies" section.
+
+    Same-origin by default (``/api/movies/new``); when the website is hosted
+    elsewhere, set ``API_URL`` in ``info.py`` / the environment.
+    """
+    base = str(_NU_API_URL or "").strip().rstrip("/")
+    path = str(_NU_API_PATH or "/api/movies/new")
+    if not path.startswith("/"):
+        path = "/" + path
+    return f"{base}{path}" if base else path
+
+
 async def render_page(id, secure_hash, src=None):
     file = await dreamxbotz.get_messages(int(BIN_CHANNEL), int(id))
     file_data = await get_file_ids(dreamxbotz, int(BIN_CHANNEL), int(id))
@@ -48,4 +95,11 @@ async def render_page(id, secure_hash, src=None):
         file_unique_id=file_data.unique_id,
         update_channel_url=UPDATE_CHNL_LNK,
         bot_username=bot_username,
+        # "Newly Uploaded Movies" section (see docs/NEWLY_UPLOADED_MOVIES.md).
+        # `bot_username` is the public @username – the TELEGRAM_BOT_TOKEN never
+        # reaches the browser.
+        newly_uploaded_enabled=_NU_ENABLED,
+        newly_uploaded_api=newly_uploaded_api_url(),
+        newly_uploaded_limit=_NU_LIMIT,
+        asset_version=ASSET_VERSION,
     )

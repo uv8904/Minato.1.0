@@ -68,7 +68,8 @@ Join our support group for assistance:
 - ✅ Superfast User Broadcast  
 - ✅ Refer & Earn Premium  
 - ✅ Top Searching  
-- ✅ Best Streaming Website Integration  
+- ✅ Best Streaming Website Integration
+- ✅ Newly Uploaded Movies section (auto-filled from the bot DB, gold/dark theme, Telegram deep links)
 - ✅ Premium Membership Management  
 - ✅ Online Streaming & Fast Download  
 - ✅ File Indexing Above 2GB  
@@ -93,6 +94,30 @@ Join our support group for assistance:
 - ✅ …and more!
 
 📌 *To stay updated with all new features, join our [Updates Channel](https://t.me/dreamxbotz).*
+
+---
+
+## 🆕 Newly Uploaded Movies (Stream Mode website section)
+
+The streaming/download pages now open with a responsive, dark + gold
+**“Newly Uploaded Movies”** rail that fills itself from the bot database:
+
+- newest **20** movies, newest first, no duplicates (deterministic `MOVIE_ID`)
+- real posters (TMDB → IMDb) with lazy loading, skeletons, empty and error states
+- every card deep-links to `https://t.me/BOT_USERNAME?start=movie_MOVIE_ID`
+  → the bot opens **that exact movie**, no manual searching
+- no file ids, download links or the bot token ever reach the browser
+
+**Setup:** nothing to install — it ships with the bot. See
+[`docs/NEWLY_UPLOADED_MOVIES.md`](docs/NEWLY_UPLOADED_MOVIES.md) for the
+placeholders (`BOT_USERNAME`, `API_URL`, `MOVIE_ID`, `DATABASE_CONNECTION`,
+`TELEGRAM_BOT_TOKEN`), the API reference and the database schema.
+
+Preview it locally without Telegram:
+
+```bash
+python tools/preview_section.py   # http://127.0.0.1:8080
+```
 
 ---
 
