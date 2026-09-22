@@ -140,6 +140,11 @@
         "MOVIE_ART_COLLECTION": {
             "description": "Stream Mode website: Mongo collection caching hero poster/backdrop URLs (default movie_art).",
             "required": false
+        },
+        "DB_SUGGEST": {
+            "description": "On a search miss, fuzzy-match the typed text against titles in the file DB and show coloured 'did you mean' buttons (or auto-fix when obvious) (true/false).",
+            "value": "True",
+            "required": false
         }
     },
     "addons": [],
