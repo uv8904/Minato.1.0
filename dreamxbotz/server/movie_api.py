@@ -21,6 +21,7 @@ Endpoints
               "quality": "1080p",
               "quality_label": "1080p, 720p, 480p",
               "poster": "/api/movies/poster/jawan-2023?v=8f2c1d",
+              "backdrop": "/api/movies/backdrop/jawan-2023?v=8f2c1d",
               "has_poster": true,
               "uploaded_at": "2026-09-20T10:11:12Z",
               "added": "2 days ago",
@@ -238,7 +239,11 @@ def public_movie(doc: Dict[str, Any], bot_username: str = "") -> Dict[str, Any]:
         year = None
 
     has_poster = bool(doc.get("poster_url"))
-    poster = f"{POSTER_PATH}/{movie_id}?v={_poster_version(doc)}" if movie_id else ""
+    version = _poster_version(doc)
+    poster = f"{POSTER_PATH}/{movie_id}?v={version}" if movie_id else ""
+    # 16:9 artwork for the "just added" spotlight banner (TMDB backdrop when
+    # known, the poster otherwise) – same origin, like the poster.
+    backdrop = f"{BACKDROP_PATH}/{movie_id}?v={version}" if movie_id else ""
     uploaded_at = as_utc(doc.get("last_upload_at") or doc.get("uploaded_at"))
     deeplink = build_deeplink(bot_username, movie_id)
 
@@ -249,6 +254,7 @@ def public_movie(doc: Dict[str, Any], bot_username: str = "") -> Dict[str, Any]:
         "quality": badge,
         "quality_label": label,
         "poster": poster,
+        "backdrop": backdrop,
         "has_poster": has_poster,
         "uploaded_at": uploaded_at.isoformat().replace("+00:00", "Z") if uploaded_at else None,
         "added": relative_time_label(uploaded_at),

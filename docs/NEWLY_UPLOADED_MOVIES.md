@@ -5,6 +5,13 @@ bot’s own database. Every card deep-links to the Telegram bot
 (`https://t.me/BOT_USERNAME?start=movie_MOVIE_ID`), and the bot opens that exact
 movie — the visitor never has to search again.
 
+The **newest upload** additionally gets a Prime-Video-style **“Just added”
+spotlight** banner above the rail (16:9 backdrop, poster card, title, year,
+quality chips, gold *Open in Telegram* button), and the page **refreshes
+itself**: a movie uploaded to the bot while somebody is watching the page
+slides into the spotlight and the rail without a reload. See section 0 for a
+step-by-step walkthrough (“I upload *hmm* – where does it show up?”).
+
 * Frontend: `dreamxbotz/static/newly_uploaded.css`, `dreamxbotz/static/newly_uploaded.js`
 * Page markup: injected into `dreamxbotz/template/req.html` (stream page) and
   `dreamxbotz/template/dl.html` (download page)
@@ -12,10 +19,53 @@ movie — the visitor never has to search again.
 * Storage: `database/recent_movies_db.py` → collection `recent_movies`
 * Indexing hook: `dreamxbotz/util/new_uploaded.py` (called from `database/ia_filterdb.save_file`)
 * Bot deep link: `dreamxbotz/util/movie_deeplink.py` + `plugins/commands.py` (`/start movie_…`)
-* Local preview: `python tools/preview_section.py`
+* Local preview + **upload simulator**: `python tools/preview_section.py`
 
 The same database also powers the **movie hero** above the video player on
 `/watch/…` (poster card, 16:9 backdrop, chips, deep link) — see section 9.
+
+---
+
+## 0. Walkthrough — “I upload a movie called *hmm*, where does it show up?”
+
+Nothing has to be clicked on the website. The whole chain is automatic:
+
+| # | What happens | Where (code) | What you see |
+| --- | --- | --- | --- |
+| 1 | You post `Hmm (2024) 1080p WEB-DL Hindi.mkv` in your file channel (or run `/index`) | Telegram → `plugins/channel.py` | the usual index log line |
+| 2 | The bot stores the file in the filter DB — exactly as before | `database/ia_filterdb.save_file()` | — |
+| 3 | Right after the commit the file name is queued for the website (non-blocking, never breaks indexing) | `new_uploaded.notify_new_file()` | — |
+| 4 | The worker parses the release name → title **Hmm**, year **2024**, quality **1080p** | `movie_titles.parse_release_name()` | — |
+| 5 | It upserts one document in **`recent_movies`** with `_id = MOVIE_ID = "hmm-2024"` — deterministic, so a 720p upload of the same movie merges into the same card instead of duplicating it | `recent_movies.register_upload()` | — |
+| 6 | The poster worker looks the artwork up (TMDB → IMDb) and stores the poster URL on that document | `new_uploaded._poster_worker()` | until it finishes, a branded placeholder poster |
+| 7 | `GET /api/movies/new` returns **Hmm** as `movies[0]` (newest first, sanitized: no file ids, no links, no token) | `dreamxbotz/server/movie_api.py` | `curl …/api/movies/new` |
+| 8 | Every open Stream Mode / download page re-checks the feed every `NEW_UPLOADED_POLL` seconds (default 60) — **Hmm** becomes the **“Just added” spotlight** and the first card, with the *new* ribbon, poster and “added just now” | `static/newly_uploaded.js` | the Prime-Video-style banner at the top of the section |
+| 9 | A visitor taps the poster → `https://t.me/BOT_USERNAME?start=movie_hmm-2024` → the bot sends **that** movie | `plugins/commands.py` + `movie_deeplink.py` | the files in Telegram |
+
+**Try it without the bot** (no Telegram, no MongoDB needed):
+
+```bash
+python tools/preview_section.py          # open http://127.0.0.1:8080/
+```
+
+The page is the real `req.html` (player + movie hero + section) plus a floating
+**Upload simulator** panel. Type `hmm.mkv` (or any release name) and press
+**Upload to bot**: the tool runs the *same* functions the bot runs after
+`save_file()` — `parse_release_name()`, `RecentMoviesStore.register_upload()`
+on an in-memory collection, a (simulated, 2.5 s) poster worker — and lists every
+step. Watch the section: *Hmm* appears in the spotlight and as the first card
+with the placeholder, and a couple of seconds later the poster fills in.
+The same thing from a shell:
+
+```bash
+curl -s -X POST http://127.0.0.1:8080/demo/upload \
+     -H 'Content-Type: application/json' \
+     -d '{"file_name": "Hmm (2024) 1080p WEB-DL Hindi.mkv"}' | python -m json.tool
+curl -s "http://127.0.0.1:8080/api/movies/new?limit=1"    # → "id": "hmm-2024" first
+```
+
+In production the only differences are: step 1 is the real channel post, the
+poster comes from TMDB/IMDb, and the data lives in your `DATABASE_URI`.
 
 ---
 
@@ -44,9 +94,11 @@ The same database also powers the **movie hero** above the video player on
                     │
                     ▼
    GET /api/movies/new            ← sanitized JSON, <abbr>no</abbr> file ids / links / token
-                    │
+                    │   (fetched on page load + every NEW_UPLOADED_POLL seconds while visible)
                     ▼
    “Newly Uploaded Movies” section on req.html & dl.html
+     ├─ “Just added” spotlight  ← movies[0]: backdrop, poster, title, chips, deep link
+     └─ poster rail             ← all movies, newest first, “new” ribbons
                     │  click
                     ▼
    https://t.me/BOT_USERNAME?start=movie_MOVIE_ID
@@ -99,14 +151,17 @@ The same database also powers the **movie hero** above the video player on
    | `NEW_UPLOADED_POSTER_HOSTS` | *(empty)* | extra allow-listed poster hosts (space separated) |
    | `NEW_UPLOADED_POSTER_ANY_HOST` | `False` | allow **any** https poster host (trusted sources only) |
    | `NEW_UPLOADED_CACHE_TTL` | `60` | browser cache for `/api/movies/new` (seconds) |
+| `NEW_UPLOADED_POLL` | `60` | live refresh: open pages re-check the feed every N seconds while the tab is visible (`0` = off, minimum 15). Cheap — the API answers `304` via its `ETag` when nothing changed |
    | `NEW_UPLOADED_COLLECTION` | `recent_movies` | Mongo collection name |
    | `NEW_UPLOADED_MAX_MOVIES` | `500` | housekeeping: keep only the newest N entries |
    | `NEW_UPLOADED_CORS_ORIGIN` | *(empty)* | set only if the website is on another origin |
    | `API_URL` | *(empty)* | see the placeholder table above |
 
-4. **Upload a movie** (channel post, `/index`, bulk index) and reload the page —
-   the movie appears at the front of the rail, the poster is resolved in the
-   background within a few seconds.
+4. **Upload a movie** (channel post, `/index`, bulk index) — within
+   `NEW_UPLOADED_POLL` seconds (default 60, or immediately after a reload) the
+   movie becomes the **“Just added” spotlight** and the first card of the rail;
+   the poster is resolved in the background within a few seconds and fills in
+   on the next refresh.
 
 5. **Check the API**:
 
@@ -123,12 +178,18 @@ Markup injected into both pages (inside `<main class="wrap">`, **before**
 
 ```html
 <section class="nu-section" id="newlyUploaded" aria-labelledby="nuTitle"
-    data-api="/api/movies/new" data-limit="20" data-bot="BOT_USERNAME"> … </section>
+    data-api="/api/movies/new" data-limit="20" data-bot="BOT_USERNAME" data-poll="60">
+    <div class="nu-spotlight" id="nuSpotlight" data-nu-spotlight hidden></div>   <!-- newest upload -->
+    <div class="nu-head">…</div>
+    <div class="nu-grid" id="nuGrid" data-nu-grid aria-busy="true"></div>          <!-- poster rail -->
+</section>
 ```
 
 | Requirement | Implementation |
 | --- | --- |
 | Dark/black background + gold accent | scoped `--nu-gold: #f5c518`, `--nu-gold-2: #ffdd7a`; every selector is namespaced `.nu-*` so the existing theme cannot break |
+| **“Just added” spotlight** (Prime-Video style) | `movies[0]` is rendered into `#nuSpotlight`: 16:9 artwork from `backdrop` (`/api/movies/backdrop/<MOVIE_ID>`) with a slow zoom and dark left/bottom gradients, a 2:3 poster card with quality badge + *new* ribbon, kicker “Just added · 2 min ago”, big title, year / quality / Telegram chips, gold **Open in Telegram** + ghost **All new uploads** buttons. If the wide artwork turns out to be portrait (no TMDB backdrop yet) it is blurred into an ambient background instead of being cropped |
+| **Live refresh** | `data-poll` seconds (default 60, `0` = off): the feed is re-fetched with `cache: "no-cache"` (→ `304` on the ETag) only while the tab is visible; unchanged cards are **reused** (keyed by id + artwork version + upload time, so posters never flicker), a new newest movie slides in with `.nu-spot--fresh` and the chip reads “new upload · Title” for a few seconds |
 | Responsive grid **and** slider | `grid-template-columns: repeat(auto-fill, minmax(158px, 1fr))` on desktop; below `640px` it becomes a horizontal snap slider (`scroll-snap-type: x mandatory`) |
 | Poster aspect ratio | `aspect-ratio: 2 / 3` + `object-fit: cover` |
 | Hover zoom / glow | card lifts (`translateY(-6px)`), gold glow shadow, poster zooms (`scale(1.08)`), “Open in Telegram” pill appears |
@@ -141,8 +202,10 @@ Markup injected into both pages (inside `<main class="wrap">`, **before**
 | No direct links | the section has no download/file URLs at all; the only action is the Telegram deep link |
 | Accessibility | `aria-live`, `aria-busy`, `role="alert"`, focus-visible gold ring, `prefers-reduced-motion` support |
 
-Optional extras: `?limit=` on the page sets the card count (max 20), and
-`window.MinatoNewlyUploaded.refresh()` re-fetches on demand.
+Optional extras: `?limit=` on the page sets the card count (max 20),
+`window.MinatoNewlyUploaded.refresh()` re-fetches on demand (skeletons shown)
+and `window.MinatoNewlyUploaded.refresh({ silent: true })` re-checks quietly,
+only redrawing what changed.
 
 ---
 
@@ -167,6 +230,7 @@ Newest uploads first, max 20, sanitized.
       "quality": "1080p",
       "quality_label": "1080p, 720p, 480p",
       "poster": "/api/movies/poster/jawan-2023?v=2bf27895",
+      "backdrop": "/api/movies/backdrop/jawan-2023?v=2bf27895",
       "has_poster": true,
       "uploaded_at": "2026-09-20T10:11:12Z",
       "added": "2 days ago",
@@ -176,6 +240,9 @@ Newest uploads first, max 20, sanitized.
 }
 ```
 
+* `backdrop` is the 16:9 artwork used by the “Just added” spotlight (same
+  origin; the TMDB backdrop when known, otherwise the poster, otherwise a
+  branded placeholder — see the backdrop endpoint below).
 * `503` + `{"ok": false, "error": "database_unavailable"}` when Mongo is unreachable
   (the page shows the error state).
 * `Cache-Control: public, max-age=<NEW_UPLOADED_CACHE_TTL>` + `ETag` (304 supported).
@@ -322,15 +389,21 @@ Nothing here duplicates the existing `msrch_` (web search) or `getfile-`
 ## 8. Preview & tests
 
 ```bash
-# Local visual preview (real page + real assets + fake feed)
+# Local preview + upload simulator (real pages + real assets + the real
+# recent_movies store on an in-memory collection – no bot, no Mongo)
 python tools/preview_section.py            # http://127.0.0.1:8080
+#   /                        Stream Mode page: player + movie hero + spotlight + rail
+#                            + floating "Upload simulator" panel
+#   /download                the download page (same rail, same panel)
 #   /?state=empty | /?state=error | /?state=loading | /?state=hostile | /?limit=6
-#   /watch/demo              watch page + movie hero (real req.html)
 #   /watch/demo?state=error  artwork API down    ?state=noart  no poster yet
 #   /watch/demo?state=hostile hostile artwork API (hardening demo)
+#   POST /demo/upload {"file_name": "..."}   run the pipeline for one file name
+#   POST /demo/reset                         back to the sample data
 
 # Test suite
 pytest tests/test_newly_uploaded.py tests/test_newly_uploaded_ui.py -q
+pytest tests/test_preview_upload_simulator.py -q   # upload → spotlight/rail flow
 pytest tests/test_watch_hero.py -q         # the watch-page hero
 pytest tests/ -q                           # whole suite
 ```
@@ -339,7 +412,12 @@ pytest tests/ -q                           # whole suite
 badges, the store’s de-duplication, the JSON/poster API (including 30-odd
 sanitization and security cases) and the `/start movie_…` handler.
 `tests/test_newly_uploaded_ui.py` renders both real templates and checks the
-markup, the assets’ states and that no secret can leak into the page.
+markup (including the spotlight container and the poll interval), the assets’
+states and that no secret can leak into the page.
+`tests/test_preview_upload_simulator.py` drives the simulator end to end:
+upload *hmm* → first in the feed with the placeholder → poster after the
+worker → a second quality merges instead of duplicating → series/junk are
+skipped → reset.
 `tests/test_watch_hero.py` covers the hero: the server-rendered context
 (title/year/quality/deep link), the artwork + backdrop endpoints (resolution
 order, caching, misses, hostile ids), the `movie_art` store and the markup
@@ -432,4 +510,7 @@ the page.
 | Hero shows “Poster coming soon” | no artwork was found: check `TMDB_API_KEY` / `WATCH_HERO_ART_FETCH`, or allow-list the host with `NEW_UPLOADED_POSTER_HOSTS` |
 | Hero shows “Artwork unavailable” | `curl /api/movies/art/<MOVIE_ID>` — a non-200 means the API/Mongo is down; the strip keeps working without artwork |
 | Wrong movie name/quality in the hero | the title is parsed from the file name — use clean release names (`Marco (2024) 1080p …`); see `dreamxbotz/util/movie_titles.py` |
+| Spotlight missing (rail works) | the banner is `movies[0]` — it only renders when the feed has at least one movie; check that `/static/newly_uploaded.css` is the current version (`?v=` token) and that the template contains `<div … data-nu-spotlight hidden>` |
+| Spotlight shows a blurry poster instead of a wide image | no 16:9 backdrop is known yet: TMDB is the only source of backdrops (`TMDB_API_KEY`, `WATCH_HERO_ART_FETCH=True`); IMDb-only artwork stays a blurred poster background by design |
+| New upload does not appear until I reload | `NEW_UPLOADED_POLL` is `0` or the tab was hidden (polling pauses); the default re-checks every 60 s. A CDN/proxy that strips `ETag`/`Cache-Control` can also serve stale JSON — check `curl -I /api/movies/new` |
 | Want it gone quickly | `NEW_UPLOADED_MOVIES=False` — the section, the API and all writes disappear; existing data is left untouched. `WATCH_HERO=False` removes only the watch-page strip |

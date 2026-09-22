@@ -113,6 +113,10 @@
             "description": "Stream Mode website: keep only the newest N entries in the recent_movies collection.",
             "required": false
         },
+        "NEW_UPLOADED_POLL": {
+            "description": "Stream Mode website: live refresh - open pages re-check /api/movies/new every N seconds so a fresh upload appears in the \"Just added\" spotlight without a reload (default 60, 0 = off).",
+            "required": false
+        },
         "API_URL": {
             "description": "Stream Mode website: base URL of the movie API. Leave empty when the pages are served by this bot (recommended); set e.g. https://my-minato-api.onrender.com when the site is hosted elsewhere.",
             "required": false

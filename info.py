@@ -233,6 +233,7 @@ except (TypeError, ValueError):
 NEW_UPLOADED_POSTER_HOSTS = environ.get('NEW_UPLOADED_POSTER_HOSTS', '')  # Extra allowed poster hosts (space separated)
 NEW_UPLOADED_POSTER_ANY_HOST = is_enabled(environ.get('NEW_UPLOADED_POSTER_ANY_HOST', "False"), False)  # Allow any https poster host (trusted sources only)
 NEW_UPLOADED_CACHE_TTL = min(max(env_int('NEW_UPLOADED_CACHE_TTL', 60), 0), 3600)  # Browser cache for /api/movies/new (seconds)
+NEW_UPLOADED_POLL = min(max(env_int('NEW_UPLOADED_POLL', 60), 0), 3600)  # Live refresh: page re-checks /api/movies/new every N seconds while visible (0 = off)
 NEW_UPLOADED_COLLECTION = environ.get('NEW_UPLOADED_COLLECTION', 'recent_movies')  # Mongo collection name
 NEW_UPLOADED_MAX_MOVIES = max(env_int('NEW_UPLOADED_MAX_MOVIES', 500), 20)  # Housekeeping: keep only the newest N entries
 NEW_UPLOADED_CORS_ORIGIN = environ.get('NEW_UPLOADED_CORS_ORIGIN', '')  # Only needed when the website is hosted elsewhere
