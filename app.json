@@ -85,6 +85,62 @@
             "value": "True",
             "required": false
         },
+        "NEW_UPLOADED_MOVIES": {
+            "description": "Stream Mode website: enable the \"Newly Uploaded Movies\" section (auto-tracking + /api/movies/new + gold poster rail). true/false",
+            "required": false
+        },
+        "NEW_UPLOADED_LIMIT": {
+            "description": "Stream Mode website: how many newly uploaded movies the section shows (hard cap 20).",
+            "required": false
+        },
+        "NEW_UPLOADED_ONLY_MOVIES": {
+            "description": "Stream Mode website: skip S01E02-style series in the newly uploaded rail (true/false).",
+            "required": false
+        },
+        "NEW_UPLOADED_POSTER_FETCH": {
+            "description": "Stream Mode website: look missing posters up in the background from TMDB/IMDb (true/false).",
+            "required": false
+        },
+        "NEW_UPLOADED_POSTER_TIMEOUT": {
+            "description": "Stream Mode website: timeout in seconds for a single poster lookup.",
+            "required": false
+        },
+        "NEW_UPLOADED_POSTER_HOSTS": {
+            "description": "Stream Mode website: extra allow-listed poster image hosts, space separated (e.g. cdn.example.com).",
+            "required": false
+        },
+        "NEW_UPLOADED_MAX_MOVIES": {
+            "description": "Stream Mode website: keep only the newest N entries in the recent_movies collection.",
+            "required": false
+        },
+        "API_URL": {
+            "description": "Stream Mode website: base URL of the movie API. Leave empty when the pages are served by this bot (recommended); set e.g. https://my-minato-api.onrender.com when the site is hosted elsewhere.",
+            "required": false
+        },
+        "NEW_UPLOADED_CORS_ORIGIN": {
+            "description": "Stream Mode website: only needed when API_URL is used from another origin - comma separated origins.",
+            "required": false
+        },
+        "WATCH_HERO": {
+            "description": "Stream Mode website: show the movie hero strip (poster + Telegram deep link) above the player on the /watch page (true/false).",
+            "required": false
+        },
+        "WATCH_HERO_ART_FETCH": {
+            "description": "Stream Mode website: look missing hero posters/backdrops up on demand from TMDB/IMDb (true/false).",
+            "required": false
+        },
+        "WATCH_HERO_ART_TIMEOUT": {
+            "description": "Stream Mode website: timeout in seconds for a single hero artwork lookup.",
+            "required": false
+        },
+        "WATCH_HERO_ART_RETRY_HOURS": {
+            "description": "Stream Mode website: re-try missing hero artwork after N hours.",
+            "required": false
+        },
+        "MOVIE_ART_COLLECTION": {
+            "description": "Stream Mode website: Mongo collection caching hero poster/backdrop URLs (default movie_art).",
+            "required": false
+        },
         "DB_SUGGEST": {
             "description": "On a search miss, fuzzy-match the typed text against titles in the file DB and show coloured 'did you mean' buttons (or auto-fix when obvious) (true/false).",
             "value": "True",

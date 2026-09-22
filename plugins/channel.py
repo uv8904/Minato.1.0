@@ -11,6 +11,7 @@ from Script import script
 from database.ia_filterdb import save_file
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from utils import temp
+from dreamxbotz.util.new_uploaded import register_movie_update
 from dreamxbotz.util.title_notify import check_new_file
 from pymongo.errors import PyMongoError, DuplicateKeyError
 from pyrogram.errors import MessageIdInvalid, MessageNotModified, FloodWait
@@ -313,6 +314,21 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
         )
         movie_doc["files"].append(file_data)
         schedule_update(bot, base_name)
+
+    # Stream Mode → "Newly Uploaded Movies": hand the curated title/year/quality
+    # and the TMDB/IMDb poster to the website section (docs/NEWLY_UPLOADED_MOVIES.md).
+    try:
+        register_movie_update(
+            base_name,
+            year=movie_doc.get("year") or media_info["year"],
+            quality=media_info["quality"],
+            poster_url=movie_doc.get("poster_url"),
+            poster_source="tmdb" if (TMDB_POSTER and not error_tmdb) else "imdb",
+            file_names=[filename],
+        )
+    except Exception:
+        logger.debug("Newly-uploaded enrichment failed for '%s'", base_name, exc_info=True)
+
 
 async def send_movie_update(bot, base_name):
     max_retries = 3

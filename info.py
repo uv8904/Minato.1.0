@@ -214,6 +214,53 @@ TITLE_NOTIFY_TTL_DAYS = env_int('TITLE_NOTIFY_TTL_DAYS', 30)  # Forget a request
 TITLE_NOTIFY_MAX_PER_USER = env_int('TITLE_NOTIFY_MAX_PER_USER', 5)  # Max pending requests kept per user
 
 
+# ============================================================
+# Stream Mode · "Newly Uploaded Movies" web section
+# ============================================================
+# Every newly indexed movie is stored in a small `recent_movies` collection and
+# rendered by /api/movies/new on the bot's own web server.  Posters are resolved
+# in the background from TMDB/IMDb.  See docs/NEWLY_UPLOADED_MOVIES.md.
+NEW_UPLOADED_MOVIES = is_enabled(environ.get('NEW_UPLOADED_MOVIES', "True"), True)  # Master switch: tracking + API + section
+NEW_UPLOADED_LIMIT = min(max(env_int('NEW_UPLOADED_LIMIT', 20), 1), 20)  # Cards shown (hard cap: 20)
+NEW_UPLOADED_ONLY_MOVIES = is_enabled(environ.get('NEW_UPLOADED_ONLY_MOVIES', "True"), True)  # Skip S01E02 style series for this section
+NEW_UPLOADED_POSTER_FETCH = is_enabled(environ.get('NEW_UPLOADED_POSTER_FETCH', "True"), True)  # Look posters up automatically (TMDB → IMDb)
+NEW_UPLOADED_POSTER_LOOKUPS = min(max(env_int('NEW_UPLOADED_POSTER_LOOKUPS', 60), 1), 200)  # Max posters backfilled per run
+NEW_UPLOADED_POSTER_RETRY_HOURS = max(env_int('NEW_UPLOADED_POSTER_RETRY_HOURS', 48), 1)  # Re-try a failed poster after N hours
+try:
+    NEW_UPLOADED_POSTER_TIMEOUT = float(environ.get('NEW_UPLOADED_POSTER_TIMEOUT') or 25)  # Per-lookup timeout (seconds)
+except (TypeError, ValueError):
+    NEW_UPLOADED_POSTER_TIMEOUT = 25.0
+NEW_UPLOADED_POSTER_HOSTS = environ.get('NEW_UPLOADED_POSTER_HOSTS', '')  # Extra allowed poster hosts (space separated)
+NEW_UPLOADED_POSTER_ANY_HOST = is_enabled(environ.get('NEW_UPLOADED_POSTER_ANY_HOST', "False"), False)  # Allow any https poster host (trusted sources only)
+NEW_UPLOADED_CACHE_TTL = min(max(env_int('NEW_UPLOADED_CACHE_TTL', 60), 0), 3600)  # Browser cache for /api/movies/new (seconds)
+NEW_UPLOADED_COLLECTION = environ.get('NEW_UPLOADED_COLLECTION', 'recent_movies')  # Mongo collection name
+NEW_UPLOADED_MAX_MOVIES = max(env_int('NEW_UPLOADED_MAX_MOVIES', 500), 20)  # Housekeeping: keep only the newest N entries
+NEW_UPLOADED_CORS_ORIGIN = environ.get('NEW_UPLOADED_CORS_ORIGIN', '')  # Only needed when the website is hosted elsewhere
+# API_URL — base URL of the Stream Mode movie API used by the web pages.
+#   Leave EMPTY (recommended) when the pages are served by this bot's own web
+#   server: the section then calls "/api/movies/new" on the same origin.
+#   Set it only if the website lives on another domain, e.g.
+#       API_URL = https://my-minato-api.onrender.com
+#   The endpoint itself is always NEW_UPLOADED_API_PATH (or API_URL + that path).
+API_URL = env_str('API_URL', 'NEW_UPLOADED_API_URL', default='')
+NEW_UPLOADED_API_PATH = env_str('NEW_UPLOADED_API_PATH', default='/api/movies/new')
+
+# ----- Watch-page movie hero (strip above the video player) ----------------- #
+#   Shows the poster of the movie that is streaming plus its Telegram deep link
+#   (https://t.me/BOT_USERNAME?start=movie_MOVIE_ID).  The strip itself is
+#   rendered server side by render_template.py; only the artwork is fetched by
+#   /static/watch_hero.js from WATCH_HERO_API_PATH.
+WATCH_HERO = is_enabled(environ.get('WATCH_HERO', "True"), True)  # Master switch for the hero strip
+WATCH_HERO_ART_FETCH = is_enabled(environ.get('WATCH_HERO_ART_FETCH', "True"), True)  # Look missing artwork up on demand (TMDB → IMDb)
+try:
+    WATCH_HERO_ART_TIMEOUT = float(environ.get('WATCH_HERO_ART_TIMEOUT') or 8)  # Per-lookup timeout (seconds) - a page view must stay snappy
+except (TypeError, ValueError):
+    WATCH_HERO_ART_TIMEOUT = 8.0
+WATCH_HERO_ART_RETRY_HOURS = max(env_int('WATCH_HERO_ART_RETRY_HOURS', 24), 1)  # Re-try missing artwork after N hours
+WATCH_HERO_API_PATH = env_str('WATCH_HERO_API_PATH', default='/api/movies/art')  # Artwork endpoint (API_URL + this path)
+MOVIE_ART_COLLECTION = environ.get('MOVIE_ART_COLLECTION', 'movie_art')  # Mongo collection caching poster/backdrop URLs
+
+
 # ============================
 # Bot Configuration
 # ============================

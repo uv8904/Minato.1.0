@@ -105,6 +105,24 @@ async def start(client, message):
         if query:
             m.text = query
             return await auto_filter(client, m)
+    if len(m.command) == 2 and m.command[1].startswith("movie_"):
+        # Deep link from the Stream Mode "Newly Uploaded Movies" section:
+        # https://t.me/<bot>?start=movie_<MOVIE_ID>. The poster the user tapped
+        # is resolved back to that exact movie, so no searching is needed.
+        # See docs/NEWLY_UPLOADED_MOVIES.md and dreamxbotz/util/movie_deeplink.py
+        from dreamxbotz.util.movie_deeplink import resolve_movie_deeplink
+        found = await resolve_movie_deeplink(m.command[1])
+        if found["status"] == "invalid":
+            return await message.reply_text(
+                "<b>😕 ᴛʜɪs ᴍᴏᴠɪᴇ ʟɪɴᴋ ɪs ɴᴏᴛ ᴠᴀʟɪᴅ ᴀɴʏᴍᴏʀᴇ.</b>\n\n"
+                "ᴛᴀᴘ ᴛʜᴇ ᴘᴏsᴛᴇʀ ᴏɴ ᴛʜᴇ ᴡᴇʙsɪᴛᴇ ᴀɢᴀɪɴ, ᴏʀ sᴇɴᴅ ᴛʜᴇ ᴍᴏᴠɪᴇ ɴᴀᴍᴇ ʜᴇʀᴇ.",
+                reply_markup=InlineKeyboardMarkup(
+                    [[green("🔍 sᴇᴀʀᴄʜ ɴᴏᴡ", switch_inline_query_current_chat="")]]
+                ),
+                parse_mode=enums.ParseMode.HTML,
+            )
+        m.text = found["query"]
+        return await auto_filter(client, m)
     if len(m.command) == 2 and m.command[1].startswith(('notcopy', 'sendall')):
         _, userid, verify_id, file_id = m.command[1].split("_", 3)
         user_id = int(userid)

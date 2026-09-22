@@ -69,7 +69,9 @@ Join our support group for assistance:
 - ✅ Superfast User Broadcast  
 - ✅ Refer & Earn Premium  
 - ✅ Top Searching  
-- ✅ Best Streaming Website Integration  
+- ✅ Best Streaming Website Integration
+- ✅ Newly Uploaded Movies section (auto-filled from the bot DB, gold/dark theme, Telegram deep links)
+- ✅ Movie hero on the watch page (IMDb poster + 16:9 backdrop + deep search link above the player)
 - ✅ Premium Membership Management  
 - ✅ Online Streaming & Fast Download  
 - ✅ File Indexing Above 2GB  
@@ -94,6 +96,52 @@ Join our support group for assistance:
 - ✅ …and more!
 
 📌 *To stay updated with all new features, join our [Updates Channel](https://t.me/dreamxbotz).*
+
+---
+
+## 🆕 Newly Uploaded Movies (Stream Mode website section)
+
+The streaming/download pages now open with a responsive, dark + gold
+**“Newly Uploaded Movies”** rail that fills itself from the bot database:
+
+- newest **20** movies, newest first, no duplicates (deterministic `MOVIE_ID`)
+- real posters (TMDB → IMDb) with lazy loading, skeletons, empty and error states
+- every card deep-links to `https://t.me/BOT_USERNAME?start=movie_MOVIE_ID`
+  → the bot opens **that exact movie**, no manual searching
+- no file ids, download links or the bot token ever reach the browser
+
+**Setup:** nothing to install — it ships with the bot. See
+[`docs/NEWLY_UPLOADED_MOVIES.md`](docs/NEWLY_UPLOADED_MOVIES.md) for the
+placeholders (`BOT_USERNAME`, `API_URL`, `MOVIE_ID`, `DATABASE_CONNECTION`,
+`TELEGRAM_BOT_TOKEN`), the API reference and the database schema.
+
+### 🎬 Movie hero on the watch page
+
+Every `/watch/…` page now opens with a **movie hero** strip above the player:
+
+- the movie's **poster (2:3 card) and a 16:9 backdrop band**, taken from
+  IMDb/TMDB through the bot (never loaded from a third party in the browser)
+- title, year, quality badge (480p/720p/1080p/2160p) and language chips, plus
+  the upload date of the streamed file
+- an **Open in Telegram** button, a *Copy search link* button and a *Play here*
+  jump — the poster card itself is the deep link
+  `https://t.me/BOT_USERNAME?start=movie_MOVIE_ID`, so the bot opens that exact
+  movie with no searching
+- clean loading (skeleton), placeholder and error states, responsive down to
+  small phones
+
+Artwork is resolved server side (TMDB → IMDb), cached in the `movie_art`
+collection and proxied from your own origin; switch it off with
+`WATCH_HERO=False`. Details: section 9 of
+[`docs/NEWLY_UPLOADED_MOVIES.md`](docs/NEWLY_UPLOADED_MOVIES.md).
+
+Preview it locally without Telegram:
+
+```bash
+python tools/preview_section.py   # http://127.0.0.1:8080
+#   /               the section (rail)
+#   /watch/demo     the watch page with the movie hero
+```
 
 ---
 

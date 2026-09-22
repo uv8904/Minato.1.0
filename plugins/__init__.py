@@ -4,6 +4,7 @@ from .route import routes
 from asyncio import sleep 
 from datetime import datetime
 from database.users_chats_db import db
+from dreamxbotz.server import movie_api, static_assets
 from info import LOG_CHANNEL, URL
 import aiohttp
 import asyncio
@@ -14,6 +15,12 @@ logging.getLogger("pyrogram").setLevel(logging.ERROR)
 
 async def web_server():
     web_app = web.Application(client_max_size=30000000)
+    # Stream Mode · "Newly Uploaded Movies" — the JSON API and its static
+    # assets must be registered *before* the catch-all stream route in
+    # plugins/route.py, otherwise "/{path:\S+}" would swallow them.
+    # Docs: docs/NEWLY_UPLOADED_MOVIES.md
+    web_app.add_routes(static_assets.routes)
+    web_app.add_routes(movie_api.routes)
     web_app.add_routes(routes)
     return web_app
 

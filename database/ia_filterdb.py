@@ -11,6 +11,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from marshmallow import ValidationError
 from info import *
 from utils import get_settings, save_group_settings
+from dreamxbotz.util.new_uploaded import notify_new_file
 from datetime import datetime, timedelta
 import logging
 
@@ -135,6 +136,20 @@ async def save_file(media):
         )
         return False, 3
     logger.info(f"[SUCCESS] '{file_name}' saved to {target_db} DB.")
+    # Stream Mode → "Newly Uploaded Movies" (see docs/NEWLY_UPLOADED_MOVIES.md):
+    # queue the file so the website section picks it up automatically.  The
+    # helper is a cheap, non-blocking enqueue and swallows every error, so the
+    # indexing pipeline can never be slowed down or broken by this feature.
+    try:
+        notify_new_file(
+            media.file_name,
+            file_id,
+            mime_type=getattr(media, "mime_type", "") or "",
+            file_type=getattr(media, "file_type", "") or "",
+            file_size=getattr(media, "file_size", None),
+        )
+    except Exception:  # pragma: no cover - defensive
+        logger.debug("Newly-uploaded hook failed for '%s'.", file_name, exc_info=True)
     return True, 1
 
 
