@@ -1,6 +1,7 @@
 from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, save_group_settings, get_cap, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text, start_buttons, blue, green, red
 import tracemalloc
 from dreamxbotz.util.ai_spell import correct_title as groq_correct_title
+from dreamxbotz.util.title_suggest import auto_pick as db_auto_pick_title, suggest as db_title_suggest
 from dreamxbotz.util.title_notify import (
     PENDING_TEXT,
     notify_keyboard,
@@ -43,6 +44,9 @@ BUTTONS0 = {}
 BUTTONS1 = {}
 BUTTONS2 = {}
 SPELL_CHECK = {}
+# "chat_id-message_id" -> list of file-DB "did you mean" titles shown as
+# buttons (callback_data is 64-byte capped, so only an index travels).
+SUGG = {}
 
 
 @Client.on_message(filters.group & filters.text & filters.incoming)
@@ -344,6 +348,57 @@ async def advantage_spoll_choker(bot, query):
         k = await query.message.edit(script.MVE_NT_FND, reply_markup=btn)
         await asyncio.sleep(120)
         await k.delete()
+
+@Client.on_callback_query(filters.regex(r"^sdb#"))
+async def spell_db_cb_handler(bot, query):
+    """Coloured "did you mean" button - searches the file DB with the
+    suggested (correct) title and shows the result directly."""
+    try:
+        _, key, index_s, user = query.data.split("#")
+    except ValueError:
+        return await query.answer()
+    if int(user) != 0 and query.from_user.id != int(user):
+        return await query.answer(script.ALRT_TXT.format(query.from_user.first_name), show_alert=True)
+    try:
+        index = int(index_s)
+    except ValueError:
+        index = 0
+    titles = SUGG.get(key) or []
+    if not titles or not 0 <= index < len(titles):
+        await query.answer(script.OLD_ALRT_TXT.format(query.from_user.first_name), show_alert=True)
+        return
+    title = titles[index]
+    await query.answer("🔍 sᴀʀᴄʜɴɢ...")
+    files, offset, total_results = await get_search_results(query.message.chat.id, title, offset=0, filter=True)
+    if not files:
+        reqstr1 = query.from_user.id if query.from_user else 0
+        try:
+            reqstr = await bot.get_users(reqstr1)
+        except Exception:
+            reqstr = None
+        if NO_RESULTS_MSG and reqstr:
+            try:
+                await bot.send_message(chat_id=BIN_CHANNEL, text=script.NORSLTS.format(reqstr.id, reqstr.mention, title))
+            except Exception as e:
+                print(f"Error In Sdb - {e}   Make Sure Bot Admin BIN CHANNEL")
+        notify_key = f"{query.message.chat.id}-{query.message.id}"
+        remember_search(notify_key, title)
+        btn = notify_keyboard(notify_key, query.from_user.id if query.from_user else 0, title)
+        k = await query.message.edit(script.MVE_NT_FND, reply_markup=btn)
+        await asyncio.sleep(120)
+        await k.delete()
+        return
+    # The user's original message must still exist (auto_filter replies to it).
+    if not getattr(query.message, "reply_to_message", None):
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        await query.answer(script.OLD_ALRT_TXT.format(query.from_user.first_name), show_alert=True)
+        return
+    k = (title, files, offset, total_results)
+    await auto_filter(bot, query, k)
+
 
 # Qualities
 @Client.on_callback_query(filters.regex(r"^qualities#"))
@@ -1923,8 +1978,18 @@ async def auto_filter(client, msg, spoll=False):
                 if settings["spell_check"]:
                     ai_sts = await m.edit('𝐏𝐋𝐄𝐀𝐒𝐄 𝐖𝐀𝐈𝐓, 𝐀𝐈 𝐂𝐇𝐄𝐂𝐊𝐈𝐍𝐆 𝐘𝐎𝐔𝐑 𝐒𝐏𝐄𝐋𝐋𝐈𝐍𝐆...')
                     is_misspelled = await ai_spell_check(chat_id=message.chat.id, wrong_name=search)
+                    fixed_by_ai = bool(is_misspelled)
+                    if not is_misspelled:
+                        # Groq/IMDb couldn't fix it — ask our own file DB (fuzzy
+                        # match against titles that actually exist, no Google needed).
+                        try:
+                            is_misspelled = await db_auto_pick_title(message.chat.id, search)
+                        except Exception as e:
+                            logger.warning("db auto pick failed: %s", e)
+                            is_misspelled = None
                     if is_misspelled:
-                        await ai_sts.edit(f'𝐀𝐈 𝐒𝐔𝐆𝐆𝐄𝐒𝐓𝐄𝐃 ✅: <code>{is_misspelled}</code>\n🔍 Searching for it...')
+                        head = '𝐀𝐈 𝐒𝐔𝐆𝐆𝐄𝐒𝐓𝐄𝐃 ✅' if fixed_by_ai else '🪄 SPELLING FIXED'
+                        await ai_sts.edit(f'{head} ➜ <code>{is_misspelled}</code>\n🔍 Searching for it...')
                         message.text = is_misspelled
                         await ai_sts.delete()
                         return await auto_filter(client, message)
@@ -2138,46 +2203,59 @@ async def ai_spell_check(chat_id, wrong_name):
 
 
 async def advantage_spell_chok(client, message):
+    """No-results screen: "did you mean" buttons instead of sending users to Google.
+
+    1. Closest titles from our own file DB (blue buttons, callback ``sdb#``).
+    2. IMDb suggestions (classic behaviour, callback ``spol#``).
+    3. Only when neither finds anything close, the old "check your spelling"
+       message with the Google button.
+    """
     mv_id = message.id
     search = message.text
     chat_id = message.chat.id
-    settings = await get_settings(chat_id)
-    query = re.sub(
-        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
-        "", message.text, flags=re.IGNORECASE)
-    query = query.strip() + " movie"
-    try:
-        movies = await get_poster(search, bulk=True)
-    except:
-        k = await message.reply(script.I_CUDNT.format(message.from_user.mention))
-        await asyncio.sleep(60)
-        await k.delete()
-        try:
-            await message.delete()
-        except:
-            pass
-        return
-    if not movies:
-        user = message.from_user.id if message.from_user else 0
-        remember_search(f"{chat_id}-{mv_id}", search)
-        k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=notify_keyboard(f"{chat_id}-{mv_id}", user, search))
-        await asyncio.sleep(60)
-        await k.delete()
-        try:
-            await message.delete()
-        except:
-            pass
-        return
+    key = f"{chat_id}-{mv_id}"
     user = message.from_user.id if message.from_user else 0
-    remember_search(f"{chat_id}-{mv_id}", search)
-    buttons = [
-        [InlineKeyboardButton(text=movie.get('title'), callback_data=f"spol#{movie.movieID}#{user}")
-         ] for movie in movies]
+    remember_search(key, search)
 
-    buttons += notify_rows(f"{chat_id}-{mv_id}", user, search)
-    buttons.append([InlineKeyboardButton(
-        text="🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
-    d = await message.reply_text(text=script.CUDNT_FND.format(message.from_user.mention), reply_markup=InlineKeyboardMarkup(buttons), reply_to_message_id=message.id)
+    # 1) fuzzy matches against titles that actually exist in the file DB
+    db_titles = []
+    try:
+        db_titles = await db_title_suggest(chat_id, search, limit=5)
+    except Exception as e:
+        logger.warning("db suggestions failed: %s", e)
+        db_titles = []
+
+    # 2) IMDb suggestions (old behaviour)
+    movies = []
+    try:
+        movies = await get_poster(search, bulk=True) or []
+    except Exception as e:
+        logger.warning("imdb suggestions failed: %s", e)
+        movies = []
+
+    if not db_titles and not movies:
+        # Truly nothing close - old no-results screen (with Google button).
+        k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=notify_keyboard(key, user, search))
+        await asyncio.sleep(60)
+        await k.delete()
+        try:
+            await message.delete()
+        except:
+            pass
+        return
+
+    buttons = []
+    if db_titles:
+        SUGG[key] = [title for title, _score in db_titles]
+        while len(SUGG) > 500:
+            SUGG.pop(next(iter(SUGG)))
+        for i, (title, _score) in enumerate(db_titles):
+            buttons.append([blue("🎬 " + title, callback_data=f"sdb#{key}#{i}#{user}")])
+    for movie in movies[:5]:
+        buttons.append([blue(movie.get('title'), callback_data=f"spol#{movie.movieID}#{user}")])
+    buttons += notify_rows(key, user, search)
+    buttons.append([red("🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
+    d = await message.reply_text(text=script.CUDNT_FND, reply_markup=InlineKeyboardMarkup(buttons), reply_to_message_id=message.id)
     await asyncio.sleep(60)
     await d.delete()
     try:
