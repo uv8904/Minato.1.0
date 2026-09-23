@@ -1,5 +1,4 @@
 import re
-from dreamxbotz.util.search_results import result_header, result_files, result_footer
 import os
 import logging
 from info import  *
@@ -581,34 +580,104 @@ def clean_search_text(search_raw: str) -> str:
     else:
         return ""
 
-def search_file_list(files, chat_id, offset=0, button_mode=False, brand=None):
-    return result_files(
-        [(file.file_id, clean_filename(file.file_name), get_size(file.file_size))
-         for file in files],
-        temp.U_NAME, chat_id, offset=offset, button_mode=button_mode,
-        brand=brand or temp.B_LINK,
-    )
-
-
 async def get_cap(settings, remaining_seconds, files, query, total_results, search, offset=0):
-    """Render callbacks with the same layout as the initial search.
+    try:
+        if settings["imdb"]:
+            IMDB_CAP = temp.IMDB_CAP.get(query.from_user.id)
+            if IMDB_CAP:
+                cap = IMDB_CAP
+                cap += "\n\n🧾 <u>Your Requested Files Are Here</u> 👇\n\n</b>"
+                for idx, file in enumerate(files, start=offset + 1):
+                        cap += (
+                            f"<b>{idx}. "
+                            f"<a href='https://telegram.me/{temp.U_NAME}"
+                            f"?start=file_{query.message.chat.id}_{file.file_id}'>"
+                            f"[{get_size(file.file_size)}] "
+                            f"{clean_filename(file.file_name)}\n\n"
+                            f"</a></b>"
+                        )
+            else:
+                imdb = await get_poster(search, file=(files[0]).file_name) if settings["imdb"] else None
+                if imdb:
+                    TEMPLATE = script.IMDB_TEMPLATE_TXT
+                    cap = TEMPLATE.format(
+                        query=search, 
+                        title=imdb['title'],
+                        votes=imdb['votes'],
+                        aka=imdb["aka"],
+                        seasons=imdb["seasons"],
+                        box_office=imdb['box_office'],
+                        localized_title=imdb['localized_title'],
+                        kind=imdb['kind'],
+                        imdb_id=imdb["imdb_id"],
+                        cast=imdb["cast"],
+                        runtime=imdb["runtime"],
+                        countries=imdb["countries"],
+                        certificates=imdb["certificates"],
+                        languages=imdb["languages"],
+                        director=imdb["director"],
+                        writer=imdb["writer"],
+                        producer=imdb["producer"],
+                        composer=imdb["composer"],
+                        cinematographer=imdb["cinematographer"],
+                        music_team=imdb["music_team"],
+                        distributors=imdb["distributors"],
+                        release_date=imdb['release_date'],
+                        year=imdb['year'],
+                        genres=imdb['genres'],
+                        poster=imdb['poster'],
+                        plot=imdb['plot'],
+                        rating=imdb['rating'],
+                        url=imdb['url'],
+                        **locals()
+                    )
+                    for idx, file in enumerate(files, start=offset+1):
+                        cap += (
+                            f"<b>{idx}. "
+                            f"<a href='https://telegram.me/{temp.U_NAME}"
+                            f"?start=file_{query.message.chat.id}_{file.file_id}'>"
+                            f"[{get_size(file.file_size)}] "
+                            f"{clean_filename(file.file_name)}\n\n"
+                            f"</a></b>"
+                        )
+                else:
+                    cap = (
+                        f"<b>🏷 ᴛɪᴛʟᴇ : <code>{search}</code>\n"
+                        f"🧱 ᴛᴏᴛᴀʟ ꜰɪʟᴇꜱ : <code>{total_results}</code>\n"
+                        f"⏰ ʀᴇsᴜʟᴛ ɪɴ : <code>{remaining_seconds} Sᴇᴄᴏɴᴅs</code>\n\n"
+                        f"📝 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ : {query.from_user.mention}\n"
+                        f"⚜️ ᴘᴏᴡᴇʀᴇᴅ ʙʏ :⚡ {query.message.chat.title}\n</b>"
+                    )
+                    cap += "\n\n🧾 <u>Your Requested Files Are Here</u> 👇 👇\n\n</b>"
+                    for idx, file in enumerate(files, start=offset + 1):
+                        cap += (
+                            f"<b>{idx}. "
+                            f"<a href='https://telegram.me/{temp.U_NAME}"
+                            f"?start=file_{query.message.chat.id}_{file.file_id}'>"
+                            f"[{get_size(file.file_size)}] "
+                            f"{clean_filename(file.file_name)}\n\n"
+                            f"</a></b>"
+                        )
 
-    offset is always zero-based, matching get_search_results.
-    """
-    cap = None
-    if settings.get("imdb"):
-        cap = temp.IMDB_CAP.get(query.from_user.id)
-        if not cap and files:
-            imdb = await get_poster(search, file=files[0].file_name)
-            if imdb:
-                TEMPLATE = settings.get('template') or script.IMDB_TEMPLATE_TXT
-                cap = TEMPLATE.format(**{**locals(), **imdb, "query": search})
-    if not cap:
-        cap = result_header(
-            search, total_results, query.from_user.mention,
-            remaining_seconds,
-        )
-    return cap + search_file_list(
-        files, query.message.chat.id, offset=offset,
-        button_mode=settings.get('button', False),
-    )
+        else:
+            cap = (
+                f"<b>🏷 ᴛɪᴛʟᴇ : <code>{search}</code>\n"
+                f"🧱 ᴛᴏᴛᴀʟ ꜰɪʟᴇꜱ : <code>{total_results}</code>\n\n"
+                f"📝 ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ : {query.from_user.mention}\n"
+                f"⚜️ ᴘᴏᴡᴇʀᴇᴅ ʙʏ : ⚡ {query.message.chat.title or temp.B_LINK or 'ᴅʀᴇᴀᴍxʙᴏᴛᴢ'}\n</b>"
+            )
+            cap += "\n\n🧾 <u>Your Requested Files Are Here</u> 👇\n\n</b>"
+            for idx, file in enumerate(files, start=offset):
+                        cap += (
+                            f"<b>{idx}. "
+                            f"<a href='https://telegram.me/{temp.U_NAME}"
+                            f"?start=file_{query.message.chat.id}_{file.file_id}'>"
+                            f"[{get_size(file.file_size)}] "
+                            f"{clean_filename(file.file_name)}\n\n"
+                            f"</a></b>"
+                        )
+        return cap
+    except Exception as e:
+        logging.error(f"Error in get_cap: {e}")
+        pass
+       
