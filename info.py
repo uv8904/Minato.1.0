@@ -366,6 +366,22 @@ PING_INTERVAL = env_int("PING_INTERVAL", 1200)  # 20 minutes
 REACTIONS = ["🤝", "😇", "🤗", "😍", "👍", "🎅", "😐", "🥰", "🤩", "😱", "🤣", "😘", "👏", "😛", "😈", "🎉", "⚡️", "🫡", "🤓", "😎", "🏆", "🔥", "🤭", "🌚", "🆒", "👻", "😁"]
 
 # ============================
+# Start-flash media (the little emoji/sticker/GIF shown right before the
+# start photo). Admins can change it live with /setstartemoji, so this env
+# var is only the default. Supported values:
+#   🌿 / any emoji / short text      -> sent as text
+#   https://...gif|.mp4|.webm|.mov   -> sent as animation
+#   https://...(other)               -> sent as photo
+#   sticker:<file_id>                -> sent as sticker
+#   anim:<file_id|url> / photo:<...> / video:<file_id> -> forced type
+#   off                              -> disable the flash completely
+# ============================
+START_EMOJI = environ.get('START_EMOJI', '🌿')
+
+# Sticker/GIF shown by /alive (same value formats as START_EMOJI).
+ALIVE_STICKER = environ.get('ALIVE_STICKER', 'sticker:CAACAgIAAxkBAAEBVAlmCYqbLub_o5pVUOEwbqhV8kRytgACRBkAAgjh2UlSqev16oISqB4E')
+
+# ============================
 # Commands Bot
 # ============================
 Bot_cmds = {
@@ -392,7 +408,9 @@ Bot_cmds = {
     "admin_cmd": "ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅs ʟɪsᴛ.",
     "reset_group": "Group Setting Default",
     "trial_reset": "User Trial Reset",
-    "aispell": "AI movie title spell check"
+    "aispell": "AI movie title spell check",
+    "setstartemoji": "ꜱᴛᴀʀᴛ ꜰʟᴀꜱʜ (🌿) ᴇᴍᴏᴊɪ/ꜱᴛɪᴄᴋᴇʀ/ɢɪꜰ ᴄʜᴀɴɢᴇ (ᴀᴅᴍɪɴ)",
+    "setalivesticker": "ᴀʟɪᴠᴇ ꜱᴛɪᴄᴋᴇʀ ᴄʜᴀɴɢᴇ (ᴀᴅᴍɪɴ)"
 }
 
 

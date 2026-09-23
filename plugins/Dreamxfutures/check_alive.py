@@ -6,7 +6,7 @@ import os
 import shutil
 import logging
 from pyrogram.types import BotCommand
-from info import ADMINS, Bot_cmds
+from info import ADMINS, Bot_cmds, ALIVE_STICKER
 
 logging.basicConfig(level=logging.INFO)
 
@@ -22,10 +22,12 @@ CMD = ["/", "."]
 
 @Client.on_message(filters.command("alive", CMD))
 async def check_alive(_, message):
-    sticker = await message.reply_sticker("CAACAgIAAxkBAAEBVAlmCYqbLub_o5pVUOEwbqhV8kRytgACRBkAAgjh2UlSqev16oISqB4E") 
+    from utils import send_start_flash
+    flash = await send_start_flash(message, key="alive_sticker", env_default=ALIVE_STICKER)
     text = await message.reply_text("Yᴏᴜ ᴀʀᴇ ᴠᴇʀʏ ʟᴜᴄᴋʏ 🤞 I ᴀᴍ ᴀʟɪᴠᴇ ❤️\nPʀᴇss /start ᴛᴏ ᴜsᴇ ᴍᴇ!")
     await asyncio.sleep(60)
-    await sticker.delete()
+    if flash:
+        await flash.delete()
     await text.delete()
     await message.delete()
 

@@ -18,7 +18,7 @@ from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
 from database.ia_filterdb import Media, Media2, get_file_details, unpack_new_file_id, get_bad_files
 from database.users_chats_db import db
 from info import *
-from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename, start_buttons, blue, green, red
+from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename, start_buttons, blue, green, red, send_start_flash, get_flash_value, parse_flash_value
 
 
 
@@ -198,9 +198,10 @@ async def start(client, message):
             gtxt = "ɢᴏᴏᴅ ᴇᴠᴇɴɪɴɢ 🌘"
         else:
             gtxt = "ɢᴏᴏᴅ ɴɪɢʜᴛ 🌑"
-        m=await message.reply_text("🌿")
-        await asyncio.sleep(0.4)
-        await m.delete()        
+        flash = await send_start_flash(message, env_default=START_EMOJI)
+        if flash:
+            await asyncio.sleep(0.4)
+            await flash.delete()        
         await message.reply_photo(
             photo=random.choice(PICS),
             caption=script.START_TXT.format(message.from_user.mention, gtxt, temp.U_NAME, temp.B_NAME),
@@ -221,9 +222,10 @@ async def start(client, message):
             gtxt = "ɢᴏᴏᴅ ᴇᴠᴇɴɪɴɢ 🌘"
         else:
             gtxt = "ɢᴏᴏᴅ ɴɪɢʜᴛ 🌑"
-        m=await message.reply_text("🌿")
-        await asyncio.sleep(0.4)
-        await m.delete()        
+        flash = await send_start_flash(message, env_default=START_EMOJI)
+        if flash:
+            await asyncio.sleep(0.4)
+            await flash.delete()        
         await message.reply_photo(
             photo=random.choice(PICS),
             caption=script.START_TXT.format(message.from_user.mention, gtxt, temp.U_NAME, temp.B_NAME),
@@ -571,6 +573,78 @@ async def start(client, message):
     await msg.delete()
     await k.edit_text("<b>ʏᴏᴜʀ ᴠɪᴅᴇᴏ / ꜰɪʟᴇ ɪꜱ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ !!</b>")
     return
+
+@Client.on_message(filters.command(["setstartemoji", "setalivesticker"]) & filters.user(ADMINS))
+async def set_start_emoji(client, message):
+    """Change the emoji/sticker/GIF flashed before the start photo (🌿 leaf
+    by default) or the /alive sticker — live, without restarting the bot.
+
+    Usage:
+      /setstartemoji                 -> current value + full usage help
+      /setstartemoji 😻              -> any emoji / short text
+      /setstartemoji off             -> flash completely off
+      /setstartemoji reset           -> back to the START_EMOJI env default
+      /setstartemoji https://...gif  -> GIF URL (or any photo URL)
+      /setstartemoji sticker:<file_id> / anim:<...> / photo:<...>
+      reply to a sticker/GIF/photo/video with /setstartemoji -> use that media
+      (same usage with /setalivesticker for the /alive sticker)
+    """
+    from database.config_db import mdb
+    cmd = message.command[0].lstrip("/")
+    key = "alive_sticker" if cmd == "setalivesticker" else "start_flash"
+    env_default = ALIVE_STICKER if key == "alive_sticker" else START_EMOJI
+    what = "/alive sticker" if key == "alive_sticker" else "start flash"
+
+    value = None
+    r = message.reply_to_message
+    if r:
+        if r.sticker:
+            value = f"sticker:{r.sticker.file_id}"
+        elif r.animation:
+            value = f"anim:{r.animation.file_id}"
+        elif r.video:
+            value = f"video:{r.video.file_id}"
+        elif r.photo:
+            value = f"photo:{r.photo.file_id}"
+        elif r.document and (r.document.mime_type or "").startswith("image/"):
+            value = f"photo:{r.document.file_id}"
+        elif r.text or r.caption:
+            value = (r.text or r.caption).strip()[:128]
+    elif len(message.command) > 1:
+        value = message.text.split(None, 1)[1].strip()
+
+    if not value:
+        current = await get_flash_value(key, env_default)
+        await message.reply(
+            f"<b>🎯 {what} setting</b>\n\n"
+            f"<b>Current:</b> <code>{current}</code>\n\n"
+            "<b>Usage:</b>\n"
+            "• <code>/setstartemoji 😻</code> — any emoji/text\n"
+            "• <code>/setstartemoji off</code> — disable it\n"
+            "• <code>/setstartemoji reset</code> — env default\n"
+            "• GIF/photo URL, or <code>sticker:</code>/<code>anim:</code>/<code>photo:</code> + file_id\n"
+            "• Or just reply to a sticker/GIF/photo with the command\n"
+            f"\n<i>Same usage with /setalivesticker for the /alive sticker.</i>",
+            parse_mode=enums.ParseMode.HTML,
+            quote=True,
+        )
+        return
+
+    if value.lower() == "reset":
+        value = env_default
+    await mdb.set_config(key, value)
+    temp.FLASH.pop(key, None)  # refresh the cache
+    await send_start_flash(message, key=key, env_default=env_default)  # live preview
+    preview_note = "ᴀʙ ꜱᴇ /start ᴘᴇ ʏʜɪ ꜰʟᴀꜱʜ ᴅɪᴋʜᴇɢᴀ ✅" if key == "start_flash" else "ᴀʙ ꜱᴇ /alive ᴘᴇ ʏʜɪ ꜱᴛɪᴄᴋᴇʀ ᴅɪᴋʜᴇɢᴀ ✅"
+    off_note = "\n\n<i>ꜰʟᴀꜱʜ ᴀʙ ᴏꜰꜰ ʜᴀɪ — ᴄᴏᴍᴍᴀɴᴅ ᴅᴏʙᴀʀᴀ ᴜꜱᴇ ᴋᴀʀᴋᴇ ᴏɴ ᴋʀ ᴏ.</i>" if parse_flash_value(value)[0] == "off" else ""
+    done = await message.reply(
+        f"<b>✅ {what} updated!</b>\n<code>{value}</code>\n\n{preview_note}{off_note}",
+        parse_mode=enums.ParseMode.HTML,
+        quote=True,
+    )
+    await asyncio.sleep(10)
+    await done.delete()
+    await message.delete()
 
 @Client.on_message(filters.command('logs') & filters.user(ADMINS))
 async def log_file(bot, message):

@@ -34,4 +34,17 @@ class Database:
         results = await self.col.aggregate(pipeline).to_list(limit)
         return [result['_id'] for result in results]
 
+    async def get_config(self, key, default=None):
+        """Read one runtime-config value (e.g. start-flash emoji/sticker)."""
+        doc = await self.config_col.find_one({"key": key})
+        return doc.get("value", default) if doc else default
+
+    async def set_config(self, key, value):
+        """Persist one runtime-config value across restarts."""
+        await self.config_col.update_one(
+            {"key": key},
+            {"$set": {"value": value, "updated_at": datetime.now()}},
+            upsert=True
+        )
+
 mdb = Database(DATABASE_URI, "admin_database")

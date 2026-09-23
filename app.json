@@ -42,6 +42,14 @@
             "description": "Add some telegraph link of pictures .",
             "required": false
         },
+        "START_EMOJI": {
+            "description": "Emoji/text/sticker/GIF flashed before the start photo (default 🌿). Use 'off' to disable. Change live with /setstartemoji.",
+            "required": false
+        },
+        "ALIVE_STICKER": {
+            "description": "Sticker/GIF/file_id shown by /alive. Use 'off' to disable. Change live with /setalivesticker.",
+            "required": false
+        },
         "LOG_CHANNEL": {
             "description": "Bot Logs,Give a channel id with -100xxxxxxx",
             "required": true
