@@ -1,41 +1,37 @@
-# Telegram MTProto framework (pyrogram-compatible fork, API layer 229).
-# Needed for coloured inline buttons (InlineKeyboardButton style=...).
+# ---------- Core (Telegram MTProto framework) ----------
+# Pyrogram-compatible fork — needed for coloured inline buttons (style=...).
 electrogram==0.3.230
+
+# ---------- Database ----------
 pymongo==4.16.0
+dnspython==2.7.0            # needed by pymongo/motor for mongodb+srv:// URIs
 motor==3.7.1
-marshmallow<4.0.0
 umongo
-requests
-bs4
-shortzy
-datetime
-pytz
+marshmallow<4.0.0           # umongo breaks with marshmallow 4.x
+
+# ---------- HTTP / utilities ----------
 aiohttp
-
-
-
-# Other tools
-opencv-python-headless==4.8.1.78
-python-dotenv==0.21.1
-PyLeaves==1.0.2
-humanize
-Pillow
-psutil
-numpy
-wheel
-ujson
-wget
-aiofiles
-dnspython==2.7.0
-python-decouple
-ffmpeg-python==0.2.0
+requests
 jinja2
-apscheduler
-pyshorteners
-colorama
-fuzzywuzzy
-Levenshtein==0.24.0
+pytz
+python-dotenv==0.21.1
 
+# ---------- Features used by the code ----------
+Pillow                      # poster editing (bot.py, Imdbposter.py, movie_api.py)
+psutil                      # /status RAM-CPU stats (p_ttishow.py)
+shortzy                     # shortlink generation (utils.py)
+fuzzywuzzy                  # title spelling/suggest (ai_spell.py, title_suggest.py)
+Levenshtein==0.24.0         # fast C backend for fuzzywuzzy
 
-# Git-based Packages
+# ---------- IMDb metadata (Joelkb fork) ----------
+# IMPORTANT: this package pulls beautifulsoup4 + lxml itself — no need to list bs4.
 git+https://github.com/Joelkb/cinemagoer
+
+# ============================================================
+# REMOVED (unused in the entire codebase — keeps the bot lite):
+#   opencv-python-headless, numpy      (~200+ MB, zero imports)
+#   ffmpeg-python, wget, ujson, aiofiles, humanize, PyLeaves,
+#   apscheduler, colorama, python-decouple, pyshorteners (shortzy is used instead),
+#   datetime (stdlib module — the PyPI one is a useless shim),
+#   wheel (pip manages it), bs4 (comes automatically with cinemagoer)
+# ============================================================
