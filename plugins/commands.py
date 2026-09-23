@@ -126,6 +126,9 @@ async def start(client, message):
     if len(m.command) == 2 and m.command[1].startswith(('notcopy', 'sendall')):
         _, userid, verify_id, file_id = m.command[1].split("_", 3)
         user_id = int(userid)
+        if m.command[1].startswith('sendall') and not await db.has_premium_access(user_id):
+            btn = [[green("⚜️ ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium")]]
+            return await message.reply("<b>⚠️ ᴛʜɪꜱ ꜰᴇᴀᴛᴜʀᴇ ɪꜱ ᴏɴʟʏ ꜰᴏʀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ !</b>\n\n<i>ᴘʟᴇᴀꜱᴇ ᴘᴜʀᴄʜᴀꜱᴇ ᴘʀᴇᴍɪᴜᴍ ᴛᴏ ᴜꜱᴇ ꜱᴇɴᴅ ᴀʟʟ ꜰᴇᴀᴛᴜʀᴇ.</i>", reply_markup=InlineKeyboardMarkup(btn))
         grp_id = temp.VERIFICATIONS.get(user_id, 0)
         settings = await get_settings(grp_id)         
         verify_id_info = await db.get_verify_id_info(user_id, verify_id)
@@ -300,6 +303,9 @@ async def start(client, message):
         _, grp_id, file_id = "", 0, data
 
     if not await db.has_premium_access(message.from_user.id): 
+        if data.startswith(("allfiles", "sendfiles")) or (len(message.command) > 1 and message.command[1].startswith(('allfiles', 'sendall', 'sendfiles'))):
+            btn = [[green("⚜️ ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium")]]
+            return await m.reply_text("<b>⚠️ ᴛʜɪꜱ ꜰᴇᴀᴛᴜʀᴇ ɪꜱ ᴏɴʟʏ ꜰᴏʀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ !</b>\n\n<i>ᴘʟᴇᴀꜱᴇ ᴘᴜʀᴄʜᴀꜱᴇ ᴘʀᴇᴍɪᴜᴍ ᴛᴏ ᴜꜱᴇ ꜱᴇɴᴅ ᴀʟʟ ꜰᴇᴀᴛᴜʀᴇ.</i>", reply_markup=InlineKeyboardMarkup(btn))
         try:
             btn = []
             chat = int(data.split("_", 2)[1])
@@ -338,6 +344,9 @@ async def start(client, message):
 
     user_id = m.from_user.id
     if not await db.has_premium_access(user_id):
+        if (len(m.command) > 1 and m.command[1].startswith(('allfiles', 'sendall', 'sendfiles'))) or data.startswith(("allfiles", "sendfiles")):
+            btn = [[green("⚜️ ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium")]]
+            return await m.reply_text("<b>⚠️ ᴛʜɪꜱ ꜰᴇᴀᴛᴜʀᴇ ɪꜱ ᴏɴʟʏ ꜰᴏʀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ !</b>\n\n<i>ᴘʟᴇᴀꜱᴇ ᴘᴜʀᴄʜᴀꜱᴇ ᴘʀᴇᴍɪᴜᴍ ᴛᴏ ᴜꜱᴇ ꜱᴇɴᴅ ᴀʟʟ ꜰᴇᴀᴛᴜʀᴇ.</i>", reply_markup=InlineKeyboardMarkup(btn))
         try:
             grp_id = int(grp_id)
             user_verified = await db.is_user_verified(user_id)
@@ -380,7 +389,10 @@ async def start(client, message):
             print(f"Error In Verification - {e}")
             pass
 
-    if data.startswith("allfiles"):
+    if data.startswith(("allfiles", "sendfiles")):
+        if not await db.has_premium_access(message.from_user.id):
+            btn = [[green("⚜️ ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium")]]
+            return await message.reply_text("<b>⚠️ ᴛʜɪꜱ ꜰᴇᴀᴛᴜʀᴇ ɪꜱ ᴏɴʟʏ ꜰᴏʀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ !</b>\n\n<i>ᴘʟᴇᴀꜱᴇ ᴘᴜʀᴄʜᴀꜱᴇ ᴘʀᴇᴍɪᴜᴍ ᴛᴏ ᴜꜱᴇ ꜱᴇɴᴅ ᴀʟʟ ꜰᴇᴀᴛᴜʀᴇ.</i>", reply_markup=InlineKeyboardMarkup(btn))
         try:
             files = temp.GETALL.get(file_id)
             if not files:
