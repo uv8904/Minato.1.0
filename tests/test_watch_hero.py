@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from aiohttp import web  # noqa: E402
+from aiohttp.test_utils import TestClient, TestServer  # noqa: E402
 
 from dreamxbotz.server import movie_api, static_assets  # noqa: E402
 from dreamxbotz.util import watch_hero  # noqa: E402
@@ -244,6 +245,58 @@ def test_art_skips_lookups_for_hash_only_ids(monkeypatch):
     app, _ = make_client([])
     run(_get(app, "/api/movies/art/m-fa16673c9e6b"))
     assert fake.calls == []
+
+
+def test_art_repoll_after_a_new_upload_serves_the_new_poster(monkeypatch):
+    """Server side of the hero's 8 s/25 s re-check for a just-uploaded movie.
+
+    The first artwork answer is a cacheable ``has_poster: false`` miss; by the
+    time the hero asks again, the rail's poster worker has stored the artwork
+    in ``recent_movies`` – the fresh GET must serve it with a **new** ``?v=``
+    token, so the browser fetches the new bytes instead of its cached copy.
+    """
+    monkeypatch.setattr(movie_api, "_art_fetch_enabled", lambda: False)
+
+    doc = movie_doc(_id="hmm-2024", title="Hmm", year=2024, poster_url=None)
+    store = FakeStore([doc])
+    app, _ = make_client([], store=store, art=FakeArtStore())
+    url = "/api/movies/art/hmm-2024?q=Hmm&y=2024"
+
+    # One client / one event loop (like a browser): the artwork answer, then
+    # the poster worker stores the artwork, then the hero's re-check.
+    async def scenario():
+        async with TestClient(TestServer(app)) as client:
+            first = await client.get(url)
+            first_body = await first.read()
+
+            # The poster worker finishes in the meantime and stores the
+            # artwork on the rail document (what the background worker does
+            # after save_file()).
+            doc["poster_url"] = POSTER_URL
+            doc["poster_source"] = "tmdb"
+            doc["updated_at"] = NOW + timedelta(minutes=1)
+
+            again = await client.get(url)
+            again_body = await again.read()
+            return first, first_body, again, again_body
+
+    first, first_body, again, again_body = run(scenario())
+
+    first_payload = json.loads(first_body)
+    assert first.status == 200
+    assert first_payload["ok"] is True
+    assert first_payload["has_poster"] is False
+    # The miss is cacheable for a while – exactly why the hero's re-checks go
+    # out with `cache: "no-store"` instead of trusting the browser's copy.
+    assert "max-age=" in first.headers["Cache-Control"]
+
+    again_payload = json.loads(again_body)
+    assert again.status == 200
+    assert again_payload["has_poster"] is True
+    assert again_payload["poster"].startswith("/api/movies/poster/hmm-2024?v=")
+    # New artwork version → new ?v= token → the browser loads the new bytes.
+    assert again_payload["poster"] != first_payload["poster"]
+    assert "image.tmdb.org" not in again_body.decode()
 
 
 # --------------------------------------------------------------------------- #
@@ -549,6 +602,95 @@ def test_hero_javascript_is_defensive():
     for state in ('"loading"', '"ready"', '"error"'):
         assert state in source
     assert "data-mh-state" in source
+
+
+# --------------------------------------------------------------------------- #
+# watch_hero.js runtime contract
+#
+# The browser runtime is not available under pytest, so the "poster card is
+# never blank" behaviour is pinned at source level, exactly like the defensive
+# checks above.
+# --------------------------------------------------------------------------- #
+def _hero_js():
+    return (ROOT / "dreamxbotz/static/watch_hero.js").read_text(encoding="utf-8")
+
+
+def _function_body(source, name):
+    start = source.index("function " + name + "(")
+    return source[start : source.index("\n    }", start)]
+
+
+def test_hero_is_ready_only_after_the_image_has_loaded():
+    source = _hero_js()
+
+    # `is-ready` is applied in exactly one place …
+    assert source.count('classList.add("is-ready")') == 1
+    # … inside the poster loader's load-success (onload) path …
+    assert 'classList.add("is-ready")' in _function_body(source, "loadPoster")
+    # … and never straight from the artwork answer, which arrives before any
+    #   image is on screen:
+    assert 'classList.add("is-ready")' not in _function_body(source, "applyArt")
+    # A fresh artwork answer / failed refresh / exhausted retries all reset
+    #   the card, so the fallback can never be hidden without an image.
+    for name in ("applyArt", "failArt", "schedulePosterRetry"):
+        assert 'classList.remove("is-ready")' in _function_body(source, name)
+    # The gate is image-element driven, not timer driven:
+    assert "image.onload = " in source and "image.onerror = " in source
+
+
+def test_hero_retries_failed_images_with_a_fresh_r_token():
+    source = _hero_js()
+
+    # 1.5 s / 4 s / 9 s for the poster (same rhythm for the backdrop band):
+    assert "POSTER_RETRY_DELAYS = [1500, 4000, 9000]" in source
+    assert "BACKDROP_RETRY_DELAYS = [1500, 4000, 9000]" in source
+
+    # Every retry reloads the same artwork with a new &r= token …
+    poster_retry = _function_body(source, "schedulePosterRetry")
+    backdrop_retry = _function_body(source, "scheduleBackdropRetry")
+    assert "withRetryToken(posterTarget)" in poster_retry
+    assert "withRetryToken(backdropTarget)" in backdrop_retry
+
+    # … appended as &r= to the existing query (artwork URLs always carry at
+    #   least the ?v= token) …
+    token = _function_body(source, "withRetryToken")
+    assert '"&r="' in token and '"?r="' in token
+    # … with a fresh timestamp, so two retries never hit the same cache entry.
+    assert "Date.now()" in token
+
+    # When every attempt has failed the placeholder stays: never blank.
+    assert 'classList.remove("is-ready")' in poster_retry
+    assert "Poster coming soon" in poster_retry
+
+
+def test_hero_rechecks_fresh_uploads_after_8s_and_25s():
+    source = _hero_js()
+
+    # The artwork API is asked twice more, at 8 s and 25 s …
+    assert "ART_REPOLL_DELAYS = [8000, 25000]" in source
+    repoll = _function_body(source, "scheduleArtRepoll")
+    # … only for a just-uploaded movie (has_poster: false) …
+    assert "data.has_poster === false" in _function_body(source, "applyArt")
+    assert "data.has_poster === false" in repoll
+    # … by fetching the artwork endpoint again …
+    assert "requestArt(true)" in repoll
+    # … bypassing the browser's cached "no poster yet" answer …
+    assert '"no-store"' in _function_body(source, "requestArt")
+    # … and a found poster stops the polling (applyArt supersedes the timers).
+    assert "applyArt(data)" in repoll
+
+
+def test_hero_new_answers_supersede_pending_retries():
+    source = _hero_js()
+
+    # Timers are only ever scheduled through the generation-guarded helper …
+    assert "function later(callback, delayMs)" in source
+    assert "window.clearTimeout(timer)" in source
+    # … and both entry points for a new artwork answer invalidate them:
+    assert "bumpGeneration()" in _function_body(source, "applyArt")
+    assert "bumpGeneration()" in _function_body(source, "failArt")
+    # A slow, superseded image request cannot fire the new load's handlers.
+    assert "image._mhSeq" in source
 
 
 def test_hero_css_covers_theme_ratio_and_responsiveness():

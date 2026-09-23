@@ -480,10 +480,21 @@ sees the bot token: the strip carries only the public `BOT_USERNAME`.
 
 ### Behaviour
 
+The poster card **never sits blank**: `is-ready` is applied only after the
+image has actually loaded (the branded placeholder covers the card until
+then), an image that fails is retried with a fresh `&r=` cache-busting token
+after **1.5 s / 4 s / 9 s**, and a movie uploaded moments ago
+(`has_poster: false` in the artwork answer) gets the artwork API re-checked
+after **8 s** and **25 s** — the re-checks go out with `cache: no-store`, so
+the browser's minute-old “no poster yet” copy is ignored. The background
+poster worker usually finishes within that time, so the real poster fills in
+without a reload; when it does not, the placeholder stays with its note.
+
 | Situation | What the visitor sees |
 | --- | --- |
-| Movie uploaded moments ago (already in the rail) | poster immediately, 16:9 backdrop fills in right after |
+| Movie uploaded moments ago (already in the rail) | branded placeholder + shimmer, then the poster fills in on the 8 s / 25 s re-check (no reload) |
 | Older movie, first visit | skeleton shimmer, then poster + backdrop |
+| Poster image fails to load (stale cache, flaky upstream) | retried at 1.5 s / 4 s / 9 s with a fresh `&r=` token; the placeholder stays until it lands or all attempts fail |
 | No artwork found anywhere | branded placeholder card + “Poster coming soon” note |
 | TMDB/IMDb unreachable | placeholder stays, the note says so, the deep link still works |
 | JavaScript disabled | title, chips, upload date and the deep-link button still render |
@@ -547,7 +558,7 @@ changes, so the website shows the new image on its next refresh (at most
 | `404` on `/static/newly_uploaded.js` | the assets must exist in `dreamxbotz/static/` (they are whitelisted by `dreamxbotz/server/static_assets.py`) |
 | Website on another domain | set `API_URL` and `NEW_UPLOADED_CORS_ORIGIN`, then restart |
 | Hero strip missing on `/watch/…` | `WATCH_HERO=True` (restart required) and the page must be rendered by `render_template.render_page` |
-| Hero shows “Poster coming soon” | no artwork was found: check `TMDB_API_KEY` / `WATCH_HERO_ART_FETCH`, or allow-list the host with `NEW_UPLOADED_POSTER_HOSTS` |
+| Hero shows “Poster coming soon” | no artwork was found: for a just-uploaded movie the page re-checks itself after 8 s / 25 s — wait a few seconds before concluding the artwork is missing. Otherwise check `TMDB_API_KEY` / `WATCH_HERO_ART_FETCH`, or allow-list the host with `NEW_UPLOADED_POSTER_HOSTS` |
 | Hero shows “Artwork unavailable” | `curl /api/movies/art/<MOVIE_ID>` — a non-200 means the API/Mongo is down; the strip keeps working without artwork |
 | Wrong movie name/quality in the hero | the title is parsed from the file name — use clean release names (`Marco (2024) 1080p …`); see `dreamxbotz/util/movie_titles.py` |
 | Spotlight missing (rail works) | the banner is `movies[0]` — it only renders when the feed has at least one movie; check that `/static/newly_uploaded.css` is the current version (`?v=` token) and that the template contains `<div … data-nu-spotlight hidden>` |
