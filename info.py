@@ -219,7 +219,7 @@ MELCOW_NEW_USERS = is_enabled(environ.get('MELCOW_NEW_USERS', "False"), False) #
 PROTECT_CONTENT = is_enabled(environ.get('PROTECT_CONTENT', "False"), False) # Protect Content On (True) / Off (False)
 PM_SEARCH = is_enabled(environ.get('PM_SEARCH', "True"), True)  # PM Search On (True) / Off (False)
 EMOJI_MODE = is_enabled(environ.get('EMOJI_MODE', "False"), False)  # Emoji status On (True) / Off (False)
-BUTTON_MODE = is_enabled(environ.get('BUTTON_MODE', "False"), False) # pm & Group button or link mode (True) / Off (False)
+BUTTON_MODE = is_enabled(environ.get('BUTTON_MODE', "True"), True) # pm & Group button or link mode (True) / Off (False)
 STREAM_MODE = is_enabled(environ.get('STREAM_MODE', "True"), True) # Set Stream mode True or False
 PREMIUM_STREAM_MODE = is_enabled(environ.get('PREMIUM_STREAM_MODE', "False"), False) # Stream mode only for premium users
 COLOR_BUTTONS = is_enabled(environ.get('COLOR_BUTTONS', "True"), True) # Coloured inline buttons (blue/green/red) On (True) / Off (False)
@@ -405,7 +405,7 @@ if not MULTIPLE_DB or not DATABASE_URI2:
 LOG_STR = "Current Customized Configurations are:-\n"
 LOG_STR += ("IMDB Results are enabled, Bot will be showing imdb details for your queries.\n" if IMDB else "IMDB Results are disabled.\n")
 LOG_STR += ("P_TTI_SHOW_OFF found, Users will be redirected to send /start to Bot PM instead of sending file directly.\n" if P_TTI_SHOW_OFF else "P_TTI_SHOW_OFF is disabled, files will be sent in PM instead of starting the bot.\n")
-LOG_STR += ("BUTTON_MODE is found, filename and file size will be shown in a single button instead of two separate buttons.\n" if BUTTON_MODE else "BUTTON_MODE is disabled, filename and file size will be shown as different buttons.\n")
+LOG_STR += (f"BUTTON_MODE = {BUTTON_MODE} (default for new groups), search results are always sent as one inline button per file (size • SxxExx/Exx • filename), never as text links.\n")
 LOG_STR += (f"CUSTOM_FILE_CAPTION enabled with value {CUSTOM_FILE_CAPTION}, your files will be sent along with this customized caption.\n" if CUSTOM_FILE_CAPTION else "No CUSTOM_FILE_CAPTION Found, Default captions of file will be used.\n")
 LOG_STR += ("Long IMDB storyline enabled." if LONG_IMDB_DESCRIPTION else "LONG_IMDB_DESCRIPTION is disabled, Plot will be shorter.\n")
 LOG_STR += ("Spell Check Mode is enabled, bot will be suggesting related movies if movie name is misspelled.\n" if SPELL_CHECK_REPLY else "Spell Check Mode is disabled.\n")

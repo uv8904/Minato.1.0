@@ -1,4 +1,5 @@
-from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, save_group_settings, get_cap, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text, start_buttons, blue, green, red
+from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, save_group_settings, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, start_buttons, blue, green, red
+from dreamxbotz.util.file_labels import file_button_label, normalize_file_name
 import tracemalloc
 from dreamxbotz.util.ai_spell import correct_title as groq_correct_title
 from dreamxbotz.util.title_suggest import auto_pick as db_auto_pick_title, suggest as db_title_suggest
@@ -153,16 +154,24 @@ async def refercall(bot, query):
 
 
 async def build_search_buttons(key, files, offset, next_offset, total_results, req_user_id, settings):
+    """Keyboard for one page of auto-filter results.
+
+    * Row 1 always carries the two shortcuts - ``⚡ Check Bot PM ⚡`` and
+      ``Sᴇɴᴅ Aʟʟ`` - for every user (who may actually use Send All is decided
+      when the button is tapped, see ``cb_handler``).
+    * Every file gets its own button labelled ``{size} • {SxxExx/Exx} •
+      {filename}``. Files are never listed as links inside the caption, so the
+      message text stays clean for every group / PM.
+    """
     btn = []
-    if settings.get('button', True):
-        for file in files:
-            fname = re.sub(r'\s+', ' ', file.file_name).strip() if getattr(file, 'file_name', None) else "File"
-            btn.append([
-                InlineKeyboardButton(
-                    text=f"{get_size(file.file_size)} • {fname}",
-                    callback_data=f'file#{file.file_id}'
-                )
-            ])
+    for file in files:
+        fname = normalize_file_name(getattr(file, 'file_name', None)) or "File"
+        btn.append([
+            InlineKeyboardButton(
+                text=file_button_label(fname, get_size(file.file_size)),
+                callback_data=f'file#{file.file_id}'
+            )
+        ])
 
     btn.insert(0, [
         blue('Quality', callback_data=f"qualities#{key}"),
@@ -170,17 +179,12 @@ async def build_search_buttons(key, files, offset, next_offset, total_results, r
         blue('Season', callback_data=f"seasons#{key}")
     ])
 
-    is_premium = False
-    if req_user_id:
-        try:
-            is_premium = await db.has_premium_access(int(req_user_id))
-        except Exception as e:
-            logger.exception(e)
-
-    top_buttons = [green("⚡ Check Bot PM ⚡", url=f"https://t.me/{temp.U_NAME}")]
-    if is_premium:
-        top_buttons.append(green("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}"))
-    btn.insert(0, top_buttons)
+    # Both shortcuts stay on the top row for everybody: non-premium users get
+    # the premium purchase prompt when they tap "Sᴇɴᴅ Aʟʟ".
+    btn.insert(0, [
+        green("⚡ Check Bot PM ⚡", url=f"https://t.me/{temp.U_NAME}"),
+        green("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
+    ])
 
     try:
         limit = 10 if settings.get('max_btn', True) else int(MAX_B_TN)
@@ -215,10 +219,21 @@ async def build_search_buttons(key, files, offset, next_offset, total_results, r
     return btn
 
 
+async def show_search_buttons(query, btn):
+    """Apply a freshly built result keyboard to the (edited) result message.
+
+    Results are buttons-only now, so a page / filter change only swaps the
+    keyboard - the caption with its links is never rewritten.
+    """
+    try:
+        await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
+    except MessageNotModified:
+        pass
+
+
 @Client.on_callback_query(filters.regex(r"^next"))
 async def next_page(bot, query):
     ident, req, key, offset = query.data.split("_")
-    curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
     if int(req) not in [query.from_user.id, 0]:
         return await query.answer(script.ALRT_TXT.format(query.from_user.first_name), show_alert=True)
     try:
@@ -254,23 +269,7 @@ async def next_page(bot, query):
         settings=settings
     )
 
-    if not settings.get("button", True):
-        cur_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
-        time_difference = timedelta(hours=cur_time.hour, minutes=cur_time.minute, seconds=(cur_time.second+(cur_time.microsecond/1000000))) - \
-            timedelta(hours=curr_time.hour, minutes=curr_time.minute, seconds=(
-                curr_time.second+(curr_time.microsecond/1000000)))
-        remaining_seconds = "{:.2f}".format(time_difference.total_seconds())
-        dreamx_title = clean_search_text(search)
-        cap = await get_cap(settings, remaining_seconds, files, query, total, dreamx_title, offset+1)
-        try:
-            await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True)
-        except MessageNotModified:
-            pass
-    else:
-        try:
-            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
-        except MessageNotModified:
-            pass
+    await show_search_buttons(query, btn)
     await query.answer()
 
 
@@ -394,7 +393,6 @@ async def qualities_cb_handler(client: Client, query: CallbackQuery):
 @Client.on_callback_query(filters.regex(r"^fq#"))
 async def filter_qualities_cb_handler(client: Client, query: CallbackQuery):
     _, qual, key = query.data.split("#")
-    curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
     search = FRESH.get(key)
     search = search.replace("_", " ")
     baal = qual in search
@@ -430,23 +428,7 @@ async def filter_qualities_cb_handler(client: Client, query: CallbackQuery):
         settings=settings
     )
 
-    if not settings.get("button", True):
-        cur_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
-        time_difference = timedelta(hours=cur_time.hour, minutes=cur_time.minute, seconds=(cur_time.second+(cur_time.microsecond/1000000))) - \
-            timedelta(hours=curr_time.hour, minutes=curr_time.minute, seconds=(
-                curr_time.second+(curr_time.microsecond/1000000)))
-        remaining_seconds = "{:.2f}".format(time_difference.total_seconds())
-        dreamx_title = clean_search_text(search)
-        cap = await get_cap(settings, remaining_seconds, files, query, total_results, dreamx_title, offset=0)
-        try:
-            await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True)
-        except MessageNotModified:
-            pass
-    else:
-        try:
-            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
-        except MessageNotModified:
-            pass
+    await show_search_buttons(query, btn)
     await query.answer()
 
 # languages
@@ -488,7 +470,6 @@ async def languages_cb_handler(client: Client, query: CallbackQuery):
 @Client.on_callback_query(filters.regex(r"^fl#"))
 async def filter_languages_cb_handler(client: Client, query: CallbackQuery):
     _, lang, key = query.data.split("#")
-    curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
     search = FRESH.get(key)
     search = search.replace("_", " ")
     baal = lang in search
@@ -524,23 +505,7 @@ async def filter_languages_cb_handler(client: Client, query: CallbackQuery):
         settings=settings
     )
 
-    if not settings.get("button", True):
-        cur_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
-        time_difference = timedelta(hours=cur_time.hour, minutes=cur_time.minute, seconds=(cur_time.second+(cur_time.microsecond/1000000))) - \
-            timedelta(hours=curr_time.hour, minutes=curr_time.minute, seconds=(
-                curr_time.second+(curr_time.microsecond/1000000)))
-        remaining_seconds = "{:.2f}".format(time_difference.total_seconds())
-        dreamx_title = clean_search_text(search)
-        cap = await get_cap(settings, remaining_seconds, files, query, total_results, dreamx_title, offset=0)
-        try:
-            await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True)
-        except MessageNotModified:
-            pass
-    else:
-        try:
-            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
-        except MessageNotModified:
-            pass
+    await show_search_buttons(query, btn)
     await query.answer()
 
 
@@ -612,33 +577,7 @@ async def filter_seasons_cb_handler(client: Client, query: CallbackQuery):
         settings=settings
     )
 
-    if not settings.get("button", True):
-        curr_time = datetime.now(pytz.timezone("Asia/Kolkata")).time()
-        time_difference = timedelta(
-            hours=curr_time.hour,
-            minutes=curr_time.minute,
-            seconds=(curr_time.second + curr_time.microsecond / 1_000_000),
-        ) - timedelta(
-            hours=curr_time.hour,
-            minutes=curr_time.minute,
-            seconds=(curr_time.second + curr_time.microsecond / 1_000_000),
-        )
-        remaining_seconds = f"{time_difference.total_seconds():.2f}"
-        dreamx_title = clean_search_text(search_final)
-        cap = await get_cap(settings, remaining_seconds, files, query, total_results, dreamx_title, offset=0)
-        try:
-            await query.message.edit_text(
-                text=cap,
-                reply_markup=InlineKeyboardMarkup(btn),
-                disable_web_page_preview=True,
-            )
-        except MessageNotModified:
-            pass
-    else:
-        try:
-            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
-        except MessageNotModified:
-            pass
+    await show_search_buttons(query, btn)
     await query.answer()
 
 
@@ -678,6 +617,27 @@ async def notify_me_cb(client: Client, query: CallbackQuery):
     if reason == "disabled":
         return await query.answer("⚠️ ɴᴏᴛɪꜰʏ-ᴍᴇ ɪs ᴛᴜʀɴᴇᴅ ᴏꜰꜰ ʙʏ ᴛʜᴇ ʙᴏᴛ ᴏᴡɴᴇʀ.", show_alert=True)
     return await query.answer("⚠️ ᴄᴏᴜʟᴅɴ'ᴛ sᴀᴠᴇ ʏᴏᴜʀ ʀᴇǫᴜᴇsᴛ, ᴛʀʏ ᴀɢᴀɪɴ.", show_alert=True)
+
+
+async def send_all_premium_offer(query: CallbackQuery):
+    """Premium upsell for non-premium users who tapped "Sᴇɴᴅ Aʟʟ".
+
+    An alert alone cannot be tapped, so the same chat also gets a short message
+    with the plan list and a "Buy Premium" button.
+    """
+    try:
+        await query.message.reply_text(
+            text=f"{script.SEND_ALL_PREMIUM_TEXT}\n\n{script.PREMIUM_TEXT}",
+            reply_markup=InlineKeyboardMarkup([[
+                green("⚜️ ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium")
+            ]]),
+            parse_mode=enums.ParseMode.HTML,
+            disable_web_page_preview=True,
+            quote=True,
+        )
+    except Exception as e:
+        # A missing reply target / deleted result message must not break the alert.
+        logger.warning("send all premium offer failed: %s", e)
 
 
 @Client.on_callback_query()
@@ -737,9 +697,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("sendfiles"):
         clicked = query.from_user.id
-        ident, key = query.data.split("#")
+        ident, key = query.data.split("#", 1)
+        # "Sᴇɴᴅ Aʟʟ" is visible for everyone, but only premium users may use it:
+        # everybody else gets the purchase prompt (alert + tappable button).
         if not await db.has_premium_access(clicked):
-            return await query.answer("⚠️ This feature is only for Premium users!\n\nBuy Premium to use Send All.", show_alert=True)
+            await query.answer(script.SEND_ALL_PREMIUM_ALERT, show_alert=True)
+            await send_all_premium_offer(query)
+            return
         settings = await get_settings(query.message.chat.id)
         try:
             await query.answer(url=f"https://telegram.me/{temp.U_NAME}?start=allfiles_{query.message.chat.id}_{key}")
@@ -1860,16 +1824,11 @@ async def auto_filter(client, msg, spoll=False):
             **locals()
         )
         temp.IMDB_CAP[message.from_user.id] = cap
-        if not settings.get("button"):
-            cap += "\n\n<b>🧾 <u>Your Requested Files Are Here</u> 👇</b>"
-            for idx, file in enumerate(files, start=1):
-                cap += f"\n<b>{idx}. <a href='https://telegram.me/{temp.U_NAME}?start=file_{message.chat.id}_{file.file_id}'>[{get_size(file.file_size)}] {file.file_name}</a></b>\n"
+        # The files themselves are never pasted into the caption: each one is
+        # already an inline button (see build_search_buttons), so the text
+        # stays clean with no links in message mode.
     else:
         cap = f"Results For 🔍  {html.escape(search)}"
-        if not settings.get("button"):
-            cap += "\n\n🧾 <u>Your Requested Files Are Here</u> 👇\n\n"
-            for idx, file in enumerate(files, start=1):
-                cap += f"\n<b>{idx}. <a href='https://telegram.me/{temp.U_NAME}?start=file_{message.chat.id}_{file.file_id}'>[{get_size(file.file_size)}] {file.file_name}</a></b>\n"
 
     if imdb and imdb.get('poster') and settings["imdb"]:
         try:

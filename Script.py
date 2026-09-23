@@ -335,6 +335,16 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 ‼️ ᴀꜰᴛᴇʀ ꜱᴇɴᴅɪɴɢ ꜱᴄʀᴇᴇɴꜱʜᴏᴛ ɢɪᴠᴇ ᴜꜱ ꜱᴏᴍᴇᴛɪᴍᴇꜱ ᴛᴏ ᴀᴅᴅ ʏᴏᴜ ɪɴ ᴘʀᴇᴍɪᴜᴍ ʟɪꜱᴛ."""  
 
 
+    # Search results "Sᴇɴᴅ Aʟʟ" button: the button is visible to everyone, but
+    # only premium users may use it. Alerts are plain text (Telegram does not
+    # render HTML inside a callback alert), the offer message is HTML.
+    SEND_ALL_PREMIUM_ALERT = (
+        "⚠️ This feature is only for Premium users!\n\n"
+        "Buy premium to send all files of this search to your PM."
+    )
+
+    SEND_ALL_PREMIUM_TEXT = """<b>⚠️ ᴛʜɪꜱ ꜰᴇᴀᴛᴜʀᴇ ɪꜱ ᴏɴʟʏ ꜰᴏʀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ !</b>\n\n<b>ᴘʟᴇᴀꜱᴇ ᴘᴜʀᴄʜᴀꜱᴇ ᴘʀᴇᴍɪᴜᴍ ᴛᴏ ᴜꜱᴇ ꜱᴇɴᴅ ᴀʟʟ ꜰᴇᴀᴛᴜʀᴇ.</b>\n\n<blockquote>प्रीमियम ले कर आप एक ही क्लिक में सारी फाइलें अपने PM में पाएंगे।</blockquote>"""
+
     PREPLANS_TXT = PREMIUM_TXT = """<b>👋 ʜᴇʏ {},
 
 <blockquote>🎖️ <b>ᴀᴠᴀɪʟᴀʙʟᴇ ᴘʟᴀɴꜱ</b></blockquote>
