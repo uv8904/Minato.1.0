@@ -56,6 +56,7 @@ class temp(object):
     VERIFICATIONS = {}
     TEMP_INVITE_LINKS = {}
     LISTENERS = {}   # (chat_id, user_id) -> asyncio.Future, used by wait_for_reply()
+    FLASH = {}       # runtime cache for the start-flash / alive-sticker values
 
 
 def start_buttons():
@@ -96,6 +97,105 @@ async def wait_for_reply(chat_id: int, user_id: int, timeout: int = 60) -> Messa
     finally:
         if temp.LISTENERS.get(key) is fut:
             temp.LISTENERS.pop(key, None)
+
+
+# ---------------------------------------------------------------------------
+# Flash media — the little emoji/sticker/GIF shown right before the start
+# photo (default 🌿 leaf) and the /alive sticker. Configured with
+# /setstartemoji & /setalivesticker (admin) or the START_EMOJI /
+# ALIVE_STICKER env vars; runtime values are stored in MongoDB so they
+# survive restarts.
+# ---------------------------------------------------------------------------
+
+FLASH_KINDS = ("sticker", "anim", "photo", "video", "text")
+
+_FILE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{30,}$")
+
+
+def parse_flash_value(value):
+    """Split a stored flash value into ``(kind, payload)``.
+
+    Supported formats::
+
+        off                        -> ("off", None)
+        sticker:<file_id>          -> ("sticker", file_id)
+        anim:<file_id|url>         -> ("anim", ...)
+        photo:<file_id|url>        -> ("photo", ...)
+        video:<file_id>            -> ("video", ...)
+        text:<anything>            -> ("text", ...)
+        https://...gif/.mp4/...    -> ("anim", url)
+        https://...(anything else) -> ("photo", url)
+        <raw file_id>              -> best-guess media type
+        <emoji / short text>       -> ("text", ...)
+    """
+    v = (value or "").strip()
+    if not v:
+        return ("off", None)
+    if v.lower() in ("off", "false", "0", "disable", "disabled", "none"):
+        return ("off", None)
+    if ":" in v:
+        kind, payload = v.split(":", 1)
+        if kind.lower() in FLASH_KINDS:
+            return (kind.lower(), payload.strip())
+    if v.startswith(("http://", "https://", "www.")):
+        low = v.lower().split("?")[0]
+        if low.endswith((".gif", ".mp4", ".webm", ".mov", ".mkv", ".tgs")):
+            return ("anim", v)
+        return ("photo", v)
+    if _FILE_ID_RE.match(v):
+        # Raw Telegram file_id (type unknown) — send_flash() probes sticker
+        # first, then animation, then photo.
+        return ("file", v)
+    return ("text", v)
+
+
+async def get_flash_value(key, env_default):
+    """Runtime flash value for ``key``: MongoDB override > env default (cached)."""
+    if key in temp.FLASH:
+        return temp.FLASH[key]
+    from database.config_db import mdb  # lazy import avoids import-order issues
+    value = await mdb.get_config(key, env_default)
+    temp.FLASH[key] = value
+    return value
+
+
+async def send_start_flash(message, key="start_flash", env_default="🌿"):
+    """Send the flash media shown just before the start photo.
+
+    Returns the sent message so the caller can delete it after a moment,
+    or ``None`` when the flash is disabled or failed (it is purely
+    decorative, so failures must never break /start or /alive).
+    """
+    value = await get_flash_value(key, env_default)
+    kind, payload = parse_flash_value(value)
+    if kind == "off":
+        return None
+    sent = None
+    try:
+        if kind == "sticker":
+            sent = await message.reply_sticker(payload)
+        elif kind == "anim":
+            try:
+                sent = await message.reply_animation(payload)
+            except Exception:
+                sent = await message.reply_video(payload)
+        elif kind == "photo":
+            sent = await message.reply_photo(payload)
+        elif kind == "video":
+            sent = await message.reply_video(payload)
+        elif kind == "file":
+            # Unknown raw file_id: probe sticker -> animation -> photo.
+            for sender in (message.reply_sticker, message.reply_animation, message.reply_photo):
+                try:
+                    sent = await sender(payload)
+                    break
+                except Exception:
+                    continue
+        else:
+            sent = await message.reply_text(payload)
+    except Exception:
+        logging.exception("start-flash send failed for %s (value=%r)", key, value)
+    return sent
 
 async def is_req_subscribed(bot, user_id, rqfsub_channels):
     btn = []

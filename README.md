@@ -73,6 +73,7 @@ Join our support group for assistance:
 - ✅ Newly Uploaded Movies section (auto-filled from the bot DB, gold/dark theme, Telegram deep links)  
 - ✅ "Just added" spotlight (Prime-Video-style banner for the newest upload) + live refresh — no reload needed  
 - ✅ Movie hero on the watch page (IMDb poster + 16:9 backdrop + deep search link above the player)
+- ✅ Custom start-flash (the 🌿 before the start photo) & /alive sticker — emoji / text / sticker / GIF / photo / off, set live with `/setstartemoji` & `/setalivesticker` (admins) or `START_EMOJI` / `ALIVE_STICKER` env, saved in MongoDB so it survives restarts
 - ✅ Search results as buttons only: every file gets its own inline button `{size} • {SxxExx/Exx} • {filename}` — no file links inside the message text (`BUTTON_MODE`, default True)  
 - ✅ Keyboard top row always shows `⚡ Check Bot PM ⚡` and `Sᴇɴᴅ Aʟʟ`; Send All is visible for everyone, non-premium users get the premium purchase prompt and premium users receive every file of the search in PM  
 - ✅ Premium Membership Management  
