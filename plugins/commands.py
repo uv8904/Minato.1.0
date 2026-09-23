@@ -281,7 +281,7 @@ async def start(client, message):
                   ]]
         reply_markup = InlineKeyboardMarkup(buttons)
         await message.reply_photo(
-            photo=(SUBSCRIPTION),
+            photo="https://files.catbox.moe/fm96o1.jpg",
             caption=script.PREPLANS_TXT.format(message.from_user.mention, OWNER_UPI_ID, QR_CODE),
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
