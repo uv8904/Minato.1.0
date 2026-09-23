@@ -91,6 +91,7 @@ auth_channels     = environ.get("AUTH_CHANNELS", "-1003140286992 -1002536320197 
 # Payment Configuration
 # ============================
 QR_CODE = environ.get('QR_CODE', '')    # QR code image for payments
+PLAN_IMG = environ.get('PLAN_IMG', 'assets/plan_qr.png')    # Image (UPI QR) sent with /plan command (repo path or direct URL)
 OWNER_UPI_ID = environ.get('OWNER_UPI_ID', 'ɴᴏ ᴀᴠᴀɪʟᴀʙʟᴇ ʀɪɢʜᴛ ɴᴏᴡ')    # Owner UPI ID for payments
 
 STAR_PREMIUM_PLANS = {

@@ -1,4 +1,5 @@
 
+import os
 import pytz
 import datetime
 from Script import script 
@@ -179,8 +180,13 @@ async def plan(client, message):
         ],[
             InlineKeyboardButton('🚫 ᴄʟᴏꜱᴇ 🚫', callback_data='close_data')
         ]]
+    if PLAN_IMG.startswith(("http://", "https://")):
+        plan_photo = PLAN_IMG
+    else:
+        local_plan_img = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), PLAN_IMG)
+        plan_photo = local_plan_img if os.path.exists(local_plan_img) else "https://graph.org/file/86da2027469565b5873d6.jpg"
     msg = await message.reply_photo(
-        photo="https://graph.org/file/86da2027469565b5873d6.jpg",
+        photo=plan_photo,
         caption=script.BPREMIUM_TXT,
         reply_markup=InlineKeyboardMarkup(btn)
     )
