@@ -340,7 +340,8 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
     # render HTML inside a callback alert), the offer message is HTML.
     SEND_ALL_PREMIUM_ALERT = (
         "⚠️ This feature is only for Premium users!\n\n"
-        "Buy premium to send all files of this search to your PM."
+        "Buy Premium to get all files of this search in your PM.\n"
+        "Buy via /start premium in bot PM, or tap the button below."
     )
 
     SEND_ALL_PREMIUM_TEXT = """<b>⚠️ ᴛʜɪꜱ ꜰᴇᴀᴛᴜʀᴇ ɪꜱ ᴏɴʟʏ ꜰᴏʀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ !</b>\n\n<b>ᴘʟᴇᴀꜱᴇ ᴘᴜʀᴄʜᴀꜱᴇ ᴘʀᴇᴍɪᴜᴍ ᴛᴏ ᴜꜱᴇ ꜱᴇɴᴅ ᴀʟʟ ꜰᴇᴀᴛᴜʀᴇ.</b>\n\n<blockquote>प्रीमियम ले कर आप एक ही क्लिक में सारी फाइलें अपने PM में पाएंगे।</blockquote>"""

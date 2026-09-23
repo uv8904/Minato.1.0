@@ -153,6 +153,15 @@ async def refercall(bot, query):
     await query.answer()
 
 
+def search_file_label(file):
+    """Inline-button label of one result file: ``{size} • {SxxExx/Exx} • {name}``.
+
+    Thin wrapper over :mod:`dreamxbotz.util.file_labels` kept under the name
+    this module has exposed since the buttons-only search page.
+    """
+    return file_button_label(getattr(file, 'file_name', None), get_size(file.file_size))
+
+
 async def build_search_buttons(key, files, offset, next_offset, total_results, req_user_id, settings):
     """Keyboard for one page of auto-filter results.
 
@@ -704,7 +713,6 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await query.answer(script.SEND_ALL_PREMIUM_ALERT, show_alert=True)
             await send_all_premium_offer(query)
             return
-        settings = await get_settings(query.message.chat.id)
         try:
             await query.answer(url=f"https://telegram.me/{temp.U_NAME}?start=allfiles_{query.message.chat.id}_{key}")
             return

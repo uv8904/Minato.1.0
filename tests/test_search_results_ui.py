@@ -16,7 +16,7 @@ from types import SimpleNamespace
 import pytest
 from pyrogram import enums
 
-from plugins.pmfilter import build_search_buttons
+from plugins.pmfilter import build_search_buttons, search_file_label
 from database.users_chats_db import db
 from utils import get_size, temp
 
@@ -75,8 +75,11 @@ class FakeCallbackQuery:
 
 
 @pytest.fixture(autouse=True)
-def setup_temp():
-    temp.U_NAME = "TestBot"
+def setup_temp(monkeypatch):
+    monkeypatch.setattr(temp, "U_NAME", "TestBot", raising=False)
+    monkeypatch.setattr(temp, "GETALL", {})
+    monkeypatch.setattr(temp, "SHORT", {})
+    monkeypatch.setattr(temp, "IMDB_CAP", {})
 
 
 # --------------------------------------------------------------------------- #
@@ -165,6 +168,20 @@ def test_file_buttons_are_built_even_for_legacy_text_mode(monkeypatch):
 
     assert [b.text for b in btn[0]] == ["⚡ Check Bot PM ⚡", "Sᴇɴᴅ Aʟʟ"]
     assert btn[2][0].callback_data == "file#f1"
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("Flex x Cop S01E03 1080p.mkv", "1.00 GB • S01E03 • Flex x Cop S01E03 1080p.mkv"),
+        ("Show E05 720p.mkv", "1.00 GB • E05 • Show E05 720p.mkv"),
+        ("Show S01 Complete.mkv", "1.00 GB • S01 • Show S01 Complete.mkv"),
+        ("Jawan (2023).mkv", "1.00 GB • Jawan (2023).mkv"),
+    ],
+)
+def test_search_file_label(name, expected):
+    """``search_file_label`` stays the public per-file label helper."""
+    assert search_file_label(FakeFile("f1", name, 1073741824)) == expected
 
 
 def test_file_button_label_never_exceeds_telegram_limit(monkeypatch):
@@ -383,8 +400,10 @@ def test_sendfiles_callback_premium_gets_all_files_deeplink(monkeypatch):
     query = FakeCallbackQuery(data="sendfiles#123-456", user_id=777)
     asyncio.run(cb_handler(None, query))
 
-    assert len(query.answers) == 1
-    assert query.answers[0]["url"] == "https://telegram.me/TestBot?start=allfiles_-1001_123-456"
+    assert query.answers == [{
+        "text": "", "show_alert": False,
+        "url": "https://telegram.me/TestBot?start=allfiles_-1001_123-456",
+    }]
     assert query.message.replies == []
 
 
