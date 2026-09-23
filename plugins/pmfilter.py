@@ -2130,7 +2130,7 @@ async def auto_filter(client, msg, spoll=False):
         cap = result_header(
             search, total_results,
             message.from_user.mention if message.from_user else None,
-            remaining_seconds,
+            message.chat.title or temp.B_LINK, remaining_seconds,
         )
     cap += search_file_list(files, message.chat.id, button_mode=settings.get('button', False))
     # Linked lists can exceed Telegram's photo-caption limit. Use text for

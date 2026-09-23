@@ -1,5 +1,5 @@
 import re
-from dreamxbotz.util.search_results import result_header, result_files, result_footer
+from dreamxbotz.util.search_results import result_header, result_files
 import os
 import logging
 from info import  *
@@ -581,12 +581,11 @@ def clean_search_text(search_raw: str) -> str:
     else:
         return ""
 
-def search_file_list(files, chat_id, offset=0, button_mode=False, brand=None):
+def search_file_list(files, chat_id, offset=0, button_mode=False):
     return result_files(
         [(file.file_id, clean_filename(file.file_name), get_size(file.file_size))
          for file in files],
         temp.U_NAME, chat_id, offset=offset, button_mode=button_mode,
-        brand=brand or temp.B_LINK,
     )
 
 
@@ -606,7 +605,7 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
     if not cap:
         cap = result_header(
             search, total_results, query.from_user.mention,
-            remaining_seconds,
+            query.message.chat.title or temp.B_LINK,
         )
     return cap + search_file_list(
         files, query.message.chat.id, offset=offset,
