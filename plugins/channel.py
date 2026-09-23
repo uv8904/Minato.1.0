@@ -263,8 +263,8 @@ async def _process_with_lock(bot, filename, caption, media_info, base_name, proc
 
     if not movie_doc:
         if TMDB_POSTER:
-            details = await get_movie_detailsx(base_name)
-            if details.get("error"):
+            details = await get_movie_detailsx(base_name) or {}
+            if not details or details.get("error"):
                 error_tmdb=True
                 logger.info("TMDB error switching to IMDB")
                 details = await get_movie_details(base_name) or {}

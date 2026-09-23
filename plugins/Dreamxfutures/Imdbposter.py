@@ -135,66 +135,125 @@ async def get_movie_details(query, id=False, file=None):
         return None
 
 async def get_movie_detailsx(query, id=False, file=None):
-    base_url = "https://bharath-boy-api.vercel.app/api/movie-posters"
+    """Fetch movie/TV details directly from the TMDB v3 API (no third-party proxy).
+
+    On any failure returns {"error": True} so callers can fall back to IMDB.
+    """
+    api_key = TMDB_API_KEY
+    if not api_key:
+        logger.error("TMDB_API_KEY is not set - cannot fetch TMDB details for '%s'", query)
+        return {"error": True}
+
+    base = "https://api.themoviedb.org/3"
+    img_base = "https://image.tmdb.org/t/p/original"
+    params = {"api_key": api_key, "language": "en-US"}
+
     q = str(query).strip()
+    years = re.findall(r'(?<!\d)((?:19|20)\d{2})(?!\d)', q)
+    year = years[0] if years else None
+    q_no_year = q.replace(year, " ").strip() if year else q
+    search_queries = [q] if (not year or q_no_year == q) else [q, q_no_year]
+
+    def pick_best(results):
+        if not results:
+            return None
+        if year:
+            for r in results:
+                date = r.get("release_date") or r.get("first_air_date") or ""
+                if date.startswith(year):
+                    return r
+        return max(results, key=lambda r: r.get("vote_count") or 0)
+
+    media, kind, data = None, None, None
     try:
-        async with aiohttp.ClientSession() as session:
-            params = {"query": q, "api_key": TMDB_API_KEY}
-            async with session.get(base_url, params=params) as resp:
-                if resp.status != 200:
-                    text = await resp.text()
-                    logger.error(f"API request failed [{resp.status}] for query={q}\n {text}")
-                    return await resp.json()
-                
-                data = await resp.json()
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+            if id:
+                # Direct TMDB id from internal callers - try movie first, then tv
+                for skind in ("movie", "tv"):
+                    dp = dict(params)
+                    dp["append_to_responses"] = "images,credits"
+                    async with session.get(f"{base}/{skind}/{id}", params=dp) as resp:
+                        if resp.status == 200:
+                            kind = skind
+                            media = {"id": id}
+                            data = await resp.json()
+                            break
+                if not media:
+                    return {"error": True}
+            else:
+                for skind in ("movie", "tv"):
+                    for sq in search_queries:
+                        sp = dict(params)
+                        sp["query"] = sq
+                        async with session.get(f"{base}/search/{skind}", params=sp) as resp:
+                            if resp.status != 200:
+                                text = await resp.text()
+                                logger.error("TMDB search failed [%s] for query=%s\n %s", resp.status, sq, text)
+                                return {"error": True}
+                            sdata = await resp.json()
+                        hit = pick_best(sdata.get("results") or [])
+                        if hit:
+                            media, kind = hit, skind
+                            break
+                    if media:
+                        break
+                if not media:
+                    logger.info("TMDB: no match found for query=%s", q)
+                    return {"error": True}
+
+                dp = dict(params)
+                dp["append_to_responses"] = "images,credits"
+                async with session.get(f"{base}/{kind}/{media['id']}", params=dp) as resp:
+                    if resp.status != 200:
+                        text = await resp.text()
+                        logger.error("TMDB details failed [%s] for %s/%s\n %s", resp.status, kind, media["id"], text)
+                        return {"error": True}
+                    data = await resp.json()
     except Exception as e:
         logger.error(f"An error occurred in get_movie_detailsx: {e}")
-        return None
+        return {"error": True}
 
-    # Normalize fields
-    details = {}
-    details['title'] = data.get('title') or data.get('localized_title')
-    details['year'] = (data.get('year', 0)) if data.get('year') else None
-    details['release_date'] = data.get('release_date')
-    details['rating'] = round(float(data.get('rating', 0)), 1) if data.get('rating') is not None else None
-    details['votes'] = int(data.get('votes', 0))
-    details['runtime'] = data.get('runtime')
-    details['certificates'] = data.get('certificates')
-    details['tmdb_url'] = data.get('url')
-    
-    for key in ('genres', 'languages', 'countries'):
-        raw = data.get(key)
-        details[key] = [s.strip() for s in raw.split(',')] if raw else []
-    for role in ('director', 'writer', 'producer', 'composer', 'cinematographer', 'cast'):
-        raw = data.get(role)
-        details[role] = [s.strip() for s in raw.split(',')] if raw else []
-        
-    details['plot'] = data.get('plot')
-    details['tagline'] = data.get('tagline')
-    details['box_office'] = (data.get('box_office', 0)) if data.get('box_office') else None
-    raw_dist = data.get('distributors')
-    details['distributors'] = [d.strip() for d in raw_dist.split(',')] if raw_dist else []
-    details['imdb_id'] = data.get('imdb_id')
-    details['tmdb_id'] = data.get('tmdb_id')
-    
-    posters = data.get('images', {}).get('posters', {})
-    original_language = data.get('images', {}).get('original_language')
-    poster_url = data.get('poster_url')
-    if not poster_url:
-        for key in ('en', original_language, 'no_lang'):
-            if key and posters.get(key):
-                poster_url = posters[key][0]
-                break
-    details['poster_url'] = poster_url
+    # Normalize fields (TMDB v3 response shape)
+    credits = data.get("credits") or {}
+    crew = credits.get("crew") or []
+    release_date = data.get("release_date") or data.get("first_air_date") or ""
+    runtime = data.get("runtime")
+    if isinstance(runtime, list):
+        runtime = runtime[0] if runtime else None
 
-    backdrops = data.get('images', {}).get('backdrops', {})
-    original_language = data.get('images', {}).get('original_language')
-    backdrop_url = None
-    for key in ('en', original_language, 'no_lang'):
-        if key and backdrops.get(key):
-            backdrop_url = backdrops[key][0]
-            break
-    details['backdrop_url'] = backdrop_url
+    posters = (data.get("images") or {}).get("posters") or []
+    backdrops = (data.get("images") or {}).get("backdrops") or []
+    best_poster = max(posters, key=lambda p: (p.get("vote_count") or 0, p.get("width") or 0)) if posters else None
+    best_backdrop = max(backdrops, key=lambda b: (b.get("vote_count") or 0, b.get("width") or 0)) if backdrops else None
 
+    details = {
+        'title': data.get("title") or data.get("name"),
+        'localized_title': data.get("original_title") or data.get("original_name"),
+        'year': int(release_date[:4]) if release_date[:4].isdigit() else None,
+        'release_date': release_date or None,
+        'rating': round(float(data["vote_average"]), 1) if data.get("vote_average") is not None else None,
+        'votes': int(data.get("vote_count") or 0),
+        'runtime': runtime,
+        'certificates': None,
+        'tmdb_url': f"https://www.themoviedb.org/{kind}/{data.get('id')}",
+        'url': f"https://www.themoviedb.org/{kind}/{data.get('id')}",
+        'genres': [g.get("name") for g in (data.get("genres") or []) if g.get("name")],
+        'languages': [l.get("name") for l in (data.get("spoken_languages") or []) if l.get("name")],
+        'countries': [c.get("name") for c in (data.get("production_countries") or []) if c.get("name")],
+        'director': [c.get("name") for c in crew if c.get("job") == "Director" and c.get("name")],
+        'writer': [c.get("name") for c in crew if c.get("job") == "Writer" and c.get("name")],
+        'producer': [c.get("name") for c in crew if c.get("job") == "Producer" and c.get("name")],
+        'composer': [c.get("name") for c in crew if c.get("job") in ("Composer", "Original Music Composer") and c.get("name")],
+        'cinematographer': [c.get("name") for c in crew if c.get("job") == "Director of Photography" and c.get("name")],
+        'cast': [c.get("name") for c in (credits.get("cast") or [])[:10] if c.get("name")],
+        'plot': data.get("overview"),
+        'tagline': data.get("tagline"),
+        'box_office': None,
+        'distributors': [],
+        'imdb_id': data.get("imdb_id"),
+        'tmdb_id': data.get("id"),
+        'poster_url': f"{img_base}{best_poster['file_path']}" if best_poster and best_poster.get("file_path") else None,
+        'backdrop_url': f"{img_base}{best_backdrop['file_path']}" if best_backdrop and best_backdrop.get("file_path") else None,
+    }
     return details
 
