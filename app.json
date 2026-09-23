@@ -153,6 +153,11 @@
             "description": "On a search miss, fuzzy-match the typed text against titles in the file DB and show coloured 'did you mean' buttons (or auto-fix when obvious) (true/false).",
             "value": "True",
             "required": false
+        },
+        "BUTTON_MODE": {
+            "description": "Search results are sent as inline buttons (size • SxxExx/Exx • filename) instead of text links, so every file is one button and the top row always shows Check Bot PM and Send All (true/false).",
+            "value": "True",
+            "required": false
         }
     },
     "addons": [],

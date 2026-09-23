@@ -1,4 +1,5 @@
-from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, save_group_settings, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, clean_search_text, start_buttons, blue, green, red
+from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, save_group_settings, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, start_buttons, blue, green, red
+from dreamxbotz.util.file_labels import file_button_label, normalize_file_name
 import tracemalloc
 from dreamxbotz.util.ai_spell import correct_title as groq_correct_title
 from dreamxbotz.util.title_suggest import auto_pick as db_auto_pick_title, suggest as db_title_suggest
@@ -153,37 +154,46 @@ async def refercall(bot, query):
 
 
 def search_file_label(file):
-    """Keep the filename intact, with a compact episode tag when available."""
-    fname = re.sub(r'\s+', ' ', getattr(file, 'file_name', None) or "File").strip() or "File"
-    episode = re.search(
-        r'(?<![a-z0-9])s(\d{1,2})[ ._-]*e(\d{1,3})(?!\d)', fname, re.I
-    )
-    if episode:
-        tag = f"S{int(episode[1]):02d}E{int(episode[2]):02d}"
-    else:
-        episode = re.search(r'(?<![a-z0-9])e(?:p(?:isode)?)?[ ._-]*(\d{1,3})(?!\d)', fname, re.I)
-        tag = f"E{int(episode[1]):02d}" if episode else ""
-    return " • ".join(part for part in (get_size(file.file_size), tag, fname) if part)
+    """Inline-button label of one result file: ``{size} • {SxxExx/Exx} • {name}``.
+
+    Thin wrapper over :mod:`dreamxbotz.util.file_labels` kept under the name
+    this module has exposed since the buttons-only search page.
+    """
+    return file_button_label(getattr(file, 'file_name', None), get_size(file.file_size))
 
 
 async def build_search_buttons(key, files, offset, next_offset, total_results, req_user_id, settings):
-    # Search results are always buttons, including groups with legacy button=False.
-    # Visibility is public; premium authorization happens at click/delivery time.
-    btn = [
-        [
-            green("⚡ Check Bot PM ⚡", url=f"https://t.me/{temp.U_NAME}"),
-            green("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}"),
-        ],
-        [
-            blue('Quality', callback_data=f"qualities#{key}"),
-            blue('Language', callback_data=f"languages#{key}"),
-            blue('Season', callback_data=f"seasons#{key}"),
-        ],
-    ]
+    """Keyboard for one page of auto-filter results.
+
+    * Row 1 always carries the two shortcuts - ``⚡ Check Bot PM ⚡`` and
+      ``Sᴇɴᴅ Aʟʟ`` - for every user (who may actually use Send All is decided
+      when the button is tapped, see ``cb_handler``).
+    * Every file gets its own button labelled ``{size} • {SxxExx/Exx} •
+      {filename}``. Files are never listed as links inside the caption, so the
+      message text stays clean for every group / PM.
+    """
+    btn = []
     for file in files:
-        btn.append([InlineKeyboardButton(
-            text=search_file_label(file), callback_data=f'file#{file.file_id}'
-        )])
+        fname = normalize_file_name(getattr(file, 'file_name', None)) or "File"
+        btn.append([
+            InlineKeyboardButton(
+                text=file_button_label(fname, get_size(file.file_size)),
+                callback_data=f'file#{file.file_id}'
+            )
+        ])
+
+    btn.insert(0, [
+        blue('Quality', callback_data=f"qualities#{key}"),
+        blue('Language', callback_data=f"languages#{key}"),
+        blue('Season', callback_data=f"seasons#{key}")
+    ])
+
+    # Both shortcuts stay on the top row for everybody: non-premium users get
+    # the premium purchase prompt when they tap "Sᴇɴᴅ Aʟʟ".
+    btn.insert(0, [
+        green("⚡ Check Bot PM ⚡", url=f"https://t.me/{temp.U_NAME}"),
+        green("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
+    ])
 
     try:
         limit = 10 if settings.get('max_btn', True) else int(MAX_B_TN)
@@ -218,10 +228,21 @@ async def build_search_buttons(key, files, offset, next_offset, total_results, r
     return btn
 
 
+async def show_search_buttons(query, btn):
+    """Apply a freshly built result keyboard to the (edited) result message.
+
+    Results are buttons-only now, so a page / filter change only swaps the
+    keyboard - the caption with its links is never rewritten.
+    """
+    try:
+        await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
+    except MessageNotModified:
+        pass
+
+
 @Client.on_callback_query(filters.regex(r"^next"))
 async def next_page(bot, query):
     ident, req, key, offset = query.data.split("_")
-    curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
     if int(req) not in [query.from_user.id, 0]:
         return await query.answer(script.ALRT_TXT.format(query.from_user.first_name), show_alert=True)
     try:
@@ -257,10 +278,7 @@ async def next_page(bot, query):
         settings=settings
     )
 
-    try:
-        await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
-    except MessageNotModified:
-        pass
+    await show_search_buttons(query, btn)
     await query.answer()
 
 
@@ -384,7 +402,6 @@ async def qualities_cb_handler(client: Client, query: CallbackQuery):
 @Client.on_callback_query(filters.regex(r"^fq#"))
 async def filter_qualities_cb_handler(client: Client, query: CallbackQuery):
     _, qual, key = query.data.split("#")
-    curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
     search = FRESH.get(key)
     search = search.replace("_", " ")
     baal = qual in search
@@ -420,10 +437,7 @@ async def filter_qualities_cb_handler(client: Client, query: CallbackQuery):
         settings=settings
     )
 
-    try:
-        await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
-    except MessageNotModified:
-        pass
+    await show_search_buttons(query, btn)
     await query.answer()
 
 # languages
@@ -465,7 +479,6 @@ async def languages_cb_handler(client: Client, query: CallbackQuery):
 @Client.on_callback_query(filters.regex(r"^fl#"))
 async def filter_languages_cb_handler(client: Client, query: CallbackQuery):
     _, lang, key = query.data.split("#")
-    curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
     search = FRESH.get(key)
     search = search.replace("_", " ")
     baal = lang in search
@@ -501,10 +514,7 @@ async def filter_languages_cb_handler(client: Client, query: CallbackQuery):
         settings=settings
     )
 
-    try:
-        await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
-    except MessageNotModified:
-        pass
+    await show_search_buttons(query, btn)
     await query.answer()
 
 
@@ -576,10 +586,7 @@ async def filter_seasons_cb_handler(client: Client, query: CallbackQuery):
         settings=settings
     )
 
-    try:
-        await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
-    except MessageNotModified:
-        pass
+    await show_search_buttons(query, btn)
     await query.answer()
 
 
@@ -619,6 +626,27 @@ async def notify_me_cb(client: Client, query: CallbackQuery):
     if reason == "disabled":
         return await query.answer("⚠️ ɴᴏᴛɪꜰʏ-ᴍᴇ ɪs ᴛᴜʀɴᴇᴅ ᴏꜰꜰ ʙʏ ᴛʜᴇ ʙᴏᴛ ᴏᴡɴᴇʀ.", show_alert=True)
     return await query.answer("⚠️ ᴄᴏᴜʟᴅɴ'ᴛ sᴀᴠᴇ ʏᴏᴜʀ ʀᴇǫᴜᴇsᴛ, ᴛʀʏ ᴀɢᴀɪɴ.", show_alert=True)
+
+
+async def send_all_premium_offer(query: CallbackQuery):
+    """Premium upsell for non-premium users who tapped "Sᴇɴᴅ Aʟʟ".
+
+    An alert alone cannot be tapped, so the same chat also gets a short message
+    with the plan list and a "Buy Premium" button.
+    """
+    try:
+        await query.message.reply_text(
+            text=f"{script.SEND_ALL_PREMIUM_TEXT}\n\n{script.PREMIUM_TEXT}",
+            reply_markup=InlineKeyboardMarkup([[
+                green("⚜️ ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium")
+            ]]),
+            parse_mode=enums.ParseMode.HTML,
+            disable_web_page_preview=True,
+            quote=True,
+        )
+    except Exception as e:
+        # A missing reply target / deleted result message must not break the alert.
+        logger.warning("send all premium offer failed: %s", e)
 
 
 @Client.on_callback_query()
@@ -678,9 +706,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("sendfiles"):
         clicked = query.from_user.id
-        ident, key = query.data.split("#")
+        ident, key = query.data.split("#", 1)
+        # "Sᴇɴᴅ Aʟʟ" is visible for everyone, but only premium users may use it:
+        # everybody else gets the purchase prompt (alert + tappable button).
         if not await db.has_premium_access(clicked):
-            return await query.answer("⚠️ This feature is only for Premium users!\n\nBuy Premium via /start premium in bot PM to use Send All.", show_alert=True)
+            await query.answer(script.SEND_ALL_PREMIUM_ALERT, show_alert=True)
+            await send_all_premium_offer(query)
+            return
         try:
             await query.answer(url=f"https://telegram.me/{temp.U_NAME}?start=allfiles_{query.message.chat.id}_{key}")
             return
@@ -1800,6 +1832,9 @@ async def auto_filter(client, msg, spoll=False):
             **locals()
         )
         temp.IMDB_CAP[message.from_user.id] = cap
+        # The files themselves are never pasted into the caption: each one is
+        # already an inline button (see build_search_buttons), so the text
+        # stays clean with no links in message mode.
     else:
         cap = f"Results For 🔍  {html.escape(search)}"
 
