@@ -120,6 +120,10 @@ FAMPAY_PAYEE_NAME = env_str('FAMPAY_PAYEE_NAME', default='DreamXBotz')    # Name
 FAMPAY_ORDER_EXPIRY_MINUTES = env_int('FAMPAY_ORDER_EXPIRY_MINUTES', 10)  # How long a QR stays payable
 FAMPAY_POLL_INTERVAL = env_int('FAMPAY_POLL_INTERVAL', 20)            # Seconds between background status checks
 FAMPAY_ORDERS_COLLECTION = env_str('FAMPAY_ORDERS_COLLECTION', default='fampay_orders')  # MongoDB collection for orders
+# Persistent de-duplication log for unmatched incoming UTR alerts. Keeping it
+# separate from orders means a Koyeb restart cannot alert admins about the same
+# unmatched bank credit again.
+FAMPAY_EVENTS_COLLECTION = env_str('FAMPAY_EVENTS_COLLECTION', default='fampay_events')
 
 # --- Gmail IMAP verification (primary verifier) ---
 FAMPAY_IMAP_ENABLED = is_enabled(environ.get('FAMPAY_IMAP_ENABLED', 'True'), True)

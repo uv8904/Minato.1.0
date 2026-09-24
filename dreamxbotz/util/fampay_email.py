@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from email.utils import parseaddr
 from typing import Optional
 
 #: ₹120.50 / Rs 120.50 / Rs.120 / INR 1,200.75
@@ -41,6 +42,57 @@ _SENDER_RE = re.compile(
 
 _CREDIT_WORDS = ("received", "credit", "added to", "money received", "deposit")
 _DEBIT_WORDS = ("debited", "debit", "sent to", "paid to", "withdrawn", "deducted")
+
+# Payment notifications are sent by FamApp's system/no-reply mailboxes.  Do
+# not treat every arbitrary ``*@famapp.in`` message as a financial event: that
+# domain also sends marketing, KYC and account-notice mail.
+_SYSTEM_MAIL_LOCALPARTS = frozenset(
+    {
+        "system",
+        "no-reply",
+        "noreply",
+        "notification",
+        "notifications",
+        "alert",
+        "alerts",
+        "payment",
+        "payments",
+        "transaction",
+        "transactions",
+        "update",
+        "updates",
+    }
+)
+
+
+def _matches_sender_filter(address: str, sender_filter: str) -> bool:
+    """Match a configured sender/domain exactly, never as a loose substring."""
+    sender_filter = str(sender_filter or "").strip().lower().lstrip("@")
+    if not sender_filter:
+        return True
+    if "@" in sender_filter:
+        return address == sender_filter
+    domain = address.rsplit("@", 1)[-1] if "@" in address else ""
+    return domain == sender_filter or domain.endswith("." + sender_filter)
+
+
+def is_famapp_system_mail(sender_header: str, sender_filter: str = "famapp.in") -> bool:
+    """Return whether ``sender_header`` is a trusted FamApp service mailbox.
+
+    This is intentionally a *sender gate*, not payment parsing. The IMAP
+    worker calls it before reading/marking a mail so an unrelated message that
+    happens to contain a rupee amount cannot create an unmatched-payment alert.
+    ``sender_filter`` remains owner-configurable, while the FamApp-domain and
+    system-mailbox checks prevent values such as ``evilfamapp.in`` from passing.
+    """
+    address = parseaddr(str(sender_header or ""))[1].strip().lower()
+    if not address or "@" not in address or not _matches_sender_filter(address, sender_filter):
+        return False
+    localpart, _, domain = address.partition("@")
+    return (
+        (domain == "famapp.in" or domain.endswith(".famapp.in"))
+        and localpart in _SYSTEM_MAIL_LOCALPARTS
+    )
 
 
 @dataclass(frozen=True)

@@ -17,11 +17,12 @@ import imaplib
 import os
 import sys
 from email import message_from_bytes
-from email.utils import parseaddr
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+
+from dreamxbotz.util.fampay_email import is_famapp_system_mail, parse_payment_email
 
 try:
     from dotenv import load_dotenv
@@ -32,7 +33,10 @@ except ImportError:
 
 EMAIL = os.environ.get("FAMPAY_EMAIL", "").strip()
 PASSWORD = os.environ.get("FAMPAY_EMAIL_PASSWORD", "").strip().replace(" ", "")
-UPI_ID = os.environ.get("FAMPAY_UPI_ID", "").strip()
+UPI_ID = (
+    os.environ.get("FAMPAY_UPI_ID", "").strip()
+    or os.environ.get("OWNER_UPI_ID", "").strip()
+)
 HOST = os.environ.get("FAMPAY_IMAP_HOST", "imap.gmail.com")
 PORT = int(os.environ.get("FAMPAY_IMAP_PORT", "993"))
 MAILBOX = os.environ.get("FAMPAY_IMAP_MAILBOX", "INBOX")
@@ -109,14 +113,12 @@ def main() -> int:
                 if status != "OK" or not fetched or not fetched[0]:
                     continue
                 raw = fetched[0][1]
-                sender = parseaddr(message_from_bytes(raw).get("From", ""))[1].lower()
-                if SENDER_FILTER and SENDER_FILTER in sender:
+                sender_header = message_from_bytes(raw).get("From", "")
+                if is_famapp_system_mail(sender_header, SENDER_FILTER):
                     fampay_unseen += 1
                     newest = newest or raw
 
         if newest:
-            from dreamxbotz.util.fampay_email import parse_payment_email
-
             parsed = parse_payment_email(newest.decode("utf-8", "replace"))
             subject = message_from_bytes(newest).get("Subject", "")
             print(f"{OK} FamApp mail mila: \"{subject}\"")

@@ -242,6 +242,11 @@
             "value": "20",
             "required": false
         },
+        "FAMPAY_EVENTS_COLLECTION": {
+            "description": "FamPay: persistent unmatched-UTR alert log; prevents duplicate alerts after a bot restart.",
+            "value": "fampay_events",
+            "required": false
+        },
         "FAMPAY_EMAIL": {
             "description": "FamPay: Gmail address linked to your FamPay account (IMAP verification).",
             "value": "",
@@ -250,6 +255,11 @@
         "FAMPAY_EMAIL_PASSWORD": {
             "description": "FamPay: 16-character Google App Password for that Gmail (NOT your Gmail password).",
             "value": "",
+            "required": false
+        },
+        "FAMPAY_EMAIL_SENDER_FILTER": {
+            "description": "FamPay: trusted FamApp system-mail domain or exact service address (default famapp.in).",
+            "value": "famapp.in",
             "required": false
         },
         "FAMGATEWAY_API_KEY": {

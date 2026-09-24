@@ -27,6 +27,9 @@ field               type    notes
 ``fg_checkout_url`` str     FamGateway hosted checkout page
 ``chat_id``         int     chat holding the QR message (so it can be edited)
 ``qr_message_id``   int     the QR message id
+``order_placed_at`` datetime buyer tapped the post-payment "Order placed" step
+``submitted_utr``   str     buyer-supplied UTR, awaiting an admin's review
+``utr_submitted_at`` datetime when ``submitted_utr`` was confirmed by the buyer
 ``created_at``      datetime naive local time (same convention as the rest of
                              the bot's premium data)
 ``updated_at``      datetime last write
@@ -38,11 +41,18 @@ Only order metadata is stored – never any Gmail/FamPay credential.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
 import string
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+
+try:
+    from pymongo.errors import DuplicateKeyError
+except ImportError:  # keeps pure helpers importable before optional dependencies are installed
+    class DuplicateKeyError(Exception):
+        pass
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +68,7 @@ STATUS_EXPIRED = "expired"
 STATUS_CANCELLED = "cancelled"
 
 DEFAULT_COLLECTION_NAME = "fampay_orders"
+DEFAULT_EVENTS_COLLECTION_NAME = "fampay_events"
 
 
 def generate_order_id() -> str:
@@ -161,6 +172,13 @@ class FamPayOrderStore:
             "fg_checkout_url": fg_checkout_url or "",
             "chat_id": int(chat_id) if chat_id is not None else None,
             "qr_message_id": int(qr_message_id) if qr_message_id else None,
+            # A buyer may mark an order as placed and submit their bank UTR for
+            # an admin to inspect. Neither value is treated as payment proof:
+            # IMAP/FamGateway remains the automatic verifier, and manual
+            # approval is still an explicit admin action.
+            "order_placed_at": None,
+            "submitted_utr": "",
+            "utr_submitted_at": None,
             "created_at": now,
             "updated_at": now,
             "expires_at": expires_at,
@@ -174,6 +192,63 @@ class FamPayOrderStore:
         await self.col.update_one(
             {"_id": order_id},
             {"$set": {"chat_id": int(chat_id), "qr_message_id": int(message_id)}},
+        )
+
+    async def mark_order_placed(
+        self, order_id: str, *, user_id: Optional[int] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Record the buyer's *post-payment* acknowledgement.
+
+        This is deliberately separate from :meth:`mark_paid`: tapping
+        "Order placed" only opens the optional UTR-review flow.  A payment is
+        still fulfilled exclusively by an automatic verifier or an admin.
+        """
+        current = await self.get_order(order_id)
+        if not current or current.get("status") not in (STATUS_PENDING, STATUS_MANUAL_PENDING):
+            return None
+        if user_id is not None and current.get("user_id") != int(user_id):
+            return None
+        now = datetime.now()
+        filters = {"_id": order_id, "status": current["status"]}
+        if user_id is not None:
+            filters["user_id"] = int(user_id)
+        return await self.col.find_one_and_update(
+            filters,
+            {"$set": {"order_placed_at": now, "updated_at": now}},
+            return_document=True,
+        )
+
+    async def submit_utr(
+        self, order_id: str, *, user_id: int, utr: str
+    ) -> Optional[Dict[str, Any]]:
+        """Save a buyer-confirmed UTR for **manual review**, never auto-approve it.
+
+        The status guard makes a late callback harmless if the order becomes
+        paid/cancelled between the command and the confirmation tap.
+        """
+        current = await self.get_order(order_id)
+        if (
+            not current
+            or current.get("user_id") != int(user_id)
+            or current.get("status") not in (STATUS_PENDING, STATUS_MANUAL_PENDING)
+        ):
+            return None
+        now = datetime.now()
+        return await self.col.find_one_and_update(
+            {
+                "_id": order_id,
+                "user_id": int(user_id),
+                "status": current["status"],
+            },
+            {
+                "$set": {
+                    "order_placed_at": current.get("order_placed_at") or now,
+                    "submitted_utr": str(utr or ""),
+                    "utr_submitted_at": now,
+                    "updated_at": now,
+                }
+            },
+            return_document=True,
         )
 
     async def transition_status(self, order_id: str, from_status: str, to_status: str) -> Optional[Dict[str, Any]]:
@@ -253,6 +328,16 @@ class FamPayOrderStore:
             return order
         return None
 
+    async def get_reviewable_order(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Latest pending/manual-review order for the buyer's ``/utr`` command."""
+        # Filtering the two legal statuses in Python avoids a database-specific
+        # ``$in`` expression and keeps this tiny store easy to fake in tests.
+        cursor = self.col.find({"user_id": int(user_id)}).sort("created_at", -1)
+        async for order in cursor:
+            if order.get("status") in (STATUS_PENDING, STATUS_MANUAL_PENDING):
+                return order
+        return None
+
     async def pending_orders(self) -> List[Dict[str, Any]]:
         cursor = self.col.find({"status": STATUS_PENDING}).sort("created_at", 1)
         return [order async for order in cursor]
@@ -296,6 +381,15 @@ class FamPayOrderStore:
         cursor = self.col.find().sort("created_at", -1).limit(int(limit))
         return [order async for order in cursor]
 
+    async def orders_by_status(self, status: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Newest orders in one state, for the compact admin panel."""
+        cursor = (
+            self.col.find({"status": status})
+            .sort("created_at", -1)
+            .limit(max(1, int(limit)))
+        )
+        return [order async for order in cursor]
+
     async def count_by_status(self) -> Dict[str, int]:
         counts: Dict[str, int] = {}
         for status in (
@@ -323,5 +417,105 @@ class FamPayOrderStore:
         return datetime.now() + timedelta(minutes=max(1, int(minutes)))
 
 
-#: Shared instance used by the plugin (lazy connection, fake-injectable).
+class FamPayEventStore:
+    """Small persistent event log for IMAP alerts that must survive restarts.
+
+    Orders already remember a UTR once they are paid.  This separate collection
+    records *unmatched* incoming credits, so restarting the bot cannot make the
+    same bank UTR produce another admin alert.
+    """
+
+    def __init__(self, database=None, collection=None, collection_name: Optional[str] = None):
+        self._database = database
+        self._collection = collection
+        self._collection_name = collection_name
+        self._indexes_ready = False
+
+    @property
+    def collection_name(self) -> str:
+        if self._collection_name:
+            return self._collection_name
+        try:
+            from info import FAMPAY_EVENTS_COLLECTION  # type: ignore
+
+            return FAMPAY_EVENTS_COLLECTION
+        except Exception:
+            return DEFAULT_EVENTS_COLLECTION_NAME
+
+    @property
+    def col(self):
+        if self._collection is None:
+            if self._database is None:
+                self._database = _default_database()
+            self._collection = self._database[self.collection_name]
+        return self._collection
+
+    async def ensure_indexes(self) -> None:
+        """Best-effort indexes for support lookups; ``_id`` is the dedupe key."""
+        if self._indexes_ready:
+            return
+        try:
+            await self.col.create_index("kind", name="fp_event_kind", background=True)
+            await self.col.create_index("utr", name="fp_event_utr", background=True)
+            await self.col.create_index("created_at", name="fp_event_created", background=True)
+            self._indexes_ready = True
+        except Exception as exc:
+            logger.warning("FamPay: could not create event indexes: %s", exc)
+
+    @staticmethod
+    def _unmatched_event_key(
+        utr: str, amount: float, sender_name: str, raw_excerpt: str = ""
+    ) -> tuple[str, str]:
+        """Return ``(event_id, normalized_utr)`` without persisting email text."""
+        normalized_utr = "".join(ch for ch in str(utr or "") if ch.isdigit())
+        if normalized_utr:
+            return f"unmatched:{normalized_utr}", normalized_utr
+        # A no-UTR credit has no universal bank identity. Use a stable digest
+        # only as a best-effort fallback while keeping the raw email body out of
+        # MongoDB.
+        fingerprint = "\x1f".join(
+            (
+                f"{float(amount):.2f}",
+                str(sender_name or "").strip().lower(),
+                str(raw_excerpt or "").strip().lower(),
+            )
+        )
+        digest = hashlib.sha256(fingerprint.encode("utf-8", "replace")).hexdigest()[:32]
+        return f"unmatched:no-utr:{digest}", ""
+
+    async def claim_unmatched_payment(
+        self,
+        *,
+        utr: str,
+        amount: float,
+        sender_name: str = "",
+        raw_excerpt: str = "",
+    ) -> bool:
+        """Atomically claim an unmatched-credit alert.
+
+        ``True`` means this process owns the notification. MongoDB's built-in
+        unique ``_id`` index makes the insert safe across bot restarts and even
+        across two accidentally-running workers. ``False`` means the same UTR
+        was already logged and alerted.
+        """
+        event_id, normalized_utr = self._unmatched_event_key(
+            utr, amount, sender_name, raw_excerpt
+        )
+        document = {
+            "_id": event_id,
+            "kind": "unmatched_payment",
+            "utr": normalized_utr,
+            "amount": round(float(amount), 2),
+            "sender_name": str(sender_name or "")[:128],
+            "created_at": datetime.now(),
+        }
+        try:
+            await self.col.insert_one(document)
+        except DuplicateKeyError:
+            return False
+        return True
+
+
+#: Shared instances used by the plugin (lazy connection, fake-injectable).
 paydb = FamPayOrderStore()
+payeventdb = FamPayEventStore()

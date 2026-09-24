@@ -24,8 +24,10 @@ admin gets an **Approve / Reject** button (manual fallback).
 /plan  →  ⚡ FamPay  →  pick a plan (₹10 / ₹20 / ₹40 / ₹55 / ₹75)
       →  bot creates order FMP-AB12CD and reserves a UNIQUE paise amount
          (₹40 → ₹40.07)  ── the paise is how the bot knows WHO paid
-      →  bot sends: UPI QR + "pay exactly ₹40.07" + [Pay via UPI app] button
-      →  user pays  →  Gmail email / FamGateway says "₹40.07 received, UTR …"
+      →  bot sends: UPI QR + "pay exactly ₹40.07" + green [Pay via UPI app]
+         + green [✅ Order placed] button
+      →  user pays → taps [✅ Order placed] to get the optional UTR instructions
+      →  Gmail email / FamGateway says "₹40.07 received, UTR …"
       →  bot matches the order, marks it paid (idempotent) and grants premium
       →  buyer + PREMIUM_LOGS get the receipt with the UTR
 ```
@@ -42,6 +44,38 @@ Safety properties:
 * A UTR that already fulfilled an order is ignored everywhere.
 * A pending order is re-shown (not duplicated) if the user taps the same plan
   again.
+* A user-entered UTR is **never** automatic proof of payment. It is only shown
+  to admins for a bank/FamApp check; the IMAP/FamGateway verifier or an explicit
+  admin approval remains required.
+
+### Optional manual UTR route
+
+The normal flow needs no manual input: wait a few seconds for the FamApp email
+or FamGateway webhook. If the buyer has paid but the automatic verification is
+late, they can tap **✅ Order placed** on their QR and send either:
+
+```text
+/utr FMP-ABC123 123456789012
+```
+
+or, when they have only one open FamPay order:
+
+```text
+/utr 123456789012
+```
+
+The bot displays the order, amount and UTR once more. The buyer must tap
+**✅ Confirm UTR** before anything is stored or sent to admins. This deliberate
+second confirmation prevents a mistyped reference number from entering the
+review queue. Admins receive green **Approve** and red **Reject** buttons after
+checking the UTR in FamApp/bank history.
+
+### Button colours
+
+The FamPay checkout uses the bot's `COLOR_BUTTONS` setting: green marks the
+primary payment/confirmation action, blue marks navigation or refresh, and red
+marks cancellation/rejection. Older Telegram clients simply show normal inline
+buttons, so the flow still works everywhere.
 
 ## 2. Configuration (env vars)
 
@@ -56,11 +90,12 @@ Set these on Heroku/Koyeb/VPS `.env` — never commit them.
 | `FAMPAY_ORDER_EXPIRY_MINUTES` | no | `10` | How long a QR stays payable. |
 | `FAMPAY_POLL_INTERVAL` | no | `20` | Seconds between background status checks (min 5). |
 | `FAMPAY_ORDERS_COLLECTION` | no | `fampay_orders` | MongoDB collection for orders. |
+| `FAMPAY_EVENTS_COLLECTION` | no | `fampay_events` | Persistent unmatched-UTR alert log; prevents duplicate alerts after a restart. |
 | `FAMPAY_EMAIL` | **yes\*** | – | Gmail linked to your FamPay account. |
 | `FAMPAY_EMAIL_PASSWORD` | **yes\*** | – | 16-char **Google App Password** (not your Gmail password). |
 | `FAMPAY_IMAP_ENABLED` | no | `True` | Turn the IMAP verifier off. |
 | `FAMPAY_IMAP_HOST` / `FAMPAY_IMAP_PORT` / `FAMPAY_IMAP_MAILBOX` | no | `imap.gmail.com` / `993` / `INBOX` | IMAP settings (other providers work too). |
-| `FAMPAY_EMAIL_SENDER_FILTER` | no | `famapp.in` | Only scan mails from this sender. |
+| `FAMPAY_EMAIL_SENDER_FILTER` | no | `famapp.in` | Only scan trusted FamApp system/no-reply payment mail from this domain or exact service address. |
 | `FAMGATEWAY_API_KEY` | no\*\* | – | famgateway.in API key (fallback verifier + instant webhook). |
 | `FAMGATEWAY_BASE_URL` | no | `https://famgateway.in` | API base URL. |
 | `FAMGATEWAY_WEBHOOK_SECRET` | no | = API key | Separate webhook signing secret if you want one. |
@@ -107,19 +142,25 @@ IMAP scan and the FamGateway status poll still cover everything.
 ## 3. What the user sees
 
 * `/plan` → **⚡ FamPay — auto approval**, or `/fampay` any time in PM.
-* Plan list → tap a price → QR photo with **"pay exactly ₹40.07"**, the order
-  id, the UPI id and buttons: **Pay via UPI app**, **Web checkout** (FamGateway
-  only), **✅ Paid? Verify**, **🚫 Cancel**.
+* Plan list → tap a green price button → QR photo with **"pay exactly ₹40.07"**,
+  the order id, the UPI id and buttons: green **Pay via UPI app**, **Web
+  checkout** (FamGateway only), **✅ Order placed**, blue **Check payment**, and
+  red **Cancel**.
+* **Order placed** keeps the QR available and sends the buyer the optional
+  `/utr FMP-… <UTR>` instructions. `/utr` always shows a second **Confirm UTR**
+  step; it does not activate premium by itself.
 * On payment: the QR message is replaced by a receipt (plan, amount, UTR,
   expiry) and premium is live. `/myplan` shows the new expiry.
-* If the order expires unpaid: buyer gets a "payment is with the admin" note
-  and admins get **Approve / Reject** buttons (manual fallback).
+* If the order expires unpaid, or a buyer confirms a UTR, admins get green
+  **Approve** / red **Reject** buttons (manual fallback). They must check the
+  payment before approving.
 
 ## 4. Admin commands
 
 | Command | Who | What |
 |---------|-----|------|
-| `/fampay_orders` | admins | Order counts by status + latest 10 orders. |
+| `/fampay_orders` | admins | Interactive FamPay panel: live counts, pending/recent views and the UTR/manual-review queue. |
+| `/utr [FMP-ORDER] <UTR>` | buyer | Optional post-payment UTR submission. The bot asks for a second confirmation, then sends it to the admin review queue; it does **not** auto-approve. |
 | `/add_premium <id> <time>` | admins | Manual grant (unchanged, still works). |
 
 ## 5. Files
