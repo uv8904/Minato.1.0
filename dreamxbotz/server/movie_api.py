@@ -57,6 +57,47 @@ Endpoints
     Wide (16:9) artwork for the hero band – the TMDB backdrop when there is
     one, the poster otherwise, and a clean SVG placeholder as the last resort.
 
+``GET /api/movies/upcoming?limit=12``
+    The "Coming Soon" rail: releases that are **not out yet**, soonest first,
+    each with its release day and a countdown the browser ticks locally:
+
+    .. code-block:: json
+
+        {
+          "ok": true,
+          "count": 12,
+          "limit": 12,
+          "updated_at": "2026-10-05T00:00:00Z",
+          "bot_username": "MyMovieBot",
+          "movies": [
+            {
+              "id": "avatar-3-2026",
+              "title": "Avatar 3",
+              "year": 2026,
+              "release_date": "2026-12-18T00:00:00Z",
+              "release_label": "18 Dec 2026",
+              "days_left": 85,
+              "seconds_left": 7344000,
+              "countdown": "in 85 days",
+              "state": "upcoming",
+              "has_poster": true,
+              "poster": "/api/movies/upcoming/poster/avatar-3-2026",
+              "waiting": 37,
+              "deeplink": "https://t.me/MyMovieBot?start=movie_avatar-3-2026"
+            }
+          ]
+        }
+
+    ``state`` is ``"released"`` (inside the grace window), ``"soon"`` (inside
+    ``COMING_SOON_SOON_DAYS``) or ``"upcoming"`` – that is what paints the gold
+    chip.  ``waiting`` is how many users asked to be notified, so a card can
+    show "🔥 37 waiting".
+
+``GET /api/movies/upcoming/poster/<MOVIE_ID>?w=320``
+    Poster bytes of one upcoming release.  Separate from ``/api/movies/poster``
+    on purpose: this one reads the ``upcoming_movies`` cache, that one the
+    uploaded-movies rail, so a Coming Soon card can never look available.
+
 Security notes
 --------------
 * The response never contains ``file_ids``, ``file_names``, download URLs or the
@@ -107,6 +148,10 @@ MAX_LIMIT = 20
 POSTER_PATH = "/api/movies/poster"
 ART_PATH = "/api/movies/art"
 BACKDROP_PATH = "/api/movies/backdrop"
+#: "Coming Soon" rail – releases that are not out yet, with a countdown.
+UPCOMING_PATH = "/api/movies/upcoming"
+UPCOMING_POSTER_PATH = "/api/movies/upcoming/poster"
+UPCOMING_MAX_LIMIT = 24
 #: 2:3 poster art (200 = thumbnail, 1600 = big desktop card).
 ALLOWED_POSTER_WIDTHS = (200, 320, 480, 640, 800, 1600)
 #: 16:9 hero band artwork.
@@ -541,6 +586,195 @@ async def newly_uploaded_movies(request: web.Request) -> web.Response:
         )
 
 
+# --------------------------------------------------------------------------- #
+# "Coming Soon" – upcoming releases with a live countdown
+# --------------------------------------------------------------------------- #
+#: Guards against piling up refresh tasks when many visitors hit the page.
+_UPCOMING_REFRESH_RUNNING = False
+_UPCOMING_STORE = None
+
+
+def _upcoming_store():
+    """The ``upcoming_movies`` store (memoised per process)."""
+    global _UPCOMING_STORE
+    if _UPCOMING_STORE is None:
+        from database.upcoming_db import UpcomingMoviesStore
+
+        _UPCOMING_STORE = UpcomingMoviesStore()
+    return _UPCOMING_STORE
+
+
+def _upcoming_enabled() -> bool:
+    """``COMING_SOON`` master switch (default on)."""
+    try:
+        from dreamxbotz.util.coming_soon import is_enabled
+
+        return bool(is_enabled())
+    except Exception:  # pragma: no cover - defensive
+        return True
+
+
+def _upcoming_limit() -> int:
+    try:
+        from dreamxbotz.util.coming_soon import limit
+
+        return max(1, min(int(limit()), UPCOMING_MAX_LIMIT))
+    except Exception:
+        return 12
+
+
+def _upcoming_cache_ttl() -> int:
+    try:
+        from dreamxbotz.util.coming_soon import cache_ttl
+
+        return max(0, int(cache_ttl()))
+    except Exception:
+        return 600
+
+
+def _kick_upcoming_refresh() -> None:
+    """Refresh the TMDB cache in the background – never blocks the response.
+
+    The page keeps serving whatever is cached; the next visit sees the new
+    rows.  A single in-flight task is enough, so a burst of visitors cannot
+    spawn a burst of upstream calls.
+    """
+    global _UPCOMING_REFRESH_RUNNING
+    if _UPCOMING_REFRESH_RUNNING:
+        return
+    _UPCOMING_REFRESH_RUNNING = True
+
+    async def _run():
+        global _UPCOMING_REFRESH_RUNNING
+        try:
+            from dreamxbotz.util.coming_soon import refresh_if_stale
+
+            await refresh_if_stale(_upcoming_store())
+        except Exception as exc:  # never surface a refresh failure to visitors
+            logger.info("Coming soon: background refresh failed: %s", exc)
+        finally:
+            _UPCOMING_REFRESH_RUNNING = False
+
+    try:
+        asyncio.ensure_future(_run())
+    except RuntimeError:  # pragma: no cover - no running loop (e.g. in tests)
+        _UPCOMING_REFRESH_RUNNING = False
+
+
+@routes.get(UPCOMING_PATH, allow_head=True)
+async def upcoming_movies(request: web.Request) -> web.Response:
+    """Movies that are not out yet, soonest first, with a countdown.
+
+    Same contract as ``/api/movies/new``: whitelisted fields only, an ETag the
+    browser can answer with 304, and a clean ``503`` when Mongo is down.
+    """
+    try:
+        raw_limit = request.rel_url.query.get("limit")
+        try:
+            limit = int(raw_limit) if raw_limit else _upcoming_limit()
+        except (TypeError, ValueError):
+            limit = _upcoming_limit()
+        limit = max(1, min(limit, UPCOMING_MAX_LIMIT))
+
+        if not _upcoming_enabled():
+            return _json_response(
+                {"ok": True, "count": 0, "limit": limit, "movies": [], "disabled": True},
+                ttl=0,
+                request=request,
+            )
+
+        from dreamxbotz.util.coming_soon import public_upcoming_movies, release_cutoff
+
+        store = _upcoming_store()
+        # A stale cache is refreshed *after* the response is built, so the
+        # visitor is never made to wait for TMDB.
+        try:
+            stale = await store.is_stale(_upcoming_refresh_seconds())
+        except Exception:
+            stale = False
+        if stale:
+            _kick_upcoming_refresh()
+
+        rows = await store.list_upcoming(limit, cutoff=release_cutoff(), raise_on_error=True)
+        bot_username = _bot_username(request)
+        movies = public_upcoming_movies(rows, bot_username)
+        # Freshness = the newest release date in the payload, so unchanged data
+        # produces an unchanged body and the ETag can answer 304.
+        newest = max(
+            (row.get("release_date") for row in movies if row.get("release_date")),
+            default=None,
+        )
+        payload = {
+            "ok": True,
+            "count": len(movies),
+            "limit": limit,
+            "updated_at": newest,
+            "bot_username": bot_username,
+            "movies": movies,
+        }
+        return _json_response(payload, ttl=_upcoming_cache_ttl(), request=request)
+    except Exception as exc:
+        logger.error("GET %s failed: %s", UPCOMING_PATH, exc)
+        return _json_response(
+            {"ok": False, "error": "database_unavailable", "movies": []},
+            status=503,
+            request=request,
+        )
+
+
+def _upcoming_refresh_seconds() -> int:
+    try:
+        from dreamxbotz.util.coming_soon import refresh_ttl
+
+        return int(refresh_ttl())
+    except Exception:
+        return 6 * 3600
+
+
+@routes.get(UPCOMING_POSTER_PATH + "/{movie_id}", allow_head=True)
+async def upcoming_poster(request: web.Request) -> web.Response:
+    """Poster bytes of one upcoming release, served from our own origin.
+
+    Deliberately separate from ``/api/movies/poster/…``: that route reads the
+    ``recent_movies`` rail (movies that *are* uploaded), while these posters
+    come from the ``upcoming_movies`` cache filled by TMDB.  Keeping them apart
+    means a Coming Soon card can never be mistaken for an available movie.
+    """
+    movie_id = sanitize_movie_id(request.match_info.get("movie_id"))
+    if not movie_id:
+        return _not_found_poster(request)
+
+    width = _safe_width(request.rel_url.query.get("w"))
+    cache_key = f"upcoming:{movie_id}:{width}:{_safe_version(request)}"
+    cached = _cache_get(cache_key)
+    if cached:
+        payload, content_type, ttl = cached
+        return _image_response(payload, content_type, request=request, ttl=ttl)
+
+    try:
+        doc = await _upcoming_store().get(movie_id)
+    except Exception as exc:
+        logger.error("Coming soon: poster lookup failed for %s: %s", movie_id, exc)
+        doc = None
+
+    poster_url = (doc or {}).get("poster_url")
+    title = (doc or {}).get("title")
+    if not poster_url:
+        if doc is None:
+            return _not_found_poster(request)
+        payload = (placeholder_svg(title), "image/svg+xml")
+        _cache_put(cache_key, payload[0], payload[1], PLACEHOLDER_TTL)
+        return _image_response(payload[0], payload[1], request=request)
+
+    image = await _fetch_poster(cache_key, poster_url, width, _session(request))
+    if image is None:
+        payload = (placeholder_svg(title), "image/svg+xml")
+        _cache_put(cache_key, payload[0], payload[1], PLACEHOLDER_TTL)
+        return _image_response(payload[0], payload[1], request=request)
+
+    return _image_response(image[0], image[1], request=request)
+
+
 @routes.get(POSTER_PATH + "/{movie_id}", allow_head=True)
 async def movie_poster(request: web.Request) -> web.Response:
     """Poster bytes for one movie, or a clean SVG placeholder."""
@@ -658,7 +892,7 @@ def evict_cached(movie_id: str) -> int:
     safe_id = sanitize_movie_id(movie_id)
     if not safe_id:
         return 0
-    prefixes = (f"{safe_id}:", f"backdrop:{safe_id}:")
+    prefixes = (f"{safe_id}:", f"backdrop:{safe_id}:", f"upcoming:{safe_id}:")
     doomed = [key for key in _POSTER_CACHE if key.startswith(prefixes)]
     for key in doomed:
         payload, _, _ = _POSTER_CACHE.pop(key)

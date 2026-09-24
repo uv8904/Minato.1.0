@@ -166,6 +166,56 @@
             "description": "Search results are sent as inline buttons (size • SxxExx/Exx • filename) instead of text links, so every file is one button and the top row always shows Check Bot PM and Send All (true/false).",
             "value": "True",
             "required": false
+        },
+        "COMING_SOON": {
+            "description": "Stream Mode website + bot: enable the Coming Soon rail (TMDB upcoming releases with a live countdown) and the /comingsoon command (true/false).",
+            "value": "True",
+            "required": false
+        },
+        "COMING_SOON_LIMIT": {
+            "description": "Stream Mode website: how many upcoming releases the Coming Soon rail shows (hard cap 24).",
+            "value": "12",
+            "required": false
+        },
+        "COMING_SOON_REFRESH_HOURS": {
+            "description": "Coming Soon: re-read the TMDB upcoming list every N hours (1-168).",
+            "value": "6",
+            "required": false
+        },
+        "COMING_SOON_GRACE_DAYS": {
+            "description": "Coming Soon: keep an already-released movie in the rail for N days (0-30) - it is the one about to appear in Newly Uploaded.",
+            "value": "3",
+            "required": false
+        },
+        "COMING_SOON_SOON_DAYS": {
+            "description": "Coming Soon: releases within N days get the gold releasing-soon chip (0-60).",
+            "value": "7",
+            "required": false
+        },
+        "COMING_SOON_CACHE_TTL": {
+            "description": "Coming Soon: browser cache for /api/movies/upcoming in seconds (0-86400).",
+            "value": "600",
+            "required": false
+        },
+        "COMING_SOON_POLL": {
+            "description": "Coming Soon: re-check the feed every N seconds while the tab is visible (0 = off). The countdown itself needs no polling, so 0 is recommended.",
+            "value": "0",
+            "required": false
+        },
+        "COMING_SOON_COLLECTION": {
+            "description": "Coming Soon: MongoDB collection name for the upcoming releases.",
+            "value": "upcoming_movies",
+            "required": false
+        },
+        "COMING_SOON_META_COLLECTION": {
+            "description": "Coming Soon: MongoDB collection holding the single TMDB refresh timestamp.",
+            "value": "upcoming_meta",
+            "required": false
+        },
+        "COMING_SOON_API_PATH": {
+            "description": "Coming Soon: API path the web pages call (API_URL + this path).",
+            "value": "/api/movies/upcoming",
+            "required": false
         }
     },
     "addons": [],

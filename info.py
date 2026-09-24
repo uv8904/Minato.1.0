@@ -295,6 +295,28 @@ WATCH_HERO_ART_RETRY_HOURS = max(env_int('WATCH_HERO_ART_RETRY_HOURS', 24), 1)  
 WATCH_HERO_API_PATH = env_str('WATCH_HERO_API_PATH', default='/api/movies/art')  # Artwork endpoint (API_URL + this path)
 MOVIE_ART_COLLECTION = environ.get('MOVIE_ART_COLLECTION', 'movie_art')  # Mongo collection caching poster/backdrop URLs
 
+# ----- Stream Mode · "Coming Soon" rail (upcoming releases + countdown) ------ #
+#   Movies that are NOT out yet, pulled from TMDB /3/movie/upcoming and shown
+#   with a live ticking countdown.  Every card deep-links to
+#   https://t.me/BOT_USERNAME?start=movie_MOVIE_ID and /comingsoon lets a user
+#   register for a "notify me when uploaded" alert, which the existing
+#   title_notify pipeline fires the moment a file of that movie is indexed.
+#   See docs/COMING_SOON.md.
+COMING_SOON = is_enabled(environ.get('COMING_SOON', "True"), True)  # Master switch: rail + API + /comingsoon
+COMING_SOON_LIMIT = min(max(env_int('COMING_SOON_LIMIT', 12), 1), 24)  # Cards shown (hard cap: 24)
+COMING_SOON_REFRESH_HOURS = min(max(env_int('COMING_SOON_REFRESH_HOURS', 6), 1), 168)  # Re-read TMDB every N hours
+COMING_SOON_GRACE_DAYS = min(max(env_int('COMING_SOON_GRACE_DAYS', 3), 0), 30)  # Keep a released movie for N days ("now released")
+COMING_SOON_SOON_DAYS = min(max(env_int('COMING_SOON_SOON_DAYS', 7), 0), 60)  # Gold "releasing soon" chip within N days
+COMING_SOON_CACHE_TTL = min(max(env_int('COMING_SOON_CACHE_TTL', 600), 0), 86400)  # Browser cache for /api/movies/upcoming (seconds)
+# Live feed refresh while the tab is visible (0 = off, the default).  The
+# countdown itself is computed in the browser from the release date and needs
+# no polling at all – this only re-reads the *list*, which changes at most once
+# every COMING_SOON_REFRESH_HOURS, so leaving it off is the cheap choice.
+COMING_SOON_POLL = min(max(env_int('COMING_SOON_POLL', 0), 0), 3600)
+COMING_SOON_COLLECTION = environ.get('COMING_SOON_COLLECTION', 'upcoming_movies')  # Mongo collection name
+COMING_SOON_META_COLLECTION = environ.get('COMING_SOON_META_COLLECTION', 'upcoming_meta')  # Refresh-timestamp document
+COMING_SOON_API_PATH = env_str('COMING_SOON_API_PATH', default='/api/movies/upcoming')  # API_URL + this path
+
 
 # ============================
 # Bot Configuration
