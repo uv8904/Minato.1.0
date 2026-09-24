@@ -30,6 +30,7 @@ import asyncio
 import imaplib
 import logging
 import re
+from html import escape
 import threading
 import time
 from datetime import datetime, timedelta
@@ -83,6 +84,7 @@ from database.payment_db import (
 )
 from database.users_chats_db import db
 from dreamxbotz.server import fampay_webhook
+from dreamxbotz.util.buttons import blue, green, red
 from dreamxbotz.util.fampay_email import parse_payment_email
 from dreamxbotz.util.fampay_qr import (
     build_upi_intent,
@@ -118,6 +120,12 @@ _PLAN_UNITS = {
     "min": "ᴍɪɴᴜᴛᴇꜱ",
     "s": "sᴇᴄᴏɴᴅs",
 }
+
+# NPCI UTRs are normally 12 digits, but banks/FamApp can expose a shorter or
+# longer reference. Keep the same conservative range as the email parser.
+_UTR_VALUE_RE = re.compile(r"^[0-9]{6,22}$")
+_UTR_CONFIRM_CALLBACK_RE = re.compile(r"^famutr_yes_(FMP-[A-Z0-9]{6})_([0-9]{6,22})$")
+_UTR_CANCEL_CALLBACK_RE = re.compile(r"^famutr_no_(FMP-[A-Z0-9]{6})$")
 
 
 # --------------------------------------------------------------------------- #
@@ -167,31 +175,67 @@ def _plans_caption() -> str:
 
 
 def _plan_buttons():
+    """Checkout choices: green is the primary action; blue is navigation."""
     buttons = [
-        InlineKeyboardButton(
+        green(
             f"{format_inr(amount)} · {plan_label(plan_time)}",
             callback_data=f"fampay_{amount}",
         )
         for amount, plan_time in sorted(FAMPAY_PLANS.items())
     ]
     rows = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
-    rows.append([InlineKeyboardButton("⋞ ʙᴀᴄᴋ", callback_data="buy_info")])
+    rows.append([blue("⋞ ʙᴀᴄᴋ", callback_data="buy_info")])
     return InlineKeyboardMarkup(rows)
 
 
-def _order_buttons(order_id: str, upi_intent: str, checkout_url: str = ""):
+def _order_buttons(order: dict, upi_intent: str, checkout_url: str = ""):
+    """Buttons for a QR order, including the explicit post-payment step."""
+    order_id = order["order_id"]
     rows = []
     if upi_intent:
-        rows.append([InlineKeyboardButton("📲 ᴘᴀʏ ᴠɪᴀ ᴜᴘɪ ᴀᴘᴘ", url=upi_intent)])
+        rows.append([green("📲 ᴘᴀʏ ᴠɪᴀ ᴜᴘɪ ᴀᴘᴘ", url=upi_intent)])
     if checkout_url:
-        rows.append([InlineKeyboardButton("🌐 ᴡᴇʙ ᴄʜᴇᴄᴋᴏᴜᴛ", url=checkout_url)])
+        rows.append([green("🌐 ᴡᴇʙ ᴄʜᴇᴄᴋᴏᴜᴛ", url=checkout_url)])
+    if not order.get("order_placed_at"):
+        rows.append([green("✅ ᴏʀᴅᴇʀ ᴘʟᴀᴄᴇᴅ", callback_data=f"famplaced_{order_id}")])
     rows.append(
         [
-            InlineKeyboardButton("✅ ᴘᴀɪᴅ? ᴠᴇʀɪꜰʏ", callback_data=f"famcheck_{order_id}"),
-            InlineKeyboardButton("🚫 ᴄᴀɴᴄᴇʟ", callback_data=f"famcancel_{order_id}"),
+            blue("🔄 ᴄʜᴇᴄᴋ ᴘᴀʏᴍᴇɴᴛ", callback_data=f"famcheck_{order_id}"),
+            red("🚫 ᴄᴀɴᴄᴇʟ", callback_data=f"famcancel_{order_id}"),
         ]
     )
     return InlineKeyboardMarkup(rows)
+
+
+def _upi_intent_for_order(order: dict) -> str:
+    """Rebuild a local UPI intent when refreshing an order's keyboard."""
+    return order.get("fg_upi_intent") or build_upi_intent(
+        FAMPAY_UPI_ID,
+        FAMPAY_PAYEE_NAME,
+        float(order["payable_amount"]),
+        note=order["order_id"],
+    )
+
+
+def _utr_confirmation_buttons(order_id: str, utr: str) -> InlineKeyboardMarkup:
+    """A second, explicit tap keeps typoed UTRs out of the review queue."""
+    return InlineKeyboardMarkup(
+        [
+            [green("✅ ᴄᴏɴꜰɪʀᴍ ᴜᴛʀ", callback_data=f"famutr_yes_{order_id}_{utr}")],
+            [red("✏️ ᴄʜᴀɴɢᴇ ᴜᴛʀ", callback_data=f"famutr_no_{order_id}")],
+        ]
+    )
+
+
+def _manual_review_buttons(order_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                green("✅ ᴀᴘᴘʀᴏᴠᴇ", callback_data=f"famapprove_{order_id}"),
+                red("🚫 ʀᴇᴊᴇᴄᴛ", callback_data=f"famreject_{order_id}"),
+            ]
+        ]
+    )
 
 
 async def notify_admins(text: str, reply_markup=None):
@@ -404,9 +448,7 @@ async def send_payment_message(client: Client, chat_id: int, order: dict):
     plan_time = order["plan_time"]
     payable = round(float(order["payable_amount"]), 2)
     paise = f"{payable:.2f}".split(".")[1]
-    upi_intent = order.get("fg_upi_intent") or build_upi_intent(
-        FAMPAY_UPI_ID, FAMPAY_PAYEE_NAME, payable, note=order["order_id"]
-    )
+    upi_intent = _upi_intent_for_order(order)
 
     photo, intent, checkout_url = await _qr_photo(order, upi_intent)
     caption = script.FAMPAY_ORDER_TXT.format(
@@ -422,7 +464,7 @@ async def send_payment_message(client: Client, chat_id: int, order: dict):
         photo=photo,
         caption=caption,
         parse_mode=ParseMode.HTML,
-        reply_markup=_order_buttons(order["order_id"], intent, checkout_url),
+        reply_markup=_order_buttons(order, intent, checkout_url),
     )
     await paydb.set_message_ref(order["order_id"], chat_id, sent.id)
     return sent
@@ -539,6 +581,174 @@ async def fampay_buy_callback(client: Client, callback_query: CallbackQuery):
         await callback_query.answer("🚫 Order ban nahi paya, dobara try karein.", show_alert=True)
 
 
+@Client.on_callback_query(filters.regex(r"^famplaced_(\S+)$"))
+async def fampay_order_placed_callback(client: Client, callback_query: CallbackQuery):
+    """Buyer says they paid; provide the optional, double-confirmed UTR route."""
+    order_id = callback_query.data.split("_", 1)[1]
+    order = await paydb.get_order(order_id)
+    user_id = callback_query.from_user.id if callback_query.from_user else None
+    if not order or order.get("user_id") != user_id:
+        return await callback_query.answer("🚫 Order not found.", show_alert=True)
+    if order.get("status") == STATUS_PAID:
+        return await callback_query.answer("✅ Payment already verified!", show_alert=True)
+    if order.get("status") == STATUS_CANCELLED:
+        return await callback_query.answer("🚫 Ye order cancel ho chuka hai.", show_alert=True)
+
+    marked = await paydb.mark_order_placed(order_id, user_id=user_id)
+    if not marked:
+        return await callback_query.answer("🚫 Order ab process nahi ho sakta.", show_alert=True)
+
+    # The QR stays available, but the one-time Order placed action disappears.
+    try:
+        await callback_query.edit_message_reply_markup(
+            reply_markup=_order_buttons(
+                marked,
+                _upi_intent_for_order(marked),
+                marked.get("fg_checkout_url") or "",
+            )
+        )
+    except Exception:
+        pass
+
+    payable = format_inr(marked["payable_amount"])
+    try:
+        await client.send_message(
+            chat_id=marked["user_id"],
+            text=script.FAMPAY_ORDER_PLACED_TXT.format(
+                order_id=order_id,
+                payable=payable,
+            ),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+    except Exception as exc:
+        logger.warning("FamPay: could not send Order placed guide for %s: %s", order_id, exc)
+    await callback_query.answer("✅ Order placed. UTR ho to /utr se submit karein.", show_alert=True)
+
+
+@Client.on_message(filters.command("utr") & filters.private)
+async def fampay_utr_command(client: Client, message: Message):
+    """Collect a bank UTR without ever treating it as automatic payment proof."""
+    user = message.from_user
+    if not user:
+        return
+    args = [str(value).strip() for value in (message.command or [])[1:] if str(value).strip()]
+    order_id = ""
+    utr = ""
+    if len(args) == 1:
+        utr = args[0]
+    elif len(args) == 2 and re.fullmatch(r"FMP-[A-Z0-9]{6}", args[0].upper()):
+        order_id, utr = args[0].upper(), args[1]
+    else:
+        return await message.reply_text(
+            "<b>ᴜꜱᴀɢᴇ:</b> <code>/utr FMP-ABC123 123456789012</code>\n"
+            "Agar aapka ek hi active order hai: <code>/utr 123456789012</code>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    if not _UTR_VALUE_RE.fullmatch(utr):
+        return await message.reply_text(
+            "⚠️ UTR sirf 6–22 digits ka hona chahiye. Bank/FamApp receipt wala UTR bhejein."
+        )
+
+    order = await (paydb.get_order(order_id) if order_id else paydb.get_reviewable_order(user.id))
+    if not order or order.get("user_id") != user.id:
+        return await message.reply_text("🚫 Aapka koi active FamPay order nahi mila.")
+    order_id = order["order_id"]
+    if order.get("status") == STATUS_PAID:
+        return await message.reply_text("✅ Is order ka payment already verified hai.")
+    if order.get("status") == STATUS_CANCELLED:
+        return await message.reply_text("🚫 Ye order cancel ho chuka hai; naya order /fampay se banayein.")
+    if await paydb.utr_already_used(utr):
+        return await message.reply_text("⚠️ Ye UTR pehle kisi verified order ke liye use ho chuka hai.")
+
+    await message.reply_text(
+        script.FAMPAY_UTR_CONFIRM_TXT.format(
+            order_id=order_id,
+            payable=format_inr(order["payable_amount"]),
+            utr=utr,
+        ),
+        parse_mode=ParseMode.HTML,
+        reply_markup=_utr_confirmation_buttons(order_id, utr),
+        disable_web_page_preview=True,
+    )
+
+
+@Client.on_callback_query(filters.regex(r"^famutr_yes_FMP-[A-Z0-9]{6}_[0-9]{6,22}$"))
+async def fampay_utr_confirm_callback(client: Client, callback_query: CallbackQuery):
+    """Second UTR confirmation: persist it and put it into the admin queue."""
+    match = _UTR_CONFIRM_CALLBACK_RE.fullmatch(callback_query.data or "")
+    user = callback_query.from_user
+    if not match or not user:
+        return await callback_query.answer("🚫 Invalid UTR confirmation.", show_alert=True)
+    order_id, utr = match.groups()
+    order = await paydb.get_order(order_id)
+    if not order or order.get("user_id") != user.id:
+        return await callback_query.answer("🚫 Order not found.", show_alert=True)
+    if order.get("status") == STATUS_PAID:
+        return await callback_query.answer("✅ Payment already verified!", show_alert=True)
+    if order.get("status") == STATUS_CANCELLED:
+        return await callback_query.answer("🚫 Ye order cancel ho chuka hai.", show_alert=True)
+    if await paydb.utr_already_used(utr):
+        return await callback_query.answer("⚠️ UTR already used hai.", show_alert=True)
+
+    already_submitted = order.get("submitted_utr") == utr
+    saved = await paydb.submit_utr(order_id, user_id=user.id, utr=utr)
+    if not saved:
+        return await callback_query.answer("🚫 Order ab review ke liye available nahi hai.", show_alert=True)
+
+    try:
+        await callback_query.message.edit_text(
+            script.FAMPAY_UTR_SUBMITTED_TXT.format(order_id=order_id, utr=utr),
+            parse_mode=ParseMode.HTML,
+            reply_markup=None,
+            disable_web_page_preview=True,
+        )
+    except Exception:
+        pass
+
+    # A repeated tap/command must not spam every admin. A changed UTR, however,
+    # is a new review request and is worth surfacing.
+    if not already_submitted:
+        try:
+            await notify_admins(
+                f"<b>#FamPay_UTR_Review</b>\n\n"
+                f"ᴏʀᴅᴇʀ: <code>{order_id}</code>\n"
+                f"ᴜsᴇʀ: <code>{saved.get('user_id')}</code> "
+                f"({escape(str(saved.get('user_name') or 'ɴ/ᴀ'))})\n"
+                f"ᴀᴍᴏᴜɴᴛ: <b>{format_inr(saved.get('payable_amount', 0))}</b>\n"
+                f"ᴘʟᴀɴ: {plan_label(saved.get('plan_time', ''))}\n"
+                f"ᴜᴛʀ: <code>{utr}</code>\n\n"
+                f"ᴘᴇʜʟᴇ ʙᴀɴᴋ/ꜰᴀᴍᴀᴘᴘ ᴍᴇ ᴜᴛʀ ᴄʜᴇᴄᴋ ᴋᴀʀᴇᴍ, ꜰɪʀ ᴀᴘᴘʀᴏᴠᴇ/ʀᴇᴊᴇᴄᴛ ᴄʜᴜɴᴇᴍ.",
+                reply_markup=_manual_review_buttons(order_id),
+            )
+        except Exception:
+            logger.exception("FamPay: could not notify admins of UTR %s", utr)
+
+    await callback_query.answer("✅ UTR review ke liye bhej diya gaya.", show_alert=True)
+
+
+@Client.on_callback_query(filters.regex(r"^famutr_no_FMP-[A-Z0-9]{6}$"))
+async def fampay_utr_cancel_callback(client: Client, callback_query: CallbackQuery):
+    match = _UTR_CANCEL_CALLBACK_RE.fullmatch(callback_query.data or "")
+    user = callback_query.from_user
+    if not match or not user:
+        return await callback_query.answer("🚫 Invalid UTR request.", show_alert=True)
+    order_id = match.group(1)
+    order = await paydb.get_order(order_id)
+    if not order or order.get("user_id") != user.id:
+        return await callback_query.answer("🚫 Order not found.", show_alert=True)
+    try:
+        await callback_query.message.edit_text(
+            script.FAMPAY_UTR_CANCELLED_TXT.format(order_id=order_id),
+            parse_mode=ParseMode.HTML,
+            reply_markup=None,
+        )
+    except Exception:
+        pass
+    await callback_query.answer("UTR input cancel ho gaya.")
+
+
 @Client.on_callback_query(filters.regex(r"^famcheck_(\S+)$"))
 async def fampay_check_callback(client: Client, callback_query: CallbackQuery):
     order_id = callback_query.data.split("_", 1)[1]
@@ -617,7 +827,14 @@ async def fampay_approve_callback(client: Client, callback_query: CallbackQuery)
         if not moved:
             return await callback_query.answer("Order already process ho chuka hai.", show_alert=True)
 
-    granted = await fulfil_order(client, order_id, verified_by="manual")
+    # A buyer-provided UTR is not auto-proof, but once an admin has checked it
+    # manually it belongs on the receipt/log instead of being discarded.
+    granted = await fulfil_order(
+        client,
+        order_id,
+        utr=str(order.get("submitted_utr") or ""),
+        verified_by="manual",
+    )
     if granted:
         _escalated_orders.discard(order_id)
         await callback_query.answer("✅ Premium granted manually.")
@@ -641,12 +858,64 @@ async def fampay_reject_callback(client: Client, callback_query: CallbackQuery):
         pass
 
 
-@Client.on_message(filters.command("fampay_orders") & filters.user(ADMINS))
-async def fampay_orders_command(client: Client, message: Message):
+def _is_fampay_admin(user_id: Optional[int]) -> bool:
+    """Check callback users ourselves; Electrogram's ``filters.user`` is Message-only."""
+    if user_id is None:
+        return False
+    for admin in ADMINS:
+        try:
+            if int(admin) == int(user_id):
+                return True
+        except (TypeError, ValueError):
+            # ADMINS also supports usernames in the rest of the project. A
+            # callback gives an id, so a non-numeric configured value cannot
+            # authorize one here.
+            continue
+    return False
+
+
+async def _require_fampay_admin(callback_query: CallbackQuery) -> bool:
+    if _is_fampay_admin(callback_query.from_user.id if callback_query.from_user else None):
+        return True
+    await callback_query.answer("🚫 Admin only.", show_alert=True)
+    return False
+
+
+def _order_summary_line(order: dict) -> str:
+    """A safe one-line, HTML-ready order summary for the admin panel."""
+    try:
+        payable = format_inr(float(order.get("payable_amount", 0)))
+    except (TypeError, ValueError):
+        payable = "₹0.00"
+    line = (
+        f"• <code>{order.get('order_id', 'n/a')}</code> · "
+        f"<code>{order.get('user_id', 'n/a')}</code> · {payable} · "
+        f"<b>{escape(str(order.get('status') or 'n/a'))}</b>"
+    )
+    utr = order.get("utr") or order.get("submitted_utr")
+    if utr:
+        line += f" · UTR <code>{escape(str(utr))}</code>"
+    return line
+
+
+def _admin_panel_buttons() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [blue("🔄 ʀᴇꜰʀᴇꜱʜ", callback_data="famadmin_home")],
+            [
+                blue("⏳ ᴘᴇɴᴅɪɴɢ", callback_data="famadmin_pending"),
+                green("🧾 ᴜᴛʀ ʀᴇᴠɪᴇᴡ", callback_data="famadmin_review"),
+            ],
+            [blue("🕒 ʀᴇᴄᴇɴᴛ", callback_data="famadmin_recent")],
+        ]
+    )
+
+
+async def _admin_dashboard_text() -> str:
     counts = await paydb.count_by_status()
-    recent = await paydb.recent_orders(10)
+    recent = await paydb.recent_orders(5)
     lines = [
-        "<b>⚡ FamPay orders</b>",
+        "<b>⚡ FamPay admin panel</b>",
         "",
         f"• ᴘᴇɴᴅɪɴɢ: <code>{counts.get(STATUS_PENDING, 0)}</code>",
         f"• ᴘᴀɪᴅ: <code>{counts.get(STATUS_PAID, 0)}</code>",
@@ -654,17 +923,82 @@ async def fampay_orders_command(client: Client, message: Message):
         f"• ᴇxᴘɪʀᴇᴅ: <code>{counts.get('expired', 0)}</code>",
         f"• ᴄᴀɴᴄᴇʟʟᴇᴅ: <code>{counts.get(STATUS_CANCELLED, 0)}</code>",
         "",
-        "<b>ʟᴀᴛᴇsᴛ 10:</b>",
+        "<b>ʟᴀᴛᴇsᴛ 5:</b>",
     ]
-    for order in recent:
-        line = (
-            f"• <code>{order['order_id']}</code> · <code>{order['user_id']}</code> · "
-            f"₹{order['payable_amount']:.2f} · {order['status']}"
+    lines.extend(_order_summary_line(order) for order in recent)
+    return "\n".join(lines)
+
+
+async def _admin_orders_view(view: str) -> tuple[str, InlineKeyboardMarkup]:
+    """Render a compact status view, with decisions for orders awaiting review."""
+    if view == "pending":
+        title = "<b>⏳ Pending FamPay orders</b>"
+        orders = await paydb.orders_by_status(STATUS_PENDING, 10)
+    elif view == "review":
+        title = "<b>🧾 UTR / manual review queue</b>"
+        recent = await paydb.recent_orders(30)
+        orders = [
+            order for order in recent
+            if order.get("status") == STATUS_MANUAL_PENDING or order.get("submitted_utr")
+        ][:10]
+    else:
+        title = "<b>🕒 Latest FamPay orders</b>"
+        orders = await paydb.recent_orders(10)
+
+    lines = [title, ""]
+    if orders:
+        lines.extend(_order_summary_line(order) for order in orders)
+    else:
+        lines.append("<i>Abhi koi order nahi hai.</i>")
+
+    rows = []
+    if view == "review":
+        for order in orders:
+            if order.get("status") in (STATUS_PENDING, STATUS_MANUAL_PENDING):
+                order_id = order["order_id"]
+                rows.append(
+                    [
+                        green(f"✅ {order_id}", callback_data=f"famapprove_{order_id}"),
+                        red(f"🚫 {order_id}", callback_data=f"famreject_{order_id}"),
+                    ]
+                )
+    rows.append([blue("⇋ ʙᴀᴄᴋ ᴛᴏ ᴘᴀɴᴇʟ", callback_data="famadmin_home")])
+    return "\n".join(lines), InlineKeyboardMarkup(rows)
+
+
+@Client.on_message(filters.command("fampay_orders"))
+async def fampay_orders_command(client: Client, message: Message):
+    """Interactive, admin-only FamPay order overview."""
+    if not _is_fampay_admin(message.from_user.id if message.from_user else None):
+        return await message.reply_text("🚫 This command is for admins only.")
+    await message.reply_text(
+        await _admin_dashboard_text(),
+        parse_mode=ParseMode.HTML,
+        reply_markup=_admin_panel_buttons(),
+        disable_web_page_preview=True,
+    )
+
+
+@Client.on_callback_query(filters.regex(r"^famadmin_(home|pending|review|recent)$"))
+async def fampay_admin_panel_callback(client: Client, callback_query: CallbackQuery):
+    if not await _require_fampay_admin(callback_query):
+        return
+    view = callback_query.data.rsplit("_", 1)[-1]
+    if view == "home":
+        text, markup = await _admin_dashboard_text(), _admin_panel_buttons()
+    else:
+        text, markup = await _admin_orders_view(view)
+    try:
+        await callback_query.message.edit_text(
+            text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=markup,
+            disable_web_page_preview=True,
         )
-        if order.get("utr"):
-            line += f" · utr <code>{order['utr']}</code>"
-        lines.append(line)
-    await message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except Exception as exc:
+        # "message is not modified" is benign; answer the callback either way.
+        logger.debug("FamPay: could not refresh admin panel: %s", exc)
+    await callback_query.answer()
 
 
 # --------------------------------------------------------------------------- #
@@ -688,14 +1022,7 @@ async def escalate_to_admin(order: dict):
     if order_id in _escalated_orders:
         return
     _escalated_orders.add(order_id)
-    buttons = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("✅ ᴀᴘᴘʀᴏᴠᴇ", callback_data=f"famapprove_{order_id}"),
-                InlineKeyboardButton("🚫 ʀᴇᴊᴇᴄᴛ", callback_data=f"famreject_{order_id}"),
-            ]
-        ]
-    )
+    buttons = _manual_review_buttons(order_id)
     await notify_admins(
         f"<b>#FamPay_Manual_Review</b>\n\n"
         f"ᴏʀᴅᴇʀ <code>{order_id}</code> ᴇxᴘɪʀᴇ ʜᴏ ɢᴀʏᴀ (ᴀᴜᴛᴏ-ᴠᴇʀɪꜰʏ ɴᴀʜɪ ʜᴜᴀ)।\n"

@@ -299,6 +299,25 @@ def test_pending_amounts_and_expiry(store):
     asyncio.run(_run())
 
 
+def test_order_placed_and_utr_are_review_metadata_not_payment(store):
+    async def _run():
+        await _create(store)
+        placed = await store.mark_order_placed("FMP-TEST01", user_id=99)
+        assert placed["status"] == STATUS_PENDING
+        assert placed["order_placed_at"] is not None
+
+        review = await store.submit_utr("FMP-TEST01", user_id=99, utr="420987654321")
+        assert review["status"] == STATUS_PENDING  # only a verifier/admin can mark paid
+        assert review["submitted_utr"] == "420987654321"
+        assert review["utr_submitted_at"] is not None
+        assert (await store.get_reviewable_order(99))["order_id"] == "FMP-TEST01"
+        assert await store.submit_utr("FMP-TEST01", user_id=100, utr="420987654321") is None
+
+        await store.mark_paid("FMP-TEST01", utr="420987654321", verified_by="imap")
+        assert await store.submit_utr("FMP-TEST01", user_id=99, utr="420987654321") is None
+
+    asyncio.run(_run())
+
 
 # --------------------------------------------------------------------------- #
 # Webhook
@@ -422,8 +441,10 @@ def test_plugin_registers_expected_handlers():
     for needle in (
         'filters.command("fampay")',
         'filters.command("fampay_orders")',
+        'filters.command("utr")',
         'filters.regex(r"^fampay_info$")',
         'filters.regex(r"^fampay_(\\d+)$")',
+        'filters.regex(r"^famplaced_(\\S+)$")',
         'filters.regex(r"^famcheck_(\\S+)$")',
         'filters.regex(r"^famcancel_(\\S+)$")',
         'filters.regex(r"^famapprove_(\\S+)$")',

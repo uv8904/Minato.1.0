@@ -27,6 +27,9 @@ field               type    notes
 ``fg_checkout_url`` str     FamGateway hosted checkout page
 ``chat_id``         int     chat holding the QR message (so it can be edited)
 ``qr_message_id``   int     the QR message id
+``order_placed_at`` datetime buyer tapped the post-payment "Order placed" step
+``submitted_utr``   str     buyer-supplied UTR, awaiting an admin's review
+``utr_submitted_at`` datetime when ``submitted_utr`` was confirmed by the buyer
 ``created_at``      datetime naive local time (same convention as the rest of
                              the bot's premium data)
 ``updated_at``      datetime last write
@@ -161,6 +164,13 @@ class FamPayOrderStore:
             "fg_checkout_url": fg_checkout_url or "",
             "chat_id": int(chat_id) if chat_id is not None else None,
             "qr_message_id": int(qr_message_id) if qr_message_id else None,
+            # A buyer may mark an order as placed and submit their bank UTR for
+            # an admin to inspect. Neither value is treated as payment proof:
+            # IMAP/FamGateway remains the automatic verifier, and manual
+            # approval is still an explicit admin action.
+            "order_placed_at": None,
+            "submitted_utr": "",
+            "utr_submitted_at": None,
             "created_at": now,
             "updated_at": now,
             "expires_at": expires_at,
@@ -174,6 +184,63 @@ class FamPayOrderStore:
         await self.col.update_one(
             {"_id": order_id},
             {"$set": {"chat_id": int(chat_id), "qr_message_id": int(message_id)}},
+        )
+
+    async def mark_order_placed(
+        self, order_id: str, *, user_id: Optional[int] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Record the buyer's *post-payment* acknowledgement.
+
+        This is deliberately separate from :meth:`mark_paid`: tapping
+        "Order placed" only opens the optional UTR-review flow.  A payment is
+        still fulfilled exclusively by an automatic verifier or an admin.
+        """
+        current = await self.get_order(order_id)
+        if not current or current.get("status") not in (STATUS_PENDING, STATUS_MANUAL_PENDING):
+            return None
+        if user_id is not None and current.get("user_id") != int(user_id):
+            return None
+        now = datetime.now()
+        filters = {"_id": order_id, "status": current["status"]}
+        if user_id is not None:
+            filters["user_id"] = int(user_id)
+        return await self.col.find_one_and_update(
+            filters,
+            {"$set": {"order_placed_at": now, "updated_at": now}},
+            return_document=True,
+        )
+
+    async def submit_utr(
+        self, order_id: str, *, user_id: int, utr: str
+    ) -> Optional[Dict[str, Any]]:
+        """Save a buyer-confirmed UTR for **manual review**, never auto-approve it.
+
+        The status guard makes a late callback harmless if the order becomes
+        paid/cancelled between the command and the confirmation tap.
+        """
+        current = await self.get_order(order_id)
+        if (
+            not current
+            or current.get("user_id") != int(user_id)
+            or current.get("status") not in (STATUS_PENDING, STATUS_MANUAL_PENDING)
+        ):
+            return None
+        now = datetime.now()
+        return await self.col.find_one_and_update(
+            {
+                "_id": order_id,
+                "user_id": int(user_id),
+                "status": current["status"],
+            },
+            {
+                "$set": {
+                    "order_placed_at": current.get("order_placed_at") or now,
+                    "submitted_utr": str(utr or ""),
+                    "utr_submitted_at": now,
+                    "updated_at": now,
+                }
+            },
+            return_document=True,
         )
 
     async def transition_status(self, order_id: str, from_status: str, to_status: str) -> Optional[Dict[str, Any]]:
@@ -253,6 +320,16 @@ class FamPayOrderStore:
             return order
         return None
 
+    async def get_reviewable_order(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Latest pending/manual-review order for the buyer's ``/utr`` command."""
+        # Filtering the two legal statuses in Python avoids a database-specific
+        # ``$in`` expression and keeps this tiny store easy to fake in tests.
+        cursor = self.col.find({"user_id": int(user_id)}).sort("created_at", -1)
+        async for order in cursor:
+            if order.get("status") in (STATUS_PENDING, STATUS_MANUAL_PENDING):
+                return order
+        return None
+
     async def pending_orders(self) -> List[Dict[str, Any]]:
         cursor = self.col.find({"status": STATUS_PENDING}).sort("created_at", 1)
         return [order async for order in cursor]
@@ -294,6 +371,15 @@ class FamPayOrderStore:
 
     async def recent_orders(self, limit: int = 10) -> List[Dict[str, Any]]:
         cursor = self.col.find().sort("created_at", -1).limit(int(limit))
+        return [order async for order in cursor]
+
+    async def orders_by_status(self, status: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Newest orders in one state, for the compact admin panel."""
+        cursor = (
+            self.col.find({"status": status})
+            .sort("created_at", -1)
+            .limit(max(1, int(limit)))
+        )
         return [order async for order in cursor]
 
     async def count_by_status(self) -> Dict[str, int]:
