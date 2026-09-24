@@ -77,6 +77,16 @@ Set these on Heroku/Koyeb/VPS `.env` — never commit them.
    on) → create an app password → copy the **16 characters** (spaces optional).
 3. Put them in `FAMPAY_EMAIL` + `FAMPAY_EMAIL_PASSWORD`.
 
+**Self-check before deploying** (password never leaves your machine):
+
+```bash
+python tools/test_fampay_imap.py
+```
+
+It logs in with your `.env` values, counts unread FamApp mails and tells you
+exactly what to fix if something is wrong (wrong password, IMAP off, typo in
+the Gmail address, …).
+
 > FamApp sends the credit notification to the Gmail you registered with FamPay.
 > The bot only ever reads mail from `famapp.in`, and stores **no** email
 > content or credentials.
