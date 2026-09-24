@@ -239,20 +239,44 @@ def _manual_review_buttons(order_id: str) -> InlineKeyboardMarkup:
     )
 
 
+def _alert_destinations():
+    """Admins plus the audit channel, normalised and de-duplicated."""
+    destinations = []
+    seen = set()
+    for raw_destination in [*ADMINS, PREMIUM_LOGS]:
+        if raw_destination is None or str(raw_destination).strip() == "":
+            continue
+        try:
+            destination = int(raw_destination)
+        except (TypeError, ValueError):
+            # Keep compatibility with the project's optional @username admin
+            # configuration. PREMIUM_LOGS is normally a numeric channel id.
+            destination = str(raw_destination).strip()
+        key = str(destination).lower()
+        if key not in seen:
+            seen.add(key)
+            destinations.append(destination)
+    return destinations
+
+
 async def notify_admins(text: str, reply_markup=None):
-    """Best-effort admin notification (a blocked admin never breaks a payment)."""
+    """Best-effort payment alert to every admin **and** ``PREMIUM_LOGS``.
+
+    The log-channel copy is intentional: an admin DM can be missed/blocked,
+    whereas the premium audit trail remains available to the whole owner team.
+    """
     client = bot_client()
-    for admin_id in ADMINS:
+    for destination in _alert_destinations():
         try:
             await client.send_message(
-                chat_id=int(admin_id),
+                chat_id=destination,
                 text=text,
                 parse_mode=ParseMode.HTML,
                 reply_markup=reply_markup,
                 disable_web_page_preview=True,
             )
         except Exception as exc:
-            logger.warning("FamPay: could not notify admin %s: %s", admin_id, exc)
+            logger.warning("FamPay: could not send alert to %s: %s", destination, exc)
 
 
 async def report_unmatched_payment(parsed) -> bool:
@@ -852,9 +876,16 @@ async def fampay_cancel_callback(client: Client, callback_query: CallbackQuery):
     await callback_query.answer("Order cancel kar diya gaya.")
 
 
-@Client.on_callback_query(filters.regex(r"^famapprove_(\S+)$") & filters.user(ADMINS))
+@Client.on_callback_query(filters.regex(r"^famapprove_(\S+)$"))
 async def fampay_approve_callback(client: Client, callback_query: CallbackQuery):
-    """Manual fallback: admin approves an expired/unverified order."""
+    """Manual fallback: admin approves an expired/unverified order.
+
+    Do not add ``filters.user(ADMINS)`` here: Electrogram's user filter only
+    accepts ``Message`` updates, so it silently rejects every CallbackQuery and
+    turns the visible button into a dead button. Authorize after dispatch.
+    """
+    if not await _require_fampay_admin(callback_query):
+        return
     order_id = callback_query.data.split("_", 1)[1]
     order = await paydb.get_order(order_id)
     if not order:
@@ -890,10 +921,23 @@ async def fampay_approve_callback(client: Client, callback_query: CallbackQuery)
         await callback_query.answer("🚫 Could not grant premium, logs check karein.", show_alert=True)
 
 
-@Client.on_callback_query(filters.regex(r"^famreject_(\S+)$") & filters.user(ADMINS))
+@Client.on_callback_query(filters.regex(r"^famreject_(\S+)$"))
 async def fampay_reject_callback(client: Client, callback_query: CallbackQuery):
+    """Reject a manual-review order without ever overwriting a paid receipt."""
+    if not await _require_fampay_admin(callback_query):
+        return
     order_id = callback_query.data.split("_", 1)[1]
-    await paydb.mark_status(order_id, STATUS_CANCELLED)
+    order = await paydb.get_order(order_id)
+    if not order:
+        return await callback_query.answer("🚫 Order not found.", show_alert=True)
+    if order.get("status") == STATUS_PAID:
+        return await callback_query.answer("Already paid/approved.", show_alert=True)
+    if order.get("status") == STATUS_CANCELLED:
+        return await callback_query.answer("Ye order already reject/cancel tha.", show_alert=True)
+
+    cancelled = await paydb.transition_status(order_id, order["status"], STATUS_CANCELLED)
+    if not cancelled:
+        return await callback_query.answer("Order already process ho chuka hai.", show_alert=True)
     _escalated_orders.discard(order_id)
     await callback_query.answer("Order reject kar diya gaya.")
     try:

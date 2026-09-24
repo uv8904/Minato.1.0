@@ -493,3 +493,13 @@ def test_plugin_registers_expected_handlers():
         "def imap_scan_once",
     ):
         assert needle in source, f"missing {needle}"
+
+
+def test_admin_action_callbacks_do_not_use_message_only_user_filter():
+    """Electrogram's filters.user rejects CallbackQuery updates before a handler runs."""
+    source = (ROOT / "plugins" / "FamPay.py").read_text(encoding="utf-8")
+    assert 'filters.regex(r"^famapprove_(\\S+)$") & filters.user(ADMINS)' not in source
+    assert 'filters.regex(r"^famreject_(\\S+)$") & filters.user(ADMINS)' not in source
+    assert source.count("if not await _require_fampay_admin(callback_query):") >= 3
+    assert "def _alert_destinations" in source
+    assert "[*ADMINS, PREMIUM_LOGS]" in source
