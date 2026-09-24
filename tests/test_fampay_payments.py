@@ -16,6 +16,8 @@ import asyncio
 import hashlib
 import hmac
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -31,6 +33,31 @@ from dreamxbotz.util import fampay_email as fe  # noqa: E402
 from dreamxbotz.util import fampay_qr as fq  # noqa: E402
 
 WEBHOOK_SECRET = "test-secret"
+
+
+# --------------------------------------------------------------------------- #
+# Existing manual-approval UPI screen
+# --------------------------------------------------------------------------- #
+def test_manual_upi_template_accepts_configured_owner_upi_id():
+    """The manual UPI callback must not treat an old literal VPA as a key."""
+    from Script import script
+
+    rendered = script.PREMIUM_UPI_TEXT.format("owner@fam")
+    assert "<code>owner@fam</code>" in rendered
+
+
+def test_fampay_upi_id_falls_back_to_owner_upi_id():
+    """A legacy OWNER_UPI_ID deployment keeps the new FamPay checkout usable."""
+    env = os.environ.copy()
+    env.pop("FAMPAY_UPI_ID", None)
+    env["OWNER_UPI_ID"] = "owner@fam"
+    output = subprocess.check_output(
+        [sys.executable, "-c", "import info; print(info.FAMPAY_UPI_ID)"],
+        cwd=ROOT,
+        env=env,
+        text=True,
+    )
+    assert output.strip() == "owner@fam"
 
 
 # --------------------------------------------------------------------------- #
