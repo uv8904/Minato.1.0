@@ -1561,6 +1561,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 green('⭐ ꜱᴛᴀʀ', callback_data='star_info'),
                 green('💳 ᴜᴘɪ', callback_data='upi_info')
             ],[
+                green('⚡ ꜰᴀᴍᴘᴀʏ (ᴀᴜᴛᴏ)', callback_data='fampay_info')
+            ],[
                 blue('⇋ ʙᴀᴄᴋ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ ⇋', callback_data='premium_info')
             ]]
             reply_markup = InlineKeyboardMarkup(btn)

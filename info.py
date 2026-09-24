@@ -103,6 +103,57 @@ STAR_PREMIUM_PLANS = {
 }  # Premium plans with their respective durations in days
 
 # ============================
+# FamPay Auto-Approval Configuration
+# ============================
+# FamPay (FamApp) has no official merchant API, so payments are verified in one
+# of two ways – both need NOTHING but your own accounts:
+#   1. Gmail IMAP scan (primary, free) – FamApp emails the Gmail linked to your
+#      @fam UPI id on every credit; the bot matches amount + UTR itself.
+#   2. FamGateway API (fallback/instant) – optional third-party service; set
+#      FAMGATEWAY_API_KEY to enable order creation, status polling + webhook.
+# Docs: docs/FAMPAY_SETUP.md
+FAMPAY_ENABLED = is_enabled(environ.get('FAMPAY_ENABLED', 'True'), True)  # Master switch for UPI auto-approval
+FAMPAY_UPI_ID = env_str('FAMPAY_UPI_ID', 'OWNER_UPI_ID', default='')    # Your @fam UPI id (falls back to OWNER_UPI_ID when it looks like a VPA)
+if '@' not in FAMPAY_UPI_ID:
+    FAMPAY_UPI_ID = ''                                                # ignore placeholder text like "ɴᴏ ᴀᴠᴀɪʟᴀʙʟᴇ..."
+FAMPAY_PAYEE_NAME = env_str('FAMPAY_PAYEE_NAME', default='DreamXBotz')    # Name shown in the payer's UPI app
+FAMPAY_ORDER_EXPIRY_MINUTES = env_int('FAMPAY_ORDER_EXPIRY_MINUTES', 10)  # How long a QR stays payable
+FAMPAY_POLL_INTERVAL = env_int('FAMPAY_POLL_INTERVAL', 20)            # Seconds between background status checks
+FAMPAY_ORDERS_COLLECTION = env_str('FAMPAY_ORDERS_COLLECTION', default='fampay_orders')  # MongoDB collection for orders
+
+# --- Gmail IMAP verification (primary verifier) ---
+FAMPAY_IMAP_ENABLED = is_enabled(environ.get('FAMPAY_IMAP_ENABLED', 'True'), True)
+FAMPAY_EMAIL = env_str('FAMPAY_EMAIL', 'FAMPAY_IMAP_USER', 'FAMPAY_GMAIL', default='')           # Gmail linked to your FamPay account
+FAMPAY_EMAIL_PASSWORD = env_str('FAMPAY_EMAIL_PASSWORD', 'FAMPAY_IMAP_PASSWORD', default='')     # 16-char Google App Password (NOT your Gmail password)
+FAMPAY_IMAP_HOST = env_str('FAMPAY_IMAP_HOST', default='imap.gmail.com')
+FAMPAY_IMAP_PORT = env_int('FAMPAY_IMAP_PORT', 993)
+FAMPAY_IMAP_MAILBOX = env_str('FAMPAY_IMAP_MAILBOX', default='INBOX')
+FAMPAY_EMAIL_SENDER_FILTER = env_str('FAMPAY_EMAIL_SENDER_FILTER', default='famapp.in')  # Only scan FamApp notification mails
+FAMPAY_IMAP_LOOKBACK_HOURS = env_int('FAMPAY_IMAP_LOOKBACK_HOURS', 12)  # (info only) how far back emails are considered on boot
+
+# --- FamGateway API verification (fallback verifier, optional) ---
+FAMGATEWAY_ENABLED = is_enabled(environ.get('FAMGATEWAY_ENABLED', 'True'), True)
+FAMGATEWAY_API_KEY = env_str('FAMGATEWAY_API_KEY', default='')          # Dashboard → API Keys
+FAMGATEWAY_BASE_URL = env_str('FAMGATEWAY_BASE_URL', default='https://famgateway.in').rstrip('/')
+FAMGATEWAY_WEBHOOK_SECRET = env_str('FAMGATEWAY_WEBHOOK_SECRET', default='')  # Optional; defaults to the API key (how FamGateway signs)
+
+def _parse_fampay_plans(raw, fallback):
+    """'10:7day,20:15day' -> {10: '7day', 20: '15day'} (keeps the env overridable)."""
+    plans = {}
+    for chunk in str(raw or '').split(','):
+        chunk = chunk.strip()
+        if not chunk or ':' not in chunk:
+            continue
+        price, _, plan_time = chunk.partition(':')
+        try:
+            plans[int(float(price.strip()))] = plan_time.strip()
+        except ValueError:
+            continue
+    return plans or dict(fallback)
+
+FAMPAY_PLANS = _parse_fampay_plans(environ.get('FAMPAY_PLANS', ''), STAR_PREMIUM_PLANS)  # ₹ price -> duration, e.g. 10: "7day"
+
+# ============================
 # MongoDB Configuration
 # ============================
 DATABASE_URI = environ.get('DATABASE_URI', 'mongodb+srv://uvjangra:uvjangra@cluster0.cmjdvgq.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')  # MongoDB URI — set via env, never commit credentials

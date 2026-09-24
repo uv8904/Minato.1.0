@@ -54,6 +54,14 @@ async def dreamxbotz_start():
             spec.loader.exec_module(load)
             sys.modules["plugins." + plugin_name] = load
             print("DreamxBotz Imported => " + plugin_name)
+    # FamPay auto-approval: start the IMAP scanner + status poller now that the
+    # plugins have registered their handlers (docs/FAMPAY_SETUP.md).
+    try:
+        from plugins.FamPay import start_fampay_workers
+
+        start_fampay_workers()
+    except Exception as e:
+        logging.warning(f"FamPay workers not started: {e}")
     if ON_HEROKU:
         asyncio.create_task(ping_server()) 
     b_users, b_chats = await db.get_banned()
