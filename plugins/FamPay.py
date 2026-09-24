@@ -776,7 +776,9 @@ def imap_scan_once(loop) -> int:
     matches = 0
     mail = imaplib.IMAP4_SSL(FAMPAY_IMAP_HOST, FAMPAY_IMAP_PORT)
     try:
-        mail.login(FAMPAY_EMAIL, FAMPAY_EMAIL_PASSWORD)
+        # Google shows app passwords as "abcd efgh ijkl mnop" – IMAP wants the
+        # bare 16 characters, so strip any spaces the operator pasted.
+        mail.login(FAMPAY_EMAIL, FAMPAY_EMAIL_PASSWORD.replace(" ", ""))
         mail.select(FAMPAY_IMAP_MAILBOX)
         typ, data = mail.search(None, "UNSEEN")
         if typ != "OK":
