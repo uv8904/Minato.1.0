@@ -90,11 +90,12 @@ Set these on Heroku/Koyeb/VPS `.env` — never commit them.
 | `FAMPAY_ORDER_EXPIRY_MINUTES` | no | `10` | How long a QR stays payable. |
 | `FAMPAY_POLL_INTERVAL` | no | `20` | Seconds between background status checks (min 5). |
 | `FAMPAY_ORDERS_COLLECTION` | no | `fampay_orders` | MongoDB collection for orders. |
+| `FAMPAY_EVENTS_COLLECTION` | no | `fampay_events` | Persistent unmatched-UTR alert log; prevents duplicate alerts after a restart. |
 | `FAMPAY_EMAIL` | **yes\*** | – | Gmail linked to your FamPay account. |
 | `FAMPAY_EMAIL_PASSWORD` | **yes\*** | – | 16-char **Google App Password** (not your Gmail password). |
 | `FAMPAY_IMAP_ENABLED` | no | `True` | Turn the IMAP verifier off. |
 | `FAMPAY_IMAP_HOST` / `FAMPAY_IMAP_PORT` / `FAMPAY_IMAP_MAILBOX` | no | `imap.gmail.com` / `993` / `INBOX` | IMAP settings (other providers work too). |
-| `FAMPAY_EMAIL_SENDER_FILTER` | no | `famapp.in` | Only scan mails from this sender. |
+| `FAMPAY_EMAIL_SENDER_FILTER` | no | `famapp.in` | Only scan trusted FamApp system/no-reply payment mail from this domain or exact service address. |
 | `FAMGATEWAY_API_KEY` | no\*\* | – | famgateway.in API key (fallback verifier + instant webhook). |
 | `FAMGATEWAY_BASE_URL` | no | `https://famgateway.in` | API base URL. |
 | `FAMGATEWAY_WEBHOOK_SECRET` | no | = API key | Separate webhook signing secret if you want one. |

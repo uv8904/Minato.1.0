@@ -35,7 +35,6 @@ import threading
 import time
 from datetime import datetime, timedelta
 from email import message_from_bytes
-from email.utils import parseaddr
 from io import BytesIO
 from typing import Optional
 
@@ -81,11 +80,12 @@ from database.payment_db import (
     STATUS_PENDING,
     generate_order_id,
     paydb,
+    payeventdb,
 )
 from database.users_chats_db import db
 from dreamxbotz.server import fampay_webhook
 from dreamxbotz.util.buttons import blue, green, red
-from dreamxbotz.util.fampay_email import parse_payment_email
+from dreamxbotz.util.fampay_email import is_famapp_system_mail, parse_payment_email
 from dreamxbotz.util.fampay_qr import (
     build_upi_intent,
     format_inr,
@@ -100,7 +100,8 @@ logger = logging.getLogger(__name__)
 IMAP_POLL_SECONDS = 15
 
 #: In-memory guards (per process): UTRs already acted on, unmatched credits
-#: already reported, orders already escalated to the admin.
+#: when MongoDB is temporarily unavailable, orders already escalated to admins.
+#: Normal unmatched-credit de-duplication is durable in ``fampay_events``.
 _processed_utrs = set()
 _reported_unmatched = set()
 _escalated_orders = set()
@@ -252,6 +253,49 @@ async def notify_admins(text: str, reply_markup=None):
             )
         except Exception as exc:
             logger.warning("FamPay: could not notify admin %s: %s", admin_id, exc)
+
+
+async def report_unmatched_payment(parsed) -> bool:
+    """Persist-and-alert one unmatched incoming credit.
+
+    An IMAP message is marked seen after this flow. The durable event insert is
+    therefore intentionally attempted *before* alerting: its UTR-keyed ``_id``
+    makes the alert exactly-once across ordinary bot restarts. If MongoDB is
+    temporarily unavailable, retain the old per-process guard as a graceful
+    fallback rather than letting the mail worker crash.
+    """
+    memory_key = parsed.utr or f"{parsed.amount}:{parsed.sender_name}:{parsed.raw_excerpt}"
+    try:
+        claimed = await payeventdb.claim_unmatched_payment(
+            utr=parsed.utr or "",
+            amount=parsed.amount,
+            sender_name=parsed.sender_name,
+            raw_excerpt=parsed.raw_excerpt,
+        )
+    except Exception as exc:
+        logger.warning("FamPay IMAP: could not persist unmatched UTR event: %s", exc)
+        if memory_key in _reported_unmatched:
+            return False
+        _reported_unmatched.add(memory_key)
+        claimed = True
+
+    if not claimed:
+        return False
+
+    logger.info(
+        "FamPay IMAP: unmatched credit ₹%.2f utr=%s from=%s",
+        parsed.amount,
+        parsed.utr,
+        parsed.sender_name,
+    )
+    await notify_admins(
+        f"<b>#FamPay_Unmatched_Payment</b>\n\n"
+        f"ᴀᴍᴏᴜɴᴛ: ₹{parsed.amount:.2f}\n"
+        f"ᴜᴛʀ: <code>{parsed.utr or 'ɴ/ᴀ'}</code>\n"
+        f"sᴇɴᴅᴇʀ: {escape(parsed.sender_name or 'ɴ/ᴀ')}\n\n"
+        f"ᴋᴏɪ ᴘᴇɴᴅɪɴɢ ᴏʀᴅᴇʀ ɴᴀʜɪ ᴍɪʟᴀ — ᴊᴀɴʙᴜᴊʜ ᴋᴀʀ ᴅɪʏᴀ ɢᴀʏᴀ ʜᴀɪ।"
+    )
+    return True
 
 
 # --------------------------------------------------------------------------- #
@@ -1038,6 +1082,7 @@ async def fampay_poll_cycle():
     """One pass: expire stale orders, poll FamGateway for pending ones."""
     client = bot_client()
     await paydb.ensure_indexes()
+    await payeventdb.ensure_indexes()
     now = datetime.now()
     for order in await paydb.pending_orders():
         if paydb.is_expired(order, now):
@@ -1115,9 +1160,11 @@ def imap_scan_once(loop) -> int:
             if typ != "OK" or not fetched or not fetched[0]:
                 continue
             raw = fetched[0][1]
-            sender = parseaddr(message_from_bytes(raw).get("From", ""))[1].lower()
-            if FAMPAY_EMAIL_SENDER_FILTER and FAMPAY_EMAIL_SENDER_FILTER.lower() not in sender:
-                continue  # not a FamApp notification – leave it unread
+            sender_header = message_from_bytes(raw).get("From", "")
+            if not is_famapp_system_mail(sender_header, FAMPAY_EMAIL_SENDER_FILTER):
+                # Do not touch unrelated/marketing/KYC mail. The parser below
+                # only receives trusted FamApp system notifications.
+                continue
             parsed = parse_payment_email(email_text(raw))
             if not parsed:
                 mail.store(num, "+FLAGS", "\\Seen")  # nothing to match; never re-scan
@@ -1137,27 +1184,13 @@ def imap_scan_once(loop) -> int:
                     matches += 1
             else:
                 # A credit we cannot attribute (wrong amount, or a UTR already
-                # used).  Report once so the admin can still settle by hand.
+                # used). Persist its UTR before alerting, so a restart cannot
+                # turn the same email into another admin notification.
                 mail.store(num, "+FLAGS", "\\Seen")
-                key = parsed.utr or f"{parsed.amount}:{parsed.sender_name}"
-                if key not in _reported_unmatched:
-                    _reported_unmatched.add(key)
-                    logger.info("FamPay IMAP: unmatched credit ₹%.2f utr=%s from=%s",
-                                parsed.amount, parsed.utr, parsed.sender_name)
-                    try:
-                        _run_coro(
-                            notify_admins(
-                                f"<b>#FamPay_Unmatched_Payment</b>\n\n"
-                                f"ᴀᴍᴏᴜɴᴛ: ₹{parsed.amount:.2f}\n"
-                                f"ᴜᴛʀ: <code>{parsed.utr or 'ɴ/ᴀ'}</code>\n"
-                                f"sᴇɴᴅᴇʀ: {parsed.sender_name or 'ɴ/ᴀ'}\n\n"
-                                f"ᴋᴏɪ ᴘᴇɴᴅɪɴɢ ᴏʀᴅᴇʀ ɴᴀʜɪ ᴍɪʟᴀ — ᴊᴀɴʙᴜᴊʜ ᴋᴀʀ ᴅɪʏᴀ ɢᴀʏᴀ ʜᴀɪ।"
-                            ),
-                            loop,
-                            timeout=10,
-                        )
-                    except Exception:
-                        pass
+                try:
+                    _run_coro(report_unmatched_payment(parsed), loop, timeout=10)
+                except Exception as exc:
+                    logger.warning("FamPay IMAP: unmatched-payment alert failed: %s", exc)
     finally:
         try:
             mail.close()

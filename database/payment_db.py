@@ -41,11 +41,18 @@ Only order metadata is stored – never any Gmail/FamPay credential.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
 import string
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+
+try:
+    from pymongo.errors import DuplicateKeyError
+except ImportError:  # keeps pure helpers importable before optional dependencies are installed
+    class DuplicateKeyError(Exception):
+        pass
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +68,7 @@ STATUS_EXPIRED = "expired"
 STATUS_CANCELLED = "cancelled"
 
 DEFAULT_COLLECTION_NAME = "fampay_orders"
+DEFAULT_EVENTS_COLLECTION_NAME = "fampay_events"
 
 
 def generate_order_id() -> str:
@@ -409,5 +417,105 @@ class FamPayOrderStore:
         return datetime.now() + timedelta(minutes=max(1, int(minutes)))
 
 
-#: Shared instance used by the plugin (lazy connection, fake-injectable).
+class FamPayEventStore:
+    """Small persistent event log for IMAP alerts that must survive restarts.
+
+    Orders already remember a UTR once they are paid.  This separate collection
+    records *unmatched* incoming credits, so restarting the bot cannot make the
+    same bank UTR produce another admin alert.
+    """
+
+    def __init__(self, database=None, collection=None, collection_name: Optional[str] = None):
+        self._database = database
+        self._collection = collection
+        self._collection_name = collection_name
+        self._indexes_ready = False
+
+    @property
+    def collection_name(self) -> str:
+        if self._collection_name:
+            return self._collection_name
+        try:
+            from info import FAMPAY_EVENTS_COLLECTION  # type: ignore
+
+            return FAMPAY_EVENTS_COLLECTION
+        except Exception:
+            return DEFAULT_EVENTS_COLLECTION_NAME
+
+    @property
+    def col(self):
+        if self._collection is None:
+            if self._database is None:
+                self._database = _default_database()
+            self._collection = self._database[self.collection_name]
+        return self._collection
+
+    async def ensure_indexes(self) -> None:
+        """Best-effort indexes for support lookups; ``_id`` is the dedupe key."""
+        if self._indexes_ready:
+            return
+        try:
+            await self.col.create_index("kind", name="fp_event_kind", background=True)
+            await self.col.create_index("utr", name="fp_event_utr", background=True)
+            await self.col.create_index("created_at", name="fp_event_created", background=True)
+            self._indexes_ready = True
+        except Exception as exc:
+            logger.warning("FamPay: could not create event indexes: %s", exc)
+
+    @staticmethod
+    def _unmatched_event_key(
+        utr: str, amount: float, sender_name: str, raw_excerpt: str = ""
+    ) -> tuple[str, str]:
+        """Return ``(event_id, normalized_utr)`` without persisting email text."""
+        normalized_utr = "".join(ch for ch in str(utr or "") if ch.isdigit())
+        if normalized_utr:
+            return f"unmatched:{normalized_utr}", normalized_utr
+        # A no-UTR credit has no universal bank identity. Use a stable digest
+        # only as a best-effort fallback while keeping the raw email body out of
+        # MongoDB.
+        fingerprint = "\x1f".join(
+            (
+                f"{float(amount):.2f}",
+                str(sender_name or "").strip().lower(),
+                str(raw_excerpt or "").strip().lower(),
+            )
+        )
+        digest = hashlib.sha256(fingerprint.encode("utf-8", "replace")).hexdigest()[:32]
+        return f"unmatched:no-utr:{digest}", ""
+
+    async def claim_unmatched_payment(
+        self,
+        *,
+        utr: str,
+        amount: float,
+        sender_name: str = "",
+        raw_excerpt: str = "",
+    ) -> bool:
+        """Atomically claim an unmatched-credit alert.
+
+        ``True`` means this process owns the notification. MongoDB's built-in
+        unique ``_id`` index makes the insert safe across bot restarts and even
+        across two accidentally-running workers. ``False`` means the same UTR
+        was already logged and alerted.
+        """
+        event_id, normalized_utr = self._unmatched_event_key(
+            utr, amount, sender_name, raw_excerpt
+        )
+        document = {
+            "_id": event_id,
+            "kind": "unmatched_payment",
+            "utr": normalized_utr,
+            "amount": round(float(amount), 2),
+            "sender_name": str(sender_name or "")[:128],
+            "created_at": datetime.now(),
+        }
+        try:
+            await self.col.insert_one(document)
+        except DuplicateKeyError:
+            return False
+        return True
+
+
+#: Shared instances used by the plugin (lazy connection, fake-injectable).
 paydb = FamPayOrderStore()
+payeventdb = FamPayEventStore()

@@ -108,10 +108,20 @@ def test_non_payment_email_returns_none():
     assert fe.parse_payment_email("") is None
 
 
+def test_famapp_system_mail_sender_gate():
+    assert fe.is_famapp_system_mail("FamApp <system@famapp.in>")
+    assert fe.is_famapp_system_mail("FamApp <no-reply@system.famapp.in>")
+    assert fe.is_famapp_system_mail("FamApp <noreply@famapp.in>")
+    assert not fe.is_famapp_system_mail("FamApp Support <support@famapp.in>")
+    assert not fe.is_famapp_system_mail("Fake <system@evilfamapp.in>")
+    assert not fe.is_famapp_system_mail("Other <system@example.com>")
+    assert fe.is_famapp_system_mail("System <system@famapp.in>", "system@famapp.in")
+    assert not fe.is_famapp_system_mail("System <system@famapp.in>", "no-reply@famapp.in")
+
+
 # --------------------------------------------------------------------------- #
 # UPI intent / unique amounts / QR
-# --------------------------------------------------------------------------- #
-def test_upi_intent_shape():
+# --------------------------------------------------------------------------- #def test_upi_intent_shape():
     intent = fq.build_upi_intent("me@fam", "DreamXBotz", 40.07, note="FMP-ABC123")
     assert intent.startswith("upi://pay?")
     assert "pa=me%40fam" in intent
@@ -176,6 +186,8 @@ class FakeCollection:
         return all(doc.get(key) == value for key, value in (filt or {}).items())
 
     async def insert_one(self, document):
+        if document["_id"] in self.docs:
+            raise DuplicateKeyError("duplicate _id")
         self.docs[document["_id"]] = dict(document)
 
     async def find_one(self, filt=None, projection=None):
@@ -216,6 +228,8 @@ from database.payment_db import (  # noqa: E402
     STATUS_MANUAL_PENDING,
     STATUS_PAID,
     STATUS_PENDING,
+    DuplicateKeyError,
+    FamPayEventStore,
     FamPayOrderStore,
     generate_order_id,
 )
@@ -225,6 +239,11 @@ from datetime import datetime, timedelta  # noqa: E402
 @pytest.fixture()
 def store():
     return FamPayOrderStore(collection=FakeCollection())
+
+
+@pytest.fixture()
+def event_store():
+    return FamPayEventStore(collection=FakeCollection())
 
 
 async def _create(store, order_id="FMP-TEST01", amount=40, payable=40.07, user_id=99):
@@ -315,6 +334,27 @@ def test_order_placed_and_utr_are_review_metadata_not_payment(store):
 
         await store.mark_paid("FMP-TEST01", utr="420987654321", verified_by="imap")
         assert await store.submit_utr("FMP-TEST01", user_id=99, utr="420987654321") is None
+
+    asyncio.run(_run())
+
+
+def test_unmatched_utr_event_claim_is_restart_safe(event_store):
+    async def _run():
+        # A fresh store instance represents a new worker after a Koyeb restart.
+        assert await event_store.claim_unmatched_payment(
+            utr="420987654321", amount=40.07, sender_name="Rahul"
+        )
+        restarted_store = FamPayEventStore(collection=event_store.col)
+        assert not await restarted_store.claim_unmatched_payment(
+            utr="420987654321", amount=40.07, sender_name="Rahul"
+        )
+        assert await restarted_store.claim_unmatched_payment(
+            utr="420987654322", amount=40.07, sender_name="Rahul"
+        )
+        doc = event_store.col.docs["unmatched:420987654321"]
+        assert doc["kind"] == "unmatched_payment"
+        assert doc["utr"] == "420987654321"
+        assert doc["amount"] == 40.07
 
     asyncio.run(_run())
 
