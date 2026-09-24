@@ -32,6 +32,7 @@ Try the live bot here:
 - ✅ Group Owners Can Manage Settings via Bot PM
 - ✅ Reset All Group Settings (Owner Only)
 - ✅ 3 Verification System
+- ✅ **FamPay Auto-Approval Payments** — UPI QR + auto premium activation (Gmail IMAP / FamGateway), manual fallback for admins · [Setup Guide](docs/FAMPAY_SETUP.md)
 
 ---
 

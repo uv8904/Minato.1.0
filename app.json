@@ -216,6 +216,46 @@
             "description": "Coming Soon: API path the web pages call (API_URL + this path).",
             "value": "/api/movies/upcoming",
             "required": false
+        },
+        "FAMPAY_ENABLED": {
+            "description": "FamPay auto-approval: master switch for UPI payments (docs/FAMPAY_SETUP.md).",
+            "value": "True",
+            "required": false
+        },
+        "FAMPAY_UPI_ID": {
+            "description": "FamPay: your @fam UPI id that receives payments, e.g. yourname@fam. Falls back to OWNER_UPI_ID.",
+            "value": "",
+            "required": false
+        },
+        "FAMPAY_PAYEE_NAME": {
+            "description": "FamPay: payee name shown in the payer's UPI app.",
+            "value": "DreamXBotz",
+            "required": false
+        },
+        "FAMPAY_ORDER_EXPIRY_MINUTES": {
+            "description": "FamPay: how long a QR order stays payable before it goes to manual review.",
+            "value": "10",
+            "required": false
+        },
+        "FAMPAY_POLL_INTERVAL": {
+            "description": "FamPay: seconds between background status checks (min 5).",
+            "value": "20",
+            "required": false
+        },
+        "FAMPAY_EMAIL": {
+            "description": "FamPay: Gmail address linked to your FamPay account (IMAP verification).",
+            "value": "",
+            "required": false
+        },
+        "FAMPAY_EMAIL_PASSWORD": {
+            "description": "FamPay: 16-character Google App Password for that Gmail (NOT your Gmail password).",
+            "value": "",
+            "required": false
+        },
+        "FAMGATEWAY_API_KEY": {
+            "description": "FamPay (optional fallback): famgateway.in API key for instant QR + status/webhook verification.",
+            "value": "",
+            "required": false
         }
     },
     "addons": [],

@@ -21,6 +21,14 @@ async def web_server():
     # Docs: docs/NEWLY_UPLOADED_MOVIES.md
     web_app.add_routes(static_assets.routes)
     web_app.add_routes(movie_api.routes)
+    # FamPay · FamGateway webhook receiver (docs/FAMPAY_SETUP.md) — also before
+    # the catch-all, so POSTs to /fampay/webhook always reach it.
+    try:
+        from dreamxbotz.server import fampay_webhook
+
+        web_app.add_routes(fampay_webhook.routes)
+    except Exception as e:
+        logging.warning(f"FamPay webhook route not registered: {e}")
     web_app.add_routes(routes)
     return web_app
 

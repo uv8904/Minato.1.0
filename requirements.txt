@@ -18,6 +18,7 @@ python-dotenv==0.21.1
 
 # ---------- Features used by the code ----------
 Pillow                      # poster editing (bot.py, Imdbposter.py, movie_api.py)
+qrcode[pil]                 # FamPay UPI QR images (plugins/FamPay.py)
 psutil                      # /status RAM-CPU stats (p_ttishow.py)
 shortzy                     # shortlink generation (utils.py)
 fuzzywuzzy                  # title spelling/suggest (ai_spell.py, title_suggest.py)
