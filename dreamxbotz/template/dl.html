@@ -16,6 +16,7 @@
 
     <!-- Newly Uploaded Movies · section styles (dark + gold theme) -->
     <link rel="stylesheet" href="/static/newly_uploaded.css?v={{ asset_version | e }}">
+    <link rel="stylesheet" href="/static/coming_soon.css?v={{ asset_version | e }}">
 
     <!-- Download UI · dreamxbotz · earlier page layout by @biisal -->
     <style>
@@ -899,6 +900,35 @@
         </section>
         {% endif %}
 
+        <!-- ============ Coming Soon · Stream Mode section ============
+             Upcoming releases (TMDB) with a countdown that ticks in the
+             browser.  Auto-filled by the JSON API at
+             {{ coming_soon_api | e }}  (API_URL / same origin by default).
+             Each card deep-links to  https://t.me/<BOT_USERNAME>?start=movie_<MOVIE_ID>
+             and /comingsoon in the bot registers a "notify me when uploaded"
+             alert, which fires the moment a file of that movie is indexed.
+             Loading / empty / error states are rendered by coming_soon.js.
+             Docs: docs/COMING_SOON.md
+             ===================================================================== -->
+        {% if coming_soon_enabled %}
+        <section class="cs-section" id="comingSoon" aria-labelledby="csTitle"
+            data-api="{{ coming_soon_api | e }}" data-limit="{{ coming_soon_limit }}"
+            data-bot="{{ bot_username | e }}" data-poll="{{ coming_soon_poll | default(0) }}">
+            <div class="cs-head">
+                <div>
+                    <h2 class="cs-title" id="csTitle">Coming <span>soon</span></h2>
+                    <p class="cs-sub">Not out yet — watch the countdown, then tap a card to get
+                        pinged the moment it lands in the bot.</p>
+                </div>
+                <span class="cs-chip-live"><span data-cs-chip-text>checking soon</span></span>
+            </div>
+            <div class="cs-grid" id="csGrid" data-cs-grid aria-live="polite" aria-busy="true"></div>
+            <noscript>
+                <p class="cs-sub">Enable JavaScript to see the countdowns.</p>
+            </noscript>
+        </section>
+        {% endif %}
+
         <section id="trendingSection">
             <div class="section-head">
                 <div>
@@ -1340,6 +1370,7 @@
 
     <!-- Newly Uploaded Movies · section logic (fetch, states, deep links) -->
     <script src="/static/newly_uploaded.js?v={{ asset_version | e }}" defer></script>
+    <script src="/static/coming_soon.js?v={{ asset_version | e }}" defer></script>
 </body>
 
 </html>

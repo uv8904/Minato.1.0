@@ -37,6 +37,24 @@ try:
     from info import NEW_UPLOADED_API_PATH as _NU_API_PATH
 except Exception:  # pragma: no cover - defensive
     _NU_API_PATH = "/api/movies/new"
+# ----- Stream Mode · "Coming Soon" rail (upcoming releases + countdown) ------ #
+#   Docs: docs/COMING_SOON.md
+try:
+    from info import COMING_SOON as _CS_ENABLED
+except Exception:  # pragma: no cover - defensive
+    _CS_ENABLED = True
+try:
+    from info import COMING_SOON_LIMIT as _CS_LIMIT
+except Exception:  # pragma: no cover - defensive
+    _CS_LIMIT = 12
+try:
+    from info import COMING_SOON_POLL as _CS_POLL
+except Exception:  # pragma: no cover - defensive
+    _CS_POLL = 0
+try:
+    from info import COMING_SOON_API_PATH as _CS_API_PATH
+except Exception:  # pragma: no cover - defensive
+    _CS_API_PATH = "/api/movies/upcoming"
 try:
     from dreamxbotz.zzint import __version__ as _MV_VERSION
 except Exception:  # pragma: no cover - defensive
@@ -65,6 +83,19 @@ def newly_uploaded_api_url() -> str:
     """
     base = str(_NU_API_URL or "").strip().rstrip("/")
     path = str(_NU_API_PATH or "/api/movies/new")
+    if not path.startswith("/"):
+        path = "/" + path
+    return f"{base}{path}" if base else path
+
+
+def coming_soon_api_url() -> str:
+    """Endpoint the web pages call for the "Coming Soon" rail.
+
+    Same-origin by default (``/api/movies/upcoming``); when the website is
+    hosted elsewhere it rides on the same ``API_URL`` as the other sections.
+    """
+    base = str(_NU_API_URL or "").strip().rstrip("/")
+    path = str(_CS_API_PATH or "/api/movies/upcoming")
     if not path.startswith("/"):
         path = "/" + path
     return f"{base}{path}" if base else path
@@ -136,5 +167,12 @@ async def render_page(id, secure_hash, src=None):
         # Live refresh interval (seconds, 0 = off): a movie uploaded to the bot
         # shows up in the spotlight + rail without the visitor reloading.
         newly_uploaded_poll=_NU_POLL,
+        # "Coming Soon" rail (see docs/COMING_SOON.md).  The countdown is
+        # computed in the browser from each card's release date, so it keeps
+        # ticking with no polling at all.
+        coming_soon_enabled=_CS_ENABLED,
+        coming_soon_api=coming_soon_api_url(),
+        coming_soon_limit=_CS_LIMIT,
+        coming_soon_poll=_CS_POLL,
         asset_version=ASSET_VERSION,
     )

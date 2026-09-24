@@ -620,6 +620,19 @@ async def notify_me_cb(client: Client, query: CallbackQuery):
         name=query.from_user.first_name or "",
     )
     if saved:
+        # A tap that came from /comingsoon also raises that movie's "🔥 N
+        # waiting" badge on the Stream Mode pages.  Best effort: a counter
+        # hiccup must never turn a successful alert into an error.
+        if notify_key.startswith("cs-"):
+            try:
+                from dreamxbotz.util.coming_soon import upcoming_movie_id_for
+                from database.upcoming_db import UpcomingMoviesStore
+
+                movie_id = upcoming_movie_id_for(notify_key)
+                if movie_id:
+                    await UpcomingMoviesStore().add_notify(movie_id)
+            except Exception as exc:
+                logger.debug("Could not count a coming-soon notify: %s", exc)
         return await query.answer(f"✅ ᴅᴏɴᴇ! ɪ'ʟʟ ᴘᴍ ʏᴏᴜ ᴀs sᴏᴏɴ ᴀs\n'{search}' ɪs ᴜᴘʟᴏᴀᴅᴇᴅ.", show_alert=True)
     if reason == "duplicate":
         return await query.answer("ℹ️ ʏᴏᴜ'ʀᴇ ᴀʟʀᴇᴀᴅʏ ᴏɴ ᴛʜᴇ ʟɪsᴛ ꜰᴏʀ ᴛʜɪs ᴛɪᴛʟᴇ.", show_alert=True)

@@ -4,10 +4,11 @@
 Renders the **real** templates (``req.html`` – the Stream Mode player page
 with the movie hero and the "Newly Uploaded Movies" spotlight + rail,
 ``dl.html`` – the download page) and serves the **real** assets and the
-**real** ``recent_movies`` code path, only with an in-memory collection
-instead of MongoDB – so the whole "upload a movie → it shows up on the
-website with a poster" flow can be watched in a browser without a running
-bot, Telegram or a database.
+**real** ``recent_movies`` / ``upcoming_movies`` code paths, only with
+in-memory collections instead of MongoDB – so the whole "upload a movie → it
+shows up on the website with a poster" flow, and the whole "Coming Soon"
+countdown rail, can be watched in a browser without a running bot, Telegram
+or a database.
 
 Usage::
 
@@ -24,6 +25,11 @@ Handy URLs::
     /?state=loading           keeps the skeleton cards visible
     /?state=hostile           feed full of malicious values (hardening demo)
     /?limit=6                 fewer cards
+
+    /?cs=empty                the same four states for the **Coming Soon** rail
+    /?cs=error                only – so one rail can be broken while the other
+    /?cs=loading              keeps rendering normally (``?state=`` moves both)
+    /?cs=hostile
 
     /watch/demo               alias of "/" (kept for older bookmarks)
     /watch/demo?state=error   movie hero when the artwork API is down
@@ -60,7 +66,9 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from database.recent_movies_db import SORT, RecentMoviesStore  # noqa: E402
+from database.upcoming_db import UpcomingMoviesStore  # noqa: E402
 from dreamxbotz.server import movie_api, static_assets  # noqa: E402
+from dreamxbotz.util import coming_soon  # noqa: E402
 from dreamxbotz.util.movie_titles import (  # noqa: E402
     build_deeplink,
     looks_like_series,
@@ -72,6 +80,8 @@ from dreamxbotz.util.watch_hero import build_context as build_hero  # noqa: E402
 
 BOT_USERNAME = "MyMovieBot"
 DEFAULT_LIMIT = 20
+#: Cards in the demo "Coming Soon" rail.
+COMING_SOON_LIMIT = 12
 #: Live refresh interval used by the demo pages (production default: 60 s).
 DEMO_POLL_SECONDS = 10
 #: How long the simulated poster worker "searches TMDB/IMDb" before the poster
@@ -169,6 +179,13 @@ class MemoryCollection:
                     return False
                 if "$exists" in condition and (key in doc) != bool(condition["$exists"]):
                     return False
+                # The "Coming Soon" store queries by release date range.
+                if "$ne" in condition and value == condition["$ne"]:
+                    return False
+                if "$gte" in condition and not (value is not None and value >= condition["$gte"]):
+                    return False
+                if "$lt" in condition and not (value is not None and value < condition["$lt"]):
+                    return False
                 if "$regex" in condition:
                     import re as _re
 
@@ -240,10 +257,58 @@ STORE = RecentMoviesStore(collection=MemoryCollection(), collection_name="recent
 #: Demo artwork per MOVIE_ID (in production this is the TMDB/IMDb poster URL).
 _POSTER_JOBS: set = set()
 
+#: The *real* "Coming Soon" store on another in-memory collection.
+UPCOMING_STORE = UpcomingMoviesStore(
+    collection=MemoryCollection(),
+    meta_collection=MemoryCollection(),
+    collection_name="upcoming_movies",
+    meta_collection_name="upcoming_meta",
+)
+
+#: (title, days from now, waiting users) – one row per demo countdown card.
+#: A negative offset exercises the "releases today"/grace-window states.
+SAMPLE_UPCOMING = [
+    ("Releases Today", 0, 214),
+    ("Border 2", 2, 168),
+    ("Avatar 3", 6, 97),
+    ("Dhurandhar", 11, 74),
+    ("Toxic", 19, 61),
+    ("Ramayana Part 1", 34, 55),
+    ("Battle of Galwan", 58, 43),
+    ("King", 96, 38),
+    ("War 2", 141, 29),
+    ("Alpha", 175, 22),
+    ("No Poster Yet", 23, 0),  # exercises the poster placeholder
+]
+
 
 def _hue_for(value: str) -> str:
     """Stable demo colour per movie id."""
     return PALETTE[sum(ord(char) for char in str(value)) % len(PALETTE)]
+
+
+async def seed_upcoming() -> None:
+    """Fill the Coming Soon store through the real ``save_movie``."""
+    UPCOMING_STORE.col.docs.clear()
+    today = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    for title, offset, waiting in SAMPLE_UPCOMING:
+        release = today + timedelta(days=offset)
+        movie_id = await UPCOMING_STORE.save_movie(
+            title=title,
+            year=release.year,
+            release_date=release,
+            release_date_raw=release.strftime("%Y-%m-%d"),
+            # In production this is the TMDB poster URL; the demo proxy turns
+            # the colour back into generated artwork.
+            poster_url=None if title == "No Poster Yet" else f"demo://poster/{_hue_for(title).lstrip('#')}",
+            poster_source=None if title == "No Poster Yet" else "demo",
+            overview="Demo blurb for the preview harness.",
+            popularity=100 - offset,
+            now=utcnow(),
+        )
+        if movie_id and waiting:
+            UPCOMING_STORE.col.docs[movie_id]["notify_total"] = waiting
+    await UPCOMING_STORE.mark_fetched(len(SAMPLE_UPCOMING))
 
 
 async def seed_store() -> None:
@@ -342,11 +407,12 @@ def demo_backdrop_svg(title, hue, quality):
 """
 
 
-def limit_default(request) -> int:
+def limit_default(request, default: int = 20, cap: int = 20) -> int:
+    """``?limit=`` clamped into range (the real API caps it the same way)."""
     try:
-        return max(1, min(int(request.rel_url.query.get("limit", 20)), 20))
+        return max(1, min(int(request.rel_url.query.get("limit", default)), cap))
     except (TypeError, ValueError):
-        return 20
+        return default
 
 
 # --------------------------------------------------------------------------- #
@@ -432,6 +498,88 @@ async def demo_poster(request):
     quality = (doc.get("qualities") or ["HD"])[0]
     return web.Response(
         body=demo_poster_svg(doc["title"], hue, quality, doc.get("year")),
+        content_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+async def demo_upcoming(request):
+    """Same contract as ``GET /api/movies/upcoming`` – served by the real store.
+
+    Runs the *real* ``coming_soon.public_upcoming_movies()`` shaping code and
+    the real ``movie_api._json_response`` (so ETag / 304 / CORS behave exactly
+    as they do in production); only the TMDB call is replaced by the seeded
+    in-memory collection.
+    """
+    state = request.rel_url.query.get("state")
+    if state == "error":
+        return movie_api._json_response(
+            {"ok": False, "error": "database_unavailable", "movies": []},
+            status=503, request=request,
+        )
+    if state == "loading":
+        await asyncio.sleep(3600)
+    if state == "hostile":
+        # Security demo: a compromised feed must not reach the DOM as markup.
+        return movie_api._json_response(
+            {
+                "ok": True,
+                "count": 1,
+                "limit": 12,
+                "bot_username": BOT_USERNAME,
+                "movies": [
+                    {
+                        "id": "<img src=x onerror=alert(1)>",
+                        "title": "<script>alert('xss')</script>Evil Movie",
+                        "poster": "https://evil.example/poster.jpg",
+                        "release_date": "not-a-date",
+                        "countdown": "<b>in 3 days</b>",
+                        "deeplink": "javascript:alert(1)",
+                        "waiting": 5,
+                    }
+                ],
+            },
+            ttl=0, request=request,
+        )
+
+    limit = limit_default(request, default=12, cap=24)
+    rows = [] if state == "empty" else await UPCOMING_STORE.list_upcoming(
+        limit, cutoff=coming_soon.release_cutoff()
+    )
+    movies = coming_soon.public_upcoming_movies(rows, BOT_USERNAME)
+    newest = max(
+        (movie["release_date"] for movie in movies if movie.get("release_date")),
+        default=None,
+    )
+    return movie_api._json_response(
+        {
+            "ok": True,
+            "count": len(movies),
+            "limit": limit,
+            "updated_at": newest,
+            "bot_username": BOT_USERNAME,
+            "movies": movies,
+        },
+        ttl=0, request=request,
+    )
+
+
+async def demo_upcoming_poster(request):
+    """Poster bytes for one upcoming release (generated artwork, same origin)."""
+    movie_id = request.match_info["movie_id"]
+    doc = await UPCOMING_STORE.get(movie_id)
+    if not doc:
+        return movie_api._not_found_poster(request)
+    if not doc.get("poster_url"):
+        # Exactly what production serves while TMDB has no artwork for it.
+        return web.Response(
+            body=movie_api.placeholder_svg(doc["title"]),
+            content_type="image/svg+xml",
+            headers={"Cache-Control": "no-cache"},
+        )
+    hue = "#" + doc["poster_url"].rsplit("/", 1)[-1]
+    return web.Response(
+        body=demo_poster_svg(doc["title"], hue, "Coming soon", doc.get("year")),
         content_type="image/svg+xml",
         headers={"Cache-Control": "public, max-age=3600"},
     )
@@ -885,7 +1033,8 @@ def _inject_panel(html: str) -> str:
     return html + SIMULATOR_PANEL
 
 
-def render_watch_html(state: str = "", api: str = "/api/movies/new", limit: int = DEFAULT_LIMIT) -> str:
+def render_watch_html(state: str = "", api: str = "/api/movies/new", limit: int = DEFAULT_LIMIT,
+                      upcoming_api: str = "/api/movies/upcoming") -> str:
     """Render the real ``req.html`` Stream Mode page together with its movie hero."""
     import jinja2
 
@@ -914,11 +1063,17 @@ def render_watch_html(state: str = "", api: str = "/api/movies/new", limit: int 
         newly_uploaded_api=api,
         newly_uploaded_limit=limit,
         newly_uploaded_poll=DEMO_POLL_SECONDS,
+        # "Coming Soon" rail – the countdown needs no polling at all.
+        coming_soon_enabled=True,
+        coming_soon_api=upcoming_api,
+        coming_soon_limit=COMING_SOON_LIMIT,
+        coming_soon_poll=0,
         asset_version=static_assets.version_token(),
     )
 
 
-def render_page_html(limit: int, api: str = "/api/movies/new") -> str:
+def render_page_html(limit: int, api: str = "/api/movies/new",
+                     upcoming_api: str = "/api/movies/upcoming") -> str:
     """Render the real download page (``dl.html``) with representative values."""
     import jinja2
 
@@ -934,6 +1089,11 @@ def render_page_html(limit: int, api: str = "/api/movies/new") -> str:
         newly_uploaded_api=api,
         newly_uploaded_limit=limit,
         newly_uploaded_poll=DEMO_POLL_SECONDS,
+        # "Coming Soon" rail – the countdown needs no polling at all.
+        coming_soon_enabled=True,
+        coming_soon_api=upcoming_api,
+        coming_soon_limit=COMING_SOON_LIMIT,
+        coming_soon_poll=0,
         asset_version=static_assets.version_token(),
     )
 
@@ -941,6 +1101,19 @@ def render_page_html(limit: int, api: str = "/api/movies/new") -> str:
 def _feed_api(request) -> str:
     state = request.rel_url.query.get("state")
     api = "/api/movies/new"
+    if state in ("empty", "error", "loading", "hostile"):
+        api += "?state=" + state
+    return api
+
+
+def _upcoming_api(request) -> str:
+    """"Coming Soon" endpoint, honouring the same ``?state=`` demo switches.
+
+    A separate ``?cs=`` lets one rail be pushed into a state while the other
+    keeps rendering normally (e.g. ``/?state=error&cs=empty``).
+    """
+    state = request.rel_url.query.get("cs") or request.rel_url.query.get("state")
+    api = "/api/movies/upcoming"
     if state in ("empty", "error", "loading", "hostile"):
         api += "?state=" + state
     return api
@@ -957,13 +1130,17 @@ async def index(request):
     """The Stream Mode page (req.html): player + hero + spotlight + rail + simulator."""
     state = request.rel_url.query.get("state")
     hero_state = state if state in ("error", "noart", "hostile") else ""
-    html = render_watch_html(hero_state, _feed_api(request), _limit(request))
+    html = render_watch_html(
+        hero_state, _feed_api(request), _limit(request), _upcoming_api(request)
+    )
     return web.Response(text=_inject_panel(html), content_type="text/html")
 
 
 async def download_index(request):
     """The download page (dl.html) – same rail, same simulator."""
-    html = render_page_html(_limit(request), _feed_api(request))
+    html = render_page_html(
+        _limit(request), _feed_api(request), _upcoming_api(request)
+    )
     return web.Response(text=_inject_panel(html), content_type="text/html")
 
 
@@ -973,6 +1150,8 @@ def build_app(limit: int = DEFAULT_LIMIT) -> web.Application:
     app.router.add_get("/watch/demo", index)
     app.router.add_get("/download", download_index)
     app.router.add_get("/api/movies/new", demo_feed)
+    app.router.add_get("/api/movies/upcoming", demo_upcoming)
+    app.router.add_get("/api/movies/upcoming/poster/{movie_id}", demo_upcoming_poster)
     app.router.add_get("/api/movies/art/{movie_id}", demo_art)
     app.router.add_get("/api/movies/art-{state}/{movie_id}", demo_art)
     app.router.add_get("/api/movies/poster/{movie_id}", demo_poster)
@@ -985,6 +1164,7 @@ def build_app(limit: int = DEFAULT_LIMIT) -> web.Application:
 
     async def _seed(_app):
         await seed_store()
+        await seed_upcoming()
 
     app.on_startup.append(_seed)
     return app

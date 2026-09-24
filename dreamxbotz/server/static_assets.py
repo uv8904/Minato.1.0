@@ -17,6 +17,9 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 ASSETS = {
     "newly_uploaded.css": "text/css; charset=utf-8",
     "newly_uploaded.js": "text/javascript; charset=utf-8",
+    # "Coming Soon" rail (upcoming releases + live countdown)
+    "coming_soon.css": "text/css; charset=utf-8",
+    "coming_soon.js": "text/javascript; charset=utf-8",
     # watch-page movie hero (strip above the player)
     "watch_hero.css": "text/css; charset=utf-8",
     "watch_hero.js": "text/javascript; charset=utf-8",

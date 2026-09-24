@@ -71,6 +71,7 @@ Join our support group for assistance:
 - ✅ Top Searching  
 - ✅ Best Streaming Website Integration
 - ✅ Newly Uploaded Movies section (auto-filled from the bot DB, gold/dark theme, Telegram deep links)  
+- ✅ **Coming Soon rail with a live countdown** — TMDB upcoming releases, ticking `DD HH MM SS` in the browser (no reload), gold "releasing soon" chip, and `/comingsoon` with a 🔔 *Notify me* button per title that PMs you the moment the movie is uploaded  
 - ✅ "Just added" spotlight (Prime-Video-style banner for the newest upload) + live refresh — no reload needed  
 - ✅ Movie hero on the watch page (IMDb poster + 16:9 backdrop + deep search link above the player)
 - ✅ Custom start-flash (the 🌿 before the start photo) & /alive sticker — emoji / text / sticker / GIF / photo / off, set live with `/setstartemoji` & `/setalivesticker` (admins) or `START_EMOJI` / `ALIVE_STICKER` env, saved in MongoDB so it survives restarts
@@ -140,6 +141,53 @@ without the bot): section 0 of
 [`docs/NEWLY_UPLOADED_MOVIES.md`](docs/NEWLY_UPLOADED_MOVIES.md) for the
 placeholders (`BOT_USERNAME`, `API_URL`, `MOVIE_ID`, `DATABASE_CONNECTION`,
 `TELEGRAM_BOT_TOKEN`), the API reference and the database schema.
+
+### ⏳ Coming Soon (upcoming releases + live countdown)
+
+A second rail next to *Newly Uploaded*: movies that are **not out yet**, pulled
+from TMDB and shown with their release day and a countdown that ticks in the
+browser — `12d 04h 33m 09s` — with no page reload:
+
+- next **12** releases, soonest first, no duplicates (same deterministic
+  `MOVIE_ID` the uploaded rail uses, so a deep link keeps working after the
+  movie is uploaded)
+- a **gold `releasing soon` chip** inside `COMING_SOON_SOON_DAYS` (default 7),
+  and a released movie is kept for `COMING_SOON_GRACE_DAYS` (default 3) — that
+  is the one about to appear in *Newly Uploaded*, so it is the most useful card
+  on the page
+- when a countdown hits zero the card flips to *“Releases today”* on its own
+- **🔥 N waiting** — how many people asked to be notified
+- the countdown needs **no polling at all**: the card carries the release day
+  as an ISO timestamp and one shared 1-second timer repaints every card, so
+  `COMING_SOON_POLL` defaults to off
+- posters are proxied through your own origin — no TMDB URL, file id or bot
+  token ever reaches the browser
+
+In the bot:
+
+```
+/comingsoon            next 12 releases + a 🔔 Notify me button per title
+/comingsoon refresh    (admins) re-read TMDB right now
+```
+
+A 🔔 tap reuses the existing notify pipeline, so **the moment somebody uploads
+that movie you get a PM** — the countdown turns into a waiting list that
+actually delivers.
+
+Needs the same free `TMDB_API_KEY` as the posters; with no key the rail just
+stays empty instead of erroring. Turn the whole thing off with
+`COMING_SOON=False`. Details:
+[`docs/COMING_SOON.md`](docs/COMING_SOON.md).
+
+Preview it locally without Telegram — the same harness renders the rail from
+the real templates and the real store:
+
+```bash
+python tools/preview_section.py   # http://127.0.0.1:8080
+#   /            player page with both rails
+#   /download    download page
+#   ?cs=empty · ?cs=error · ?cs=loading · ?cs=hostile   push just this rail
+```
 
 ### 🎬 Movie hero on the watch page
 

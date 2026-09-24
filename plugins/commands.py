@@ -1108,6 +1108,92 @@ async def trendlist(client, message):
     reply_text = f"<b>Top {len(truncated_messages)} Tʀᴀɴᴅɪɴɢ ᴏғ ᴛʜᴇ ᴅᴀʏ 👇:</b>\n\n{formatted_list}"
     await message.reply_text(reply_text)
 
+
+@Client.on_message(filters.command(["comingsoon", "upcoming"]) & filters.incoming)
+async def comingsoon_cmd(client, message):
+    """Upcoming releases with a countdown + a 🔔 Notify me button per title.
+
+    The list comes from the same ``upcoming_movies`` cache that feeds the
+    "Coming Soon" rail on the Stream Mode pages, so the bot and the website
+    can never disagree about what is coming.  A notify tap reuses the existing
+    ``title_notify`` pipeline: the moment a file of that movie is indexed,
+    ``check_new_file()`` PMs everyone who asked.
+
+    Admins can force a re-read of TMDB with ``/comingsoon refresh`` (otherwise
+    the cache is refreshed at most every ``COMING_SOON_REFRESH_HOURS``).
+    """
+    from dreamxbotz.util.coming_soon import (
+        is_enabled as coming_soon_enabled,
+        limit as coming_soon_limit,
+        refresh_if_stale,
+        remember_upcoming,
+        upcoming_list_text,
+    )
+
+    if not coming_soon_enabled():
+        return await message.reply_text(
+            "<b>⏳ ᴄᴏᴍɪɴɢ ꜱᴏᴏɴ ɪꜱ ᴛᴜʀɴᴇᴅ ᴏꜰꜰ ʙʏ ᴛʜᴇ ʙᴏᴛ ᴏᴡɴᴇʀ.</b>"
+        )
+
+    force = len(message.command) > 1 and message.command[1].strip().lower() in (
+        "refresh", "force", "reload",
+    )
+    if force and message.from_user and message.from_user.id not in ADMINS:
+        force = False
+
+    sts = await message.reply_text("⏳ ꜰᴇᴛᴄʜɪɴɢ ᴜᴘᴄᴏᴍɪɴɢ ʀᴇʟᴇᴀꜱᴇꜱ...")
+    try:
+        from database.upcoming_db import UpcomingMoviesStore
+
+        store = UpcomingMoviesStore()
+        if force:
+            await refresh_if_stale(store, force=True)
+        rows = await store.list_upcoming(coming_soon_limit(), cutoff=None)
+        text = upcoming_list_text(rows, limit=coming_soon_limit())
+    except Exception as e:
+        logger.error(f"comingsoon_cmd failed: {e}")
+        return await sts.edit_text("<b>❗ ᴄᴏᴜʟᴅɴ'ᴛ ʟᴏᴀᴅ ᴛʜᴇ ᴜᴘᴄᴏᴍɪɴɢ ʟɪꜱᴛ, ᴛʀʏ ᴀɢᴀɪɴ.</b>")
+
+    if not text:
+        return await sts.edit_text(
+            "<b>⏳ ɴᴏ ᴜᴘᴄᴏᴍɪɴɢ ʀᴇʟᴇᴀꜱᴇꜱ ʏᴇᴛ.</b>\n\n"
+            "ᴛʜᴇ ʟɪꜱᴛ ꜰɪʟʟꜱ ɪᴛꜱᴇʟꜰ ꜰʀᴏᴍ ᴛᴍᴅʙ — ᴍᴀᴋᴇ ꜱᴜʀᴇ <code>TMDB_API_KEY</code> "
+            "ɪꜱ ꜱᴇᴛ ᴀɴᴅ <code>COMING_SOON</code> ɪꜱ ᴏɴ."
+        )
+
+    # One 🔔 button per title.  callback_data is capped at 64 bytes, so the
+    # movie id is hashed into a short key and the title itself lives in
+    # PENDING_TEXT (the same trick the no-results keyboard uses).
+    rows_buttons = []
+    pair = []
+    for doc in rows[: coming_soon_limit()]:
+        movie_id = str(doc.get("_id") or "")
+        title = str(doc.get("title") or "").strip()
+        if not movie_id or not title:
+            continue
+        key = remember_upcoming(movie_id, title)
+        short = title if len(title) <= 24 else title[:23].rstrip() + "…"
+        pair.append(green(f"🔔 {short}", callback_data=f"notify#{key}#{message.from_user.id}"))
+        if len(pair) == 2:
+            rows_buttons.append(pair)
+            pair = []
+    if pair:
+        rows_buttons.append(pair)
+
+    bottom = [red("🚫 ᴄʟᴏꜱᴇ", callback_data="close_data")]
+    if message.from_user and message.from_user.id in ADMINS:
+        # Admins get the force-refresh hint inline; the actual re-read is the
+        # `/comingsoon refresh` argument handled above (a callback would need
+        # its own route and would only ever serve one admin's tap anyway).
+        text += "\n\n<i>👑 ᴀᴅᴍɪɴ: /comingsoon refresh ʀᴇ-ʀᴇᴀᴅꜱ ᴛᴍᴅʙ ɴᴏᴡ.</i>"
+
+    await sts.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(rows_buttons + [bottom]) if rows_buttons
+        else InlineKeyboardMarkup([bottom]),
+        disable_web_page_preview=True,
+    )
+
 @Client.on_message(filters.private & filters.command("pm_search") & filters.user(ADMINS))
 async def set_pm_search(client, message):
     bot_id = client.me.id
