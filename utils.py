@@ -160,13 +160,20 @@ async def get_flash_value(key, env_default):
 
 
 async def send_start_flash(message, key="start_flash", env_default="🌿"):
-    """Send the flash media shown just before the start photo.
+    """Send the optional flash without ever blocking the actual command.
 
-    Returns the sent message so the caller can delete it after a moment,
-    or ``None`` when the flash is disabled or failed (it is purely
-    decorative, so failures must never break /start or /alive).
+    Mongo stores the live override, but it is decorative state.  Fall back to
+    the environment default when Mongo is unavailable or takes more than three
+    seconds; previously that lookup happened outside the error handler and
+    could leave ``/start`` waiting until Motor's long server-selection timeout.
     """
-    value = await get_flash_value(key, env_default)
+    try:
+        value = await asyncio.wait_for(
+            get_flash_value(key, env_default), timeout=3
+        )
+    except Exception as exc:
+        logger.warning("Flash config unavailable for %s; using default: %s", key, exc)
+        value = env_default
     kind, payload = parse_flash_value(value)
     if kind == "off":
         return None

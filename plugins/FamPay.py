@@ -852,7 +852,28 @@ async def _notify_admins_proof(order: dict, *, utr: str = "", has_screenshot: bo
     )
 
 
-@Client.on_message(filters.private & filters.text & ~filters.command(["utr", "start", "plan", "fampay", "myplan", "fampay_orders"]))
+async def _plain_utr_message_filter(_, __, message: Message) -> bool:
+    """Match only text that actually contains a bank UTR.
+
+    Pyrogram/Electrogram runs only the first matching handler in a dispatcher
+    group.  This handler used to match *every* private text message except six
+    named commands.  Because ``plugins/FamPay.py`` loads before the search and
+    command plugins, normal movie searches (``marco``), ``/settings``,
+    ``/stats`` and most other commands were silently swallowed here.
+
+    Keep the convenient no-command UTR flow, but stay completely out of the
+    way for normal bot traffic and for every slash command.
+    """
+    text = (getattr(message, "text", None) or "").strip()
+    return bool(text and not text.startswith("/") and _extract_utr_from_text(text))
+
+
+plain_utr_message = filters.create(
+    _plain_utr_message_filter, name="PlainFamPayUtrFilter"
+)
+
+
+@Client.on_message(filters.private & filters.text & plain_utr_message)
 async def fampay_plain_utr_message(client: Client, message: Message):
     """Accept a plain UTR number in chat — no ``/utr`` command required."""
     user = message.from_user
@@ -919,9 +940,15 @@ async def fampay_utr_command(client: Client, message: Message):
     await _prompt_utr_confirmation(message, order, utr)
 
 
-@Client.on_message(filters.private & (filters.photo | filters.document))
+@Client.on_message(filters.private & (filters.photo | filters.document), group=-1)
 async def fampay_screenshot_message(client: Client, message: Message):
-    """Accept QR/payment screenshot for confirmation on the buyer's active order."""
+    """Accept payment proof without stealing unrelated forwarded media.
+
+    Group ``-1`` runs before the normal index/media handlers.  Returning when
+    there is no active payment order then lets group ``0`` continue, instead of
+    the old broad group-0 handler silently consuming every private photo and
+    document (including forwarded files meant for indexing).
+    """
     user = message.from_user
     if not user:
         return

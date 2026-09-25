@@ -28,6 +28,88 @@ logger = logging.getLogger(__name__)
 TIMEZONE = "Asia/Kolkata"
 BATCH_FILES = {}
 
+
+def _start_greeting() -> str:
+    hour = datetime.now(pytz.timezone(TIMEZONE)).hour
+    if hour < 12:
+        return "ɢᴏᴏᴅ ᴍᴏʀɴɪɴɢ 🌞"
+    if hour < 17:
+        return "ɢᴏᴏᴅ ᴀғᴛᴇʀɴᴏᴏɴ 🌓"
+    if hour < 21:
+        return "ɢᴏᴏᴅ ᴇᴠᴇɴɪɴɢ 🌘"
+    return "ɢᴏᴏᴅ ɴɪɢʜᴛ 🌑"
+
+
+async def _send_start_home(message):
+    """Answer /start even when Mongo, flash media or the start photo is down."""
+    reply_markup = start_buttons()
+    caption = script.START_TXT.format(
+        message.from_user.mention,
+        _start_greeting(),
+        temp.U_NAME,
+        temp.B_NAME,
+    )
+
+    flash = await send_start_flash(message, env_default=START_EMOJI)
+    if flash:
+        await asyncio.sleep(0.4)
+        try:
+            await flash.delete()
+        except Exception:
+            pass
+
+    try:
+        if not PICS:
+            raise ValueError("PICS is empty")
+        await message.reply_photo(
+            photo=random.choice(PICS),
+            caption=caption,
+            reply_markup=reply_markup,
+            parse_mode=enums.ParseMode.HTML,
+        )
+    except Exception as exc:
+        # Invalid/expired Graph URLs used to make /start look completely dead.
+        # A text welcome is less fancy, but it always leaves the bot usable.
+        logger.warning("Start photo failed; sending text fallback: %s", exc)
+        try:
+            await message.reply_text(
+                caption,
+                reply_markup=reply_markup,
+                parse_mode=enums.ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
+        except Exception as fallback_exc:
+            # Last-resort answer: even a malformed/unsupported button style
+            # must not make /start silent.
+            logger.warning("Start keyboard failed; sending plain text: %s", fallback_exc)
+            await message.reply_text(
+                caption,
+                parse_mode=enums.ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
+
+
+async def _remember_start_user(client, message):
+    """Best-effort user registration performed after the welcome is sent."""
+    user = message.from_user
+    if not user:
+        return
+    try:
+        exists = await asyncio.wait_for(db.is_user_exist(user.id), timeout=8)
+        if not exists:
+            await asyncio.wait_for(db.add_user(user.id, user.first_name), timeout=8)
+            try:
+                await client.send_message(
+                    LOG_CHANNEL,
+                    script.LOG_TEXT_P.format(user.id, user.mention),
+                )
+            except Exception as exc:
+                logger.warning("Could not log new /start user %s: %s", user.id, exc)
+    except Exception as exc:
+        # Registration is bookkeeping. It must never suppress the welcome.
+        logger.warning("Could not register /start user %s: %s", user.id, exc)
+
+
 @Client.on_message(filters.incoming & filters.text & ~filters.regex(r"^/"), group=-10)
 async def catch_reply(client, message):
     """Feed messages to utils.wait_for_reply() (replaces pyromod's bot.listen).
@@ -88,10 +170,14 @@ async def aispell_cmd(client, message):
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
     if EMOJI_MODE:
-        try:
-            await message.react(emoji=random.choice(REACTIONS), big=True)
-        except Exception:
-            await message.react(emoji="🍂", big=True)
+        for emoji in (random.choice(REACTIONS), "🍂"):
+            try:
+                await message.react(emoji=emoji, big=True)
+                break
+            except Exception:
+                # Reactions can be disabled per chat/client. They are cosmetic
+                # and must never prevent the /start response.
+                continue
     m = message
     if len(m.command) == 2 and m.command[1].startswith("msrch_"):
         # Deep link from the MinatoVerse web pages: t.me/<bot>?start=msrch_<b64url>
@@ -183,55 +269,17 @@ async def start(client, message):
             await client.send_message(LOG_CHANNEL, script.LOG_TEXT_G.format(message.chat.title, message.chat.id, total, "Unknown"))       
             await db.add_chat(message.chat.id, message.chat.title)
         return 
-    if not await db.is_user_exist(message.from_user.id):
-        await db.add_user(message.from_user.id, message.from_user.first_name)
-        await client.send_message(LOG_CHANNEL, script.LOG_TEXT_P.format(message.from_user.id, message.from_user.mention))
     if len(message.command) != 2:
-        reply_markup = start_buttons()
-        current_time = datetime.now(pytz.timezone(TIMEZONE))
-        curr_time = current_time.hour        
-        if curr_time < 12:
-            gtxt = "ɢᴏᴏᴅ ᴍᴏʀɴɪɴɢ 🌞" 
-        elif curr_time < 17:
-            gtxt = "ɢᴏᴏᴅ ᴀғᴛᴇʀɴᴏᴏɴ 🌓" 
-        elif curr_time < 21:
-            gtxt = "ɢᴏᴏᴅ ᴇᴠᴇɴɪɴɢ 🌘"
-        else:
-            gtxt = "ɢᴏᴏᴅ ɴɪɢʜᴛ 🌑"
-        flash = await send_start_flash(message, env_default=START_EMOJI)
-        if flash:
-            await asyncio.sleep(0.4)
-            await flash.delete()        
-        await message.reply_photo(
-            photo=random.choice(PICS),
-            caption=script.START_TXT.format(message.from_user.mention, gtxt, temp.U_NAME, temp.B_NAME),
-            reply_markup=reply_markup,
-            parse_mode=enums.ParseMode.HTML
-        )
+        # Respond first. Mongo registration/logging happens afterwards and is
+        # deliberately best-effort, so a DB or LOG_CHANNEL outage cannot make
+        # the most important command look dead.
+        await _send_start_home(message)
+        await _remember_start_user(client, message)
         return
 
     if len(message.command) == 2 and message.command[1] in ["subscribe", "error", "okay", "help"]:
-        reply_markup = start_buttons()
-        current_time = datetime.now(pytz.timezone(TIMEZONE))
-        curr_time = current_time.hour        
-        if curr_time < 12:
-            gtxt = "ɢᴏᴏᴅ ᴍᴏʀɴɪɴɢ 🌞" 
-        elif curr_time < 17:
-            gtxt = "ɢᴏᴏᴅ ᴀғᴛᴇʀɴᴏᴏɴ 🌓" 
-        elif curr_time < 21:
-            gtxt = "ɢᴏᴏᴅ ᴇᴠᴇɴɪɴɢ 🌘"
-        else:
-            gtxt = "ɢᴏᴏᴅ ɴɪɢʜᴛ 🌑"
-        flash = await send_start_flash(message, env_default=START_EMOJI)
-        if flash:
-            await asyncio.sleep(0.4)
-            await flash.delete()        
-        await message.reply_photo(
-            photo=random.choice(PICS),
-            caption=script.START_TXT.format(message.from_user.mention, gtxt, temp.U_NAME, temp.B_NAME),
-            reply_markup=reply_markup,
-            parse_mode=enums.ParseMode.HTML
-        )
+        await _send_start_home(message)
+        await _remember_start_user(client, message)
         return
     if message.command[1].startswith("reff_"):
         try:

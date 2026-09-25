@@ -33,7 +33,10 @@ from datetime import datetime, timedelta
 lock = asyncio.Lock()
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.ERROR)
+# PM routing diagnostics were added to this module, but ERROR suppressed every
+# info/warning line (including DB fallback warnings). Keep them visible in
+# Koyeb/Heroku logs so another silent-routing regression is diagnosable.
+logger.setLevel(logging.INFO)
 
 tracemalloc.start()
 
@@ -54,10 +57,14 @@ SUGG = {}
 @Client.on_message(filters.group & filters.text & filters.incoming)
 async def give_filter(client, message):
     if EMOJI_MODE:
-        try:
-            await message.react(emoji=random.choice(REACTIONS), big=True)
-        except Exception:
-            await message.react(emoji="⚡️", big=True)
+        for emoji in (random.choice(REACTIONS), "⚡️"):
+            try:
+                await message.react(emoji=emoji, big=True)
+                break
+            except Exception:
+                # Reactions are decoration; unsupported/disabled reactions
+                # must not swallow the actual group search.
+                continue
     await mdb.update_top_messages(message.from_user.id, message.text)
     if message.chat.id != SUPPORT_CHAT_ID:
         settings = await get_settings(message.chat.id)
