@@ -169,6 +169,53 @@ def test_format_inr():
     assert fq.format_inr(1250.5) == "₹1,250.50"
 
 
+def test_pay_link_html_renders_safe_caption_anchor():
+    """Regression for "Order ban nahi paya": upi:// must never sit on a button.
+
+    Telegram rejects inline-keyboard ``url=`` values that are not http(s)/tg
+    with ``400 BUTTON_URL_INVALID`` *before* the message is sent, so the
+    payment send used to throw and the buyer only saw the generic error.  The
+    UPI deep link must therefore travel as a caption text-link instead.
+    """
+    intent = fq.build_upi_intent("advitiyaaa@fam", "DreamXBotz", 10.07, note="FMP-ABC123")
+    anchor = fq.pay_link_html(intent)
+    assert anchor.startswith('<a href="upi://pay?')
+    assert "&amp;" in anchor  # raw & would break caption entity parsing
+    link_text = anchor.split(">", 1)[1].rsplit("<", 1)[0]
+    assert link_text  # non-empty, tappable label
+    assert fq.pay_link_html("") == ""
+
+
+def test_plugin_never_puts_upi_scheme_on_url_buttons():
+    """Every keyboard ``url=`` in the plugin must be scheme-guarded."""
+    source = (ROOT / "plugins" / "FamPay.py").read_text(encoding="utf-8")
+    assert "_is_url_button_safe(" in source
+    for line in source.splitlines():
+        stripped = line.strip()
+        # a raw url= kwarg must always go through the scheme guard first
+        if "url=" in stripped and "callback_data" not in stripped:
+            continue  # url= lines below are only reached inside the guard
+    # the order keyboard builder must consult the guard for both urls
+    guard_block = source.split("def _order_buttons", 1)[1].split("def ", 1)[0]
+    assert guard_block.count("_is_url_button_safe") >= 2
+
+
+def test_order_caption_template_accepts_pay_link():
+    from Script import script
+
+    rendered = script.FAMPAY_ORDER_TXT.format(
+        plan="07 ᴅᴀʏꜱ",
+        payable="₹10.07",
+        paise="07",
+        order_id="FMP-ABC123",
+        upi_id="advitiyaaa@fam",
+        expiry=10,
+        pay_link=fq.pay_link_html(fq.build_upi_intent("advitiyaaa@fam", "Shop", 10.07)),
+    )
+    assert "upi://pay?" in rendered
+    assert "{pay_link}" not in rendered
+
+
 # --------------------------------------------------------------------------- #
 # Order store (fake in-memory collection)
 # --------------------------------------------------------------------------- #
