@@ -198,7 +198,7 @@ def _order_buttons(order: dict, upi_intent: str, checkout_url: str = ""):
     if checkout_url:
         rows.append([green("🌐 ᴡᴇʙ ᴄʜᴇᴄᴋᴏᴜᴛ", url=checkout_url)])
     if not order.get("order_placed_at"):
-        rows.append([green("✅ ᴏʀᴅᴇʀ ᴘʟᴀᴄᴇᴅ", callback_data=f"famplaced_{order_id}")])
+        rows.append([green("✅ ᴘᴀɪᴅ — ɴᴏᴡ ᴄᴏɴꜰɪʀᴍ", callback_data=f"famplaced_{order_id}")])
     rows.append(
         [
             blue("🔄 ᴄʜᴇᴄᴋ ᴘᴀʏᴍᴇɴᴛ", callback_data=f"famcheck_{order_id}"),
@@ -639,7 +639,11 @@ async def fampay_buy_callback(client: Client, callback_query: CallbackQuery):
         return await callback_query.answer(
             "⚠️ FamPay payments abhi configure nahi hain.", show_alert=True
         )
-    await callback_query.answer()
+    plan_time = FAMPAY_PLANS[amount]
+    await callback_query.answer(
+        f"✅ {plan_label(plan_time)} choose ho gaya — ab pay karein!",
+        show_alert=True,
+    )
     try:
         await create_order_for_user(
             client, callback_query.message.chat.id, callback_query.from_user, amount
@@ -651,7 +655,7 @@ async def fampay_buy_callback(client: Client, callback_query: CallbackQuery):
 
 @Client.on_callback_query(filters.regex(r"^famplaced_(\S+)$"))
 async def fampay_order_placed_callback(client: Client, callback_query: CallbackQuery):
-    """Buyer says they paid; provide the optional, double-confirmed UTR route."""
+    """Buyer says they paid; ask for plain UTR + payment screenshot (no /utr)."""
     order_id = callback_query.data.split("_", 1)[1]
     order = await paydb.get_order(order_id)
     user_id = callback_query.from_user.id if callback_query.from_user else None
@@ -666,7 +670,7 @@ async def fampay_order_placed_callback(client: Client, callback_query: CallbackQ
     if not marked:
         return await callback_query.answer("🚫 Order ab process nahi ho sakta.", show_alert=True)
 
-    # The QR stays available, but the one-time Order placed action disappears.
+    # The QR stays available, but the one-time confirm action disappears.
     try:
         await callback_query.edit_message_reply_markup(
             reply_markup=_order_buttons(
@@ -691,12 +695,98 @@ async def fampay_order_placed_callback(client: Client, callback_query: CallbackQ
         )
     except Exception as exc:
         logger.warning("FamPay: could not send Order placed guide for %s: %s", order_id, exc)
-    await callback_query.answer("✅ Order placed. UTR ho to /utr se submit karein.", show_alert=True)
+    await callback_query.answer(
+        "✅ Ab UTR number likh do + QR/payment screenshot bhejo!",
+        show_alert=True,
+    )
+
+
+def _extract_utr_from_text(text: str) -> str:
+    """Pull a bank UTR out of free-form chat text (no /utr command needed)."""
+    raw = (text or "").strip()
+    if not raw:
+        return ""
+    if _UTR_VALUE_RE.fullmatch(raw):
+        return raw
+    # Prefer a bare 12-digit NPCI UTR when the message has extra words.
+    match = re.search(r"(?<!\d)([0-9]{12})(?!\d)", raw)
+    if match:
+        return match.group(1)
+    match = re.search(
+        r"(?i)(?:utr|ref(?:erence)?|rrn|txn(?:\s*id)?)\s*[#:=\-]?\s*([0-9]{6,22})",
+        raw,
+    )
+    if match:
+        return match.group(1)
+    return ""
+
+
+async def _prompt_utr_confirmation(message: Message, order: dict, utr: str):
+    """Ask the buyer to double-check the UTR before it enters admin review."""
+    await message.reply_text(
+        script.FAMPAY_UTR_CONFIRM_TXT.format(
+            order_id=order["order_id"],
+            payable=format_inr(order["payable_amount"]),
+            utr=utr,
+        ),
+        parse_mode=ParseMode.HTML,
+        reply_markup=_utr_confirmation_buttons(order["order_id"], utr),
+        disable_web_page_preview=True,
+    )
+
+
+async def _notify_admins_proof(order: dict, *, utr: str = "", has_screenshot: bool = False):
+    """Ping admins when the buyer has shared UTR and/or a payment screenshot."""
+    order_id = order.get("order_id", "")
+    lines = [
+        f"<b>#FamPay_UTR_Review</b>\n",
+        f"ᴏʀᴅᴇʀ: <code>{order_id}</code>",
+        f"ᴜsᴇʀ: <code>{order.get('user_id')}</code> "
+        f"({escape(str(order.get('user_name') or 'ɴ/ᴀ'))})",
+        f"ᴀᴍᴏᴜɴᴛ: <b>{format_inr(order.get('payable_amount', 0))}</b>",
+        f"ᴘʟᴀɴ: {plan_label(order.get('plan_time', ''))}",
+    ]
+    if utr:
+        lines.append(f"ᴜᴛʀ: <code>{escape(str(utr))}</code>")
+    if has_screenshot or order.get("screenshot_file_id"):
+        lines.append("sᴄʀᴇᴇɴsʜᴏᴛ: ✅ attached / saved")
+    lines.append(
+        "\nᴘᴇʜʟᴇ ʙᴀɴᴋ/ꜰᴀᴍᴀᴘᴘ ᴍᴇ ᴜᴛʀ + sᴄʀᴇᴇɴsʜᴏᴛ ᴄʜᴇᴄᴋ ᴋᴀʀᴇᴍ, ꜰɪʀ ᴀᴘᴘʀᴏᴠᴇ/ʀᴇᴊᴇᴄᴛ."
+    )
+    await notify_admins(
+        "\n".join(lines),
+        reply_markup=_manual_review_buttons(order_id),
+    )
+
+
+@Client.on_message(filters.private & filters.text & ~filters.command(["utr", "start", "plan", "fampay", "myplan", "fampay_orders"]))
+async def fampay_plain_utr_message(client: Client, message: Message):
+    """Accept a plain UTR number in chat — no ``/utr`` command required."""
+    user = message.from_user
+    if not user:
+        return
+    utr = _extract_utr_from_text(message.text or "")
+    if not utr:
+        return
+    order = await paydb.get_reviewable_order(user.id)
+    if not order:
+        return
+    if order.get("status") == STATUS_PAID:
+        return await message.reply_text("✅ Is order ka payment already verified hai.")
+    if order.get("status") == STATUS_CANCELLED:
+        return await message.reply_text(
+            "🚫 Ye order cancel ho chuka hai; naya order /fampay se banayein."
+        )
+    if await paydb.utr_already_used(utr):
+        return await message.reply_text(
+            "⚠️ Ye UTR pehle kisi verified order ke liye use ho chuka hai."
+        )
+    await _prompt_utr_confirmation(message, order, utr)
 
 
 @Client.on_message(filters.command("utr") & filters.private)
 async def fampay_utr_command(client: Client, message: Message):
-    """Collect a bank UTR without ever treating it as automatic payment proof."""
+    """Backward-compatible UTR intake; prefer plain number / screenshot instead."""
     user = message.from_user
     if not user:
         return
@@ -708,9 +798,10 @@ async def fampay_utr_command(client: Client, message: Message):
     elif len(args) == 2 and re.fullmatch(r"FMP-[A-Z0-9]{6}", args[0].upper()):
         order_id, utr = args[0].upper(), args[1]
     else:
+        # Guide users to the new no-command flow instead of teaching /utr.
         return await message.reply_text(
-            "<b>ᴜꜱᴀɢᴇ:</b> <code>/utr FMP-ABC123 123456789012</code>\n"
-            "Agar aapka ek hi active order hai: <code>/utr 123456789012</code>",
+            "<b>ᴜᴛʀ ʏᴀʜɪɴ ʟɪᴋʜ ᴋᴇ ʙʜᴇᴊ ᴅᴏ</b> (sirf number), "
+            "aur QR/payment ka <b>screenshot</b> bhi bhejo confirmation ke liye ✅",
             parse_mode=ParseMode.HTML,
         )
 
@@ -722,24 +813,120 @@ async def fampay_utr_command(client: Client, message: Message):
     order = await (paydb.get_order(order_id) if order_id else paydb.get_reviewable_order(user.id))
     if not order or order.get("user_id") != user.id:
         return await message.reply_text("🚫 Aapka koi active FamPay order nahi mila.")
-    order_id = order["order_id"]
     if order.get("status") == STATUS_PAID:
         return await message.reply_text("✅ Is order ka payment already verified hai.")
     if order.get("status") == STATUS_CANCELLED:
-        return await message.reply_text("🚫 Ye order cancel ho chuka hai; naya order /fampay se banayein.")
+        return await message.reply_text(
+            "🚫 Ye order cancel ho chuka hai; naya order /fampay se banayein."
+        )
     if await paydb.utr_already_used(utr):
-        return await message.reply_text("⚠️ Ye UTR pehle kisi verified order ke liye use ho chuka hai.")
+        return await message.reply_text(
+            "⚠️ Ye UTR pehle kisi verified order ke liye use ho chuka hai."
+        )
+    await _prompt_utr_confirmation(message, order, utr)
 
-    await message.reply_text(
-        script.FAMPAY_UTR_CONFIRM_TXT.format(
-            order_id=order_id,
-            payable=format_inr(order["payable_amount"]),
-            utr=utr,
-        ),
-        parse_mode=ParseMode.HTML,
-        reply_markup=_utr_confirmation_buttons(order_id, utr),
-        disable_web_page_preview=True,
+
+@Client.on_message(filters.private & (filters.photo | filters.document))
+async def fampay_screenshot_message(client: Client, message: Message):
+    """Accept QR/payment screenshot for confirmation on the buyer's active order."""
+    user = message.from_user
+    if not user:
+        return
+
+    file_id = ""
+    if message.photo:
+        file_id = message.photo.file_id
+    elif message.document:
+        mime = (message.document.mime_type or "").lower()
+        name = (message.document.file_name or "").lower()
+        if not (mime.startswith("image/") or name.endswith((".jpg", ".jpeg", ".png", ".webp"))):
+            return
+        file_id = message.document.file_id
+    if not file_id:
+        return
+
+    order = await paydb.get_reviewable_order(user.id)
+    if not order:
+        return
+    if order.get("status") not in (STATUS_PENDING, STATUS_MANUAL_PENDING):
+        return
+
+    # Caption may already include the UTR — capture it in the same step.
+    caption_utr = _extract_utr_from_text(message.caption or "")
+    if caption_utr and await paydb.utr_already_used(caption_utr):
+        return await message.reply_text(
+            "⚠️ Ye UTR pehle kisi verified order ke liye use ho chuka hai."
+        )
+
+    saved = await paydb.submit_screenshot(
+        order["order_id"], user_id=user.id, file_id=file_id
     )
+    if not saved:
+        return await message.reply_text("🚫 Order ab review ke liye available nahi hai.")
+
+    if caption_utr:
+        confirmed = await paydb.submit_utr(
+            order["order_id"], user_id=user.id, utr=caption_utr
+        )
+        if confirmed:
+            saved = confirmed
+
+    utr = str(saved.get("submitted_utr") or caption_utr or "")
+    order_id = saved["order_id"]
+
+    # Forward the proof image to admins (best-effort) so they can eyeball it.
+    try:
+        caption = (
+            f"<b>#FamPay_Screenshot</b>\n"
+            f"ᴏʀᴅᴇʀ: <code>{order_id}</code>\n"
+            f"ᴜsᴇʀ: <code>{user.id}</code> ({escape(user.first_name or '')})\n"
+            f"ᴀᴍᴏᴜɴᴛ: <b>{format_inr(saved.get('payable_amount', 0))}</b>\n"
+            f"ᴘʟᴀɴ: {plan_label(saved.get('plan_time', ''))}\n"
+        )
+        if utr:
+            caption += f"ᴜᴛʀ: <code>{escape(utr)}</code>\n"
+        for destination in _alert_destinations():
+            try:
+                await client.send_photo(
+                    chat_id=destination,
+                    photo=file_id,
+                    caption=caption,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=_manual_review_buttons(order_id),
+                )
+            except Exception:
+                try:
+                    await client.send_document(
+                        chat_id=destination,
+                        document=file_id,
+                        caption=caption,
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=_manual_review_buttons(order_id),
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "FamPay: could not forward screenshot to %s: %s",
+                        destination,
+                        exc,
+                    )
+    except Exception:
+        logger.exception("FamPay: screenshot admin fan-out failed for %s", order_id)
+
+    if utr:
+        await message.reply_text(
+            script.FAMPAY_PROOF_COMPLETE_TXT.format(order_id=order_id, utr=utr),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+    else:
+        await message.reply_text(
+            script.FAMPAY_SCREENSHOT_OK_TXT.format(
+                order_id=order_id,
+                utr_line="",
+            ),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
 
 
 @Client.on_callback_query(filters.regex(r"^famutr_yes_FMP-[A-Z0-9]{6}_[0-9]{6,22}$"))
@@ -765,9 +952,14 @@ async def fampay_utr_confirm_callback(client: Client, callback_query: CallbackQu
     if not saved:
         return await callback_query.answer("🚫 Order ab review ke liye available nahi hai.", show_alert=True)
 
+    has_shot = bool(saved.get("screenshot_file_id"))
     try:
+        if has_shot:
+            body = script.FAMPAY_PROOF_COMPLETE_TXT.format(order_id=order_id, utr=utr)
+        else:
+            body = script.FAMPAY_UTR_SUBMITTED_TXT.format(order_id=order_id, utr=utr)
         await callback_query.message.edit_text(
-            script.FAMPAY_UTR_SUBMITTED_TXT.format(order_id=order_id, utr=utr),
+            body,
             parse_mode=ParseMode.HTML,
             reply_markup=None,
             disable_web_page_preview=True,
@@ -775,25 +967,20 @@ async def fampay_utr_confirm_callback(client: Client, callback_query: CallbackQu
     except Exception:
         pass
 
-    # A repeated tap/command must not spam every admin. A changed UTR, however,
-    # is a new review request and is worth surfacing.
+    # A repeated tap must not spam every admin. A changed UTR is a new review.
     if not already_submitted:
         try:
-            await notify_admins(
-                f"<b>#FamPay_UTR_Review</b>\n\n"
-                f"ᴏʀᴅᴇʀ: <code>{order_id}</code>\n"
-                f"ᴜsᴇʀ: <code>{saved.get('user_id')}</code> "
-                f"({escape(str(saved.get('user_name') or 'ɴ/ᴀ'))})\n"
-                f"ᴀᴍᴏᴜɴᴛ: <b>{format_inr(saved.get('payable_amount', 0))}</b>\n"
-                f"ᴘʟᴀɴ: {plan_label(saved.get('plan_time', ''))}\n"
-                f"ᴜᴛʀ: <code>{utr}</code>\n\n"
-                f"ᴘᴇʜʟᴇ ʙᴀɴᴋ/ꜰᴀᴍᴀᴘᴘ ᴍᴇ ᴜᴛʀ ᴄʜᴇᴄᴋ ᴋᴀʀᴇᴍ, ꜰɪʀ ᴀᴘᴘʀᴏᴠᴇ/ʀᴇᴊᴇᴄᴛ ᴄʜᴜɴᴇᴍ.",
-                reply_markup=_manual_review_buttons(order_id),
-            )
+            await _notify_admins_proof(saved, utr=utr, has_screenshot=has_shot)
         except Exception:
             logger.exception("FamPay: could not notify admins of UTR %s", utr)
 
-    await callback_query.answer("✅ UTR review ke liye bhej diya gaya.", show_alert=True)
+    if has_shot:
+        await callback_query.answer("✅ UTR + screenshot review par hai.", show_alert=True)
+    else:
+        await callback_query.answer(
+            "✅ UTR save ho gaya — ab QR/payment screenshot bhejo!",
+            show_alert=True,
+        )
 
 
 @Client.on_callback_query(filters.regex(r"^famutr_no_FMP-[A-Z0-9]{6}$"))

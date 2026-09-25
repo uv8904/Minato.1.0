@@ -30,6 +30,8 @@ field               type    notes
 ``order_placed_at`` datetime buyer tapped the post-payment "Order placed" step
 ``submitted_utr``   str     buyer-supplied UTR, awaiting an admin's review
 ``utr_submitted_at`` datetime when ``submitted_utr`` was confirmed by the buyer
+``screenshot_file_id`` str  Telegram file_id of buyer payment/QR screenshot
+``screenshot_submitted_at`` datetime when the screenshot was received
 ``created_at``      datetime naive local time (same convention as the rest of
                              the bot's premium data)
 ``updated_at``      datetime last write
@@ -172,13 +174,15 @@ class FamPayOrderStore:
             "fg_checkout_url": fg_checkout_url or "",
             "chat_id": int(chat_id) if chat_id is not None else None,
             "qr_message_id": int(qr_message_id) if qr_message_id else None,
-            # A buyer may mark an order as placed and submit their bank UTR for
-            # an admin to inspect. Neither value is treated as payment proof:
-            # IMAP/FamGateway remains the automatic verifier, and manual
-            # approval is still an explicit admin action.
+            # A buyer may mark an order as placed and submit their bank UTR /
+            # payment screenshot for an admin to inspect. Neither value is
+            # treated as automatic payment proof: IMAP/FamGateway remains the
+            # automatic verifier, and manual approval is still explicit.
             "order_placed_at": None,
             "submitted_utr": "",
             "utr_submitted_at": None,
+            "screenshot_file_id": "",
+            "screenshot_submitted_at": None,
             "created_at": now,
             "updated_at": now,
             "expires_at": expires_at,
@@ -245,6 +249,35 @@ class FamPayOrderStore:
                     "order_placed_at": current.get("order_placed_at") or now,
                     "submitted_utr": str(utr or ""),
                     "utr_submitted_at": now,
+                    "updated_at": now,
+                }
+            },
+            return_document=True,
+        )
+
+    async def submit_screenshot(
+        self, order_id: str, *, user_id: int, file_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Save a buyer payment/QR screenshot for **manual review** only."""
+        current = await self.get_order(order_id)
+        if (
+            not current
+            or current.get("user_id") != int(user_id)
+            or current.get("status") not in (STATUS_PENDING, STATUS_MANUAL_PENDING)
+        ):
+            return None
+        now = datetime.now()
+        return await self.col.find_one_and_update(
+            {
+                "_id": order_id,
+                "user_id": int(user_id),
+                "status": current["status"],
+            },
+            {
+                "$set": {
+                    "order_placed_at": current.get("order_placed_at") or now,
+                    "screenshot_file_id": str(file_id or ""),
+                    "screenshot_submitted_at": now,
                     "updated_at": now,
                 }
             },
@@ -329,7 +362,7 @@ class FamPayOrderStore:
         return None
 
     async def get_reviewable_order(self, user_id: int) -> Optional[Dict[str, Any]]:
-        """Latest pending/manual-review order for the buyer's ``/utr`` command."""
+        """Latest pending/manual-review order for UTR / screenshot confirmation."""
         # Filtering the two legal statuses in Python avoids a database-specific
         # ``$in`` expression and keeps this tiny store easy to fake in tests.
         cursor = self.col.find({"user_id": int(user_id)}).sort("created_at", -1)
