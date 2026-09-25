@@ -41,7 +41,14 @@ async def web_server():
 
 async def check_expired_premium(client):
     while 1:
-        data = await db.get_expired(datetime.now())
+        # A Mongo blip (very common right after a restart) must not kill this
+        # task for good – log it and try again on the next round.
+        try:
+            data = await db.get_expired(datetime.now())
+        except Exception as e:
+            logging.warning(f"Premium expiry check failed, retrying in 30s: {e}")
+            await sleep(30)
+            continue
         for user in data:
             user_id = user["id"]
             await db.remove_premium_access(user_id)

@@ -3,3 +3,6 @@ __pycache__/
 DreamXlogs.txt
 cinemagoer.db
 .env
+.venv/
+*.session
+*.session-journal
