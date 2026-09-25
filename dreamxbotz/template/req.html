@@ -23,6 +23,9 @@
     <link rel="stylesheet" href="/static/watch_hero.css?v={{ asset_version | e }}">
     {% endif %}
 
+    <!-- Netflix Pack · Enhanced Player + Continue Watching + My List + Trailers -->
+    <link rel="stylesheet" href="/static/netflix_pack.css?v={{ asset_version | e }}">
+
     <!-- Stream UI · dreamxbotz · earlier page layout by @biisal -->
     <style>
         :root {
@@ -2357,6 +2360,9 @@
     {% if watch_hero_enabled %}
     <script src="/static/watch_hero.js?v={{ asset_version | e }}" defer></script>
     {% endif %}
+
+    <!-- Netflix Pack · Enhanced Player + Continue Watching + My List + Trailers -->
+    <script src="/static/netflix_pack.js?v={{ asset_version | e }}" defer></script>
 </body>
 
 </html>

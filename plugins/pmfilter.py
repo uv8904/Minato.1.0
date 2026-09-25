@@ -91,21 +91,47 @@ async def give_filter(client, message):
 async def pm_text(bot, message):
     bot_id = bot.me.id
     content = message.text
-    user = message.from_user.first_name
-    user_id = message.from_user.id
+    user = message.from_user.first_name if message.from_user else "Unknown"
+    user_id = message.from_user.id if message.from_user else 0
     if EMOJI_MODE:
         try:
             await message.react(emoji=random.choice(REACTIONS), big=True)
         except Exception:
-            await message.react(emoji="⚡️", big=True)
+            try:
+                await message.react(emoji="⚡️", big=True)
+            except Exception:
+                pass
     if content.startswith(("#")):
         return
+    # --- Debug: always log PM request path ---
     try:
         await mdb.update_top_messages(user_id, content)
+    except Exception as e:
+        logger.warning(f"pm_text: update_top_messages failed for {user_id}: {e}")
+    # --- Check PM search status with safe fallback ---
+    try:
         pm_search = await db.pm_search_status(bot_id)
-        if pm_search:
+    except Exception as e:
+        logger.warning(f"pm_text: pm_search_status failed: {e}, fallback to True")
+        pm_search = True
+    # Log for debugging normal vs admin
+    logger.info(f"PM request from {user_id} ({user}): '{content[:40]}' pm_search={pm_search}")
+    if pm_search:
+        try:
             await auto_filter(bot, message)
-        else:
+        except Exception as e:
+            logger.exception(f"pm_text: auto_filter crashed for {user_id} query '{content}': {e}")
+            try:
+                await message.reply_text(f"<b>⚠️ Search failed, try again.\n<code>{e}</code></b>", parse_mode=enums.ParseMode.HTML)
+            except Exception:
+                pass
+            try:
+                await bot.send_message(chat_id=LOG_CHANNEL, text=f"<b>#PM_ERROR\n👤 {user} ({user_id})\n💬 {content}\n❌ {e}</b>")
+            except Exception:
+                pass
+    else:
+        try:
+            grp_link = GRP_LNK if GRP_LNK and GRP_LNK.startswith("http") else "https://t.me/movie_requestss_group"
             await message.reply_text(
                 text=(
                     f"<b>🙋 ʜᴇʏ {user} 😍 ,\n\n"
@@ -114,7 +140,10 @@ async def pm_text(bot, message):
                     "आप केवल हमारे 𝑴𝒐𝒗𝒊𝒆 𝑮𝒓𝒐𝒖𝒑 पर ही 𝑴𝒐𝒗𝒊𝒆 𝑺𝒆𝒂𝒓𝒄𝒉 कर सकते हो । "
                     "आपको 𝑫𝒊𝒓𝒆𝒄𝒕 𝑩𝒐𝒕 पर 𝑴𝒐𝒗𝒊𝒆 𝑺𝒆𝒂𝒓𝒄𝒉 करने की 𝑷𝒆𝒓𝒎𝒊𝒔𝒔𝒊𝒐𝒏 नहीं है कृपया नीचे दिए गए 𝑹𝑬𝑸𝑼𝑬𝑺𝑻 𝑯𝑬𝑹𝑬 वाले 𝑩𝒖𝒕𝒕𝒐𝒏 पर क्लिक करके हमारे 𝑴𝒐𝒗𝒊𝒆 𝑮𝒓𝒐𝒖𝒑 को 𝑱𝒐𝒊𝒏 करें और वहां पर अपनी मनपसंद 𝑴𝒐𝒗𝒊𝒆 𝑺𝒆𝒂𝒓𝒄𝒉 सर्च करें ।"
                     "</blockquote></b>"
-                ), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📝 ʀᴇǫᴜᴇsᴛ ʜᴇʀᴇ ", url=GRP_LNK)]]))
+                ), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📝 ʀᴇǫᴜᴇsᴛ ʜᴇʀᴇ ", url=grp_link)]]))
+        except Exception as e:
+            logger.warning(f"pm_text: reply PM disabled message failed: {e}")
+        try:
             await bot.send_message(chat_id=LOG_CHANNEL,
                                    text=(
                                        f"<b>#𝐏𝐌_𝐌𝐒𝐆\n\n"
@@ -123,8 +152,8 @@ async def pm_text(bot, message):
                                        f"💬 Mᴇssᴀɢᴇ : {content}</b>"
                                    )
                                    )
-    except Exception:
-        pass
+        except Exception as e:
+            logger.warning(f"pm_text: log to LOG_CHANNEL failed: {e}")
 
 
 @Client.on_callback_query(filters.regex(r"^reffff"))
