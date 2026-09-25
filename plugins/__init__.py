@@ -21,6 +21,13 @@ async def web_server():
     # Docs: docs/NEWLY_UPLOADED_MOVIES.md
     web_app.add_routes(static_assets.routes)
     web_app.add_routes(movie_api.routes)
+    # Analytics + AI Recommendations (MinatoVerse Netflix Pack)
+    try:
+        from dreamxbotz.server import analytics_api
+
+        web_app.add_routes(analytics_api.routes)
+    except Exception as e:
+        logging.warning(f"Analytics routes not registered: {e}")
     # FamPay · FamGateway webhook receiver (docs/FAMPAY_SETUP.md) — also before
     # the catch-all, so POSTs to /fampay/webhook always reach it.
     try:

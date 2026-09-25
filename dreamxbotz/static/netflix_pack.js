@@ -32,6 +32,20 @@
         clearTimeout(t._tm); t._tm = setTimeout(function(){ t.classList.remove("on"); }, 2400);
     }
 
+    /* ---------- Analytics beacon (fire-and-forget) ---------- */
+    function beacon(eventName, extra){
+        try{
+            var title = (FILE.name || "").slice(0,120) || document.title.slice(0,120);
+            var payload = JSON.stringify({ title: title, uid: FILE.uid || "", event: eventName, duration: (extra&&extra.duration)||0 });
+            if(navigator.sendBeacon){
+                var blob=new Blob([payload],{type:"application/json"});
+                navigator.sendBeacon("/api/analytics/track", blob);
+            } else {
+                fetch("/api/analytics/track", {method:"POST", headers:{"Content-Type":"application/json"}, body:payload, keepalive:true}).catch(function(){});
+            }
+        } catch(e){}
+    }
+
     /* ---------- Trailer IDs for known titles ---------- */
     var TRAILERS = {
         "Jawan": "MwoUr5wPz9o",
@@ -593,6 +607,57 @@
         }
     }
 
+    /* ---------- AI Recommendations rail ---------- */
+    function injectRecommendRail(){
+        if(document.getElementById("nfxRecommend")) return;
+        var trending=document.getElementById("trendingSection");
+        if(!trending || !trending.parentNode) return;
+        var html='<section class="nfx-rail" id="nfxRecommend" hidden>'
+            +'<div class="nfx-rail-head"><div><h2 class="nfx-rail-title">Recommended <span>for You</span> ✨</h2><p class="nfx-rail-sub" id="nfxRecSub">AI picks based on your My List + Continue Watching</p></div>'
+            +'<span class="nfx-rail-count" id="nfxRecCount">AI</span></div>'
+            +'<div class="nfx-rail-grid" id="nfxRecommendGrid"></div></section>';
+        trending.insertAdjacentHTML("beforebegin", html);
+        refreshRecommendations();
+    }
+    function refreshRecommendations(){
+        var root=document.getElementById("nfxRecommend");
+        var grid=document.getElementById("nfxRecommendGrid");
+        var sub=document.getElementById("nfxRecSub");
+        if(!root||!grid) return;
+        var base=[];
+        try{
+            var cw=cwGet().slice(0,3).map(function(x){ return x.title.split(".")[0].split("(")[0].trim(); });
+            var ml=mlGet().slice(0,3).map(function(x){ return x.label; });
+            base=cw.concat(ml).slice(0,4);
+            if(base.length===0) base=["Jawan"];
+        }catch(e){ base=["Jawan"]; }
+        if(sub) sub.textContent = base.length ? "Because you watched " + base.slice(0,2).join(", ") : "Trending picks for you";
+        var q=base.join(",");
+        fetch("/api/recommend?based_on="+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(data){
+            if(!data.ok || !data.recommendations || !data.recommendations.length){ root.hidden=true; return; }
+            grid.innerHTML="";
+            data.recommendations.forEach(function(rec){
+                var card=document.createElement("a");
+                card.className="nfx-ml-card";
+                card.href="https://t.me/"+(FILE.bot||"").replace(/^@/,"")+"?start=msrch_"+btoa(unescape(encodeURIComponent(rec.title))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+                card.style.position="relative";
+                var art=document.createElement("div");
+                art.className="nfx-ml-art";
+                art.style.background="linear-gradient(135deg, hsl("+(hashCode(rec.title)%360)+" 70% 45%), #07080c)";
+                var imgInfo = rec.title; // poster via iTunes fallback handled elsewhere
+                // no img yet, placeholder gradient is enough for demo
+                var info=document.createElement("div");
+                info.className="nfx-ml-info";
+                info.innerHTML='<div class="nfx-ml-title">'+escHtml(rec.title)+'</div><div class="nfx-ml-sub">'+escHtml(rec.genres.join(" · "))+'</div><div style="margin-top:6px;font-size:11px;color:#ffdd7a">'+escHtml(rec.reason)+'</div>';
+                card.appendChild(art); card.appendChild(info);
+                grid.appendChild(card);
+            });
+            root.hidden=false;
+        }).catch(function(){ root.hidden=true; });
+    }
+    function hashCode(s){ var h=0; for(var i=0;i<s.length;i++) h=((h<<5)-h)+s.charCodeAt(i); return Math.abs(h); }
+    function escHtml(s){ return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]}); }
+
     /* ---------- Init ---------- */
     function init(){
         injectRails();
@@ -602,8 +667,12 @@
         enhanceExistingCards();
         hookNewlyUploaded();
         hookComingSoon();
+        injectRecommendRail();
 
-        // Hook video progress for Continue Watching
+        // Analytics: view on load
+        setTimeout(function(){ beacon("view"); }, 900);
+
+        // Hook video progress for Continue Watching + analytics
         var video=document.getElementById("video");
         if(video){
             var saveTimer=null;
@@ -612,11 +681,19 @@
                 saveTimer=setTimeout(function(){ cwSaveCurrent(video.currentTime, video.duration); }, 900);
             });
             video.addEventListener("pause", function(){ cwSaveCurrent(video.currentTime, video.duration); });
+            video.addEventListener("play", function(){ beacon("play"); });
+            video.addEventListener("ended", function(){ beacon("complete", {duration: video.duration}); });
             // also periodic
             setInterval(function(){ if(!video.paused && isFinite(video.duration)) cwSaveCurrent(video.currentTime, video.duration); }, 5000);
             // on loadedmetadata, try resume toast already handled by original - we just ensure CW rendered
             video.addEventListener("loadedmetadata", function(){ setTimeout(renderCW, 400); });
         }
+        // download beacon
+        var dlBtn=document.getElementById("topDownload")||document.getElementById("mainDownload");
+        if(dlBtn){ dlBtn.addEventListener("click", function(){ beacon("download"); }); }
+        // also copy link beacon
+        var cp=document.getElementById("copyLink");
+        if(cp){ cp.addEventListener("click", function(){ beacon("view"); }); }
 
         // expose for debug
         window.NfxPack={ cwGet:cwGet, mlGet:mlGet, renderCW:renderCW, renderML:renderML, clearCW:function(){cwSet([]);renderCW();}, clearML:function(){mlSet([]);renderML(); syncHearts();} };
