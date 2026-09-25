@@ -189,6 +189,26 @@ def _plan_buttons():
     return InlineKeyboardMarkup(rows)
 
 
+def _plan_detail_caption(amount: int) -> str:
+    """Render the pre-checkout detail page for one plan."""
+    return script.FAMPAY_PLAN_DETAIL_TXT.format(
+        plan=plan_label(FAMPAY_PLANS[amount]),
+        amount=format_inr(amount),
+        upi_id=FAMPAY_UPI_ID,
+        expiry=FAMPAY_ORDER_EXPIRY_MINUTES,
+    )
+
+
+def _plan_detail_buttons(amount: int):
+    """Detail page actions: Pay Now proceeds to the QR checkout."""
+    return InlineKeyboardMarkup(
+        [
+            [green("💸 ᴘᴀʏ ɴᴏᴡ", callback_data=f"fampaybuy_{amount}")],
+            [blue("⋞ ʙᴀᴄᴋ ᴛᴏ ᴘʟᴀɴs", callback_data="fampay_info")],
+        ]
+    )
+
+
 def _order_buttons(order: dict, upi_intent: str, checkout_url: str = ""):
     """Buttons for a QR order, including the explicit post-payment step."""
     order_id = order["order_id"]
@@ -632,6 +652,7 @@ async def fampay_info_callback(client: Client, callback_query: CallbackQuery):
 
 @Client.on_callback_query(filters.regex(r"^fampay_(\d+)$"))
 async def fampay_buy_callback(client: Client, callback_query: CallbackQuery):
+    """Plan selected → show the detail page first (features + proof steps)."""
     amount = int(callback_query.data.split("_")[-1])
     if amount not in FAMPAY_PLANS:
         return await callback_query.answer("⚠️ Invalid plan.", show_alert=True)
@@ -640,9 +661,38 @@ async def fampay_buy_callback(client: Client, callback_query: CallbackQuery):
             "⚠️ FamPay payments abhi configure nahi hain.", show_alert=True
         )
     plan_time = FAMPAY_PLANS[amount]
+    try:
+        await client.edit_message_media(
+            chat_id=callback_query.message.chat.id,
+            message_id=callback_query.message.id,
+            media=InputMediaPhoto(SUBSCRIPTION, caption=_plan_detail_caption(amount)),
+            reply_markup=_plan_detail_buttons(amount),
+        )
+    except Exception:
+        await client.send_photo(
+            chat_id=callback_query.message.chat.id,
+            photo=SUBSCRIPTION,
+            caption=_plan_detail_caption(amount),
+            parse_mode=ParseMode.HTML,
+            reply_markup=_plan_detail_buttons(amount),
+        )
     await callback_query.answer(
-        f"✅ {plan_label(plan_time)} choose ho gaya — ab pay karein!",
-        show_alert=True,
+        f"🧾 {plan_label(plan_time)} — details padh ke Pay Now dabayein!"
+    )
+
+
+@Client.on_callback_query(filters.regex(r"^fampaybuy_(\d+)$"))
+async def fampay_paynow_callback(client: Client, callback_query: CallbackQuery):
+    """Pay Now on the detail page → create (or reuse) the order and send the QR."""
+    amount = int(callback_query.data.split("_")[-1])
+    if amount not in FAMPAY_PLANS:
+        return await callback_query.answer("⚠️ Invalid plan.", show_alert=True)
+    if not fampay_configured():
+        return await callback_query.answer(
+            "⚠️ FamPay payments abhi configure nahi hain.", show_alert=True
+        )
+    await callback_query.answer(
+        f"📲 {plan_label(FAMPAY_PLANS[amount])} ka QR bana raha hoon…"
     )
     try:
         await create_order_for_user(
@@ -650,7 +700,12 @@ async def fampay_buy_callback(client: Client, callback_query: CallbackQuery):
         )
     except Exception:
         logger.exception("FamPay: could not create order for %s", callback_query.from_user.id)
-        await callback_query.answer("🚫 Order ban nahi paya, dobara try karein.", show_alert=True)
+        try:
+            await callback_query.message.reply_text(
+                "🚫 Order ban nahi paya, dobara try karein."
+            )
+        except Exception:
+            pass
 
 
 @Client.on_callback_query(filters.regex(r"^famplaced_(\S+)$"))

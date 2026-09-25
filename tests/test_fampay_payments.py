@@ -60,6 +60,22 @@ def test_fampay_upi_id_falls_back_to_owner_upi_id():
     assert output.strip() == "owner@fam"
 
 
+def test_plan_detail_page_carries_features_and_proof_steps():
+    """The pre-checkout detail page must show features + UTR/screenshot steps."""
+    from Script import script
+
+    rendered = script.FAMPAY_PLAN_DETAIL_TXT.format(
+        plan="30 ᴅᴀʏꜱ", amount="₹40.00", upi_id="owner@fam", expiry=10
+    )
+    assert "30 ᴅᴀʏꜱ" in rendered
+    assert "₹40.00" in rendered
+    assert "<code>owner@fam</code>" in rendered
+    # features and the post-payment proof instructions are both on the page
+    assert "ᴘʀᴇᴍɪᴜᴍ" in rendered.lower() or "ᴍɪʟᴇɢᴀ" in rendered
+    assert "sᴄʀᴇᴇɴsʜᴏᴛ" in rendered
+    assert "ᴜᴛʀ ɴᴜᴍʙᴇʀ" in rendered
+
+
 # --------------------------------------------------------------------------- #
 # FamApp email parsing
 # --------------------------------------------------------------------------- #
@@ -521,6 +537,7 @@ def test_plugin_registers_expected_handlers():
         "fampay_screenshot_message",
         'filters.regex(r"^fampay_info$")',
         'filters.regex(r"^fampay_(\\d+)$")',
+        'filters.regex(r"^fampaybuy_(\\d+)$")',
         'filters.regex(r"^famplaced_(\\S+)$")',
         'filters.regex(r"^famcheck_(\\S+)$")',
         'filters.regex(r"^famcancel_(\\S+)$")',
@@ -530,6 +547,8 @@ def test_plugin_registers_expected_handlers():
         "def imap_scan_once",
         "submit_screenshot",
         "_extract_utr_from_text",
+        "_plan_detail_caption",
+        "FAMPAY_PLAN_DETAIL_TXT",
     ):
         assert needle in source, f"missing {needle}"
 

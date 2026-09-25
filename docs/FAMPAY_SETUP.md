@@ -22,8 +22,10 @@ admin gets an **Approve / Reject** button (manual fallback).
 
 ```
 /plan  →  ⚡ FamPay  →  pick a plan (₹10 / ₹20 / ₹40 / ₹55 / ₹75)
-      →  bot creates order FMP-AB12CD and reserves a UNIQUE paise amount
-         (₹40 → ₹40.07)  ── the paise is how the bot knows WHO paid
+      →  plan detail page: what the plan includes + the UTR/screenshot
+         confirmation steps, with a green [💸 Pay Now] button
+      →  Pay Now  →  bot creates order FMP-AB12CD and reserves a UNIQUE paise
+         amount (₹40 → ₹40.07)  ── the paise is how the bot knows WHO paid
       →  bot sends: UPI QR + "pay exactly ₹40.07" + green [Pay via UPI app]
          + green [✅ Order placed] button
       →  user pays → taps [✅ Order placed] to get the optional UTR instructions
