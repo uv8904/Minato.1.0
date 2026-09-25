@@ -23,6 +23,9 @@ ASSETS = {
     # watch-page movie hero (strip above the player)
     "watch_hero.css": "text/css; charset=utf-8",
     "watch_hero.js": "text/javascript; charset=utf-8",
+    # Netflix Pack · Enhanced Player + Continue Watching + My List + Trailers
+    "netflix_pack.css": "text/css; charset=utf-8",
+    "netflix_pack.js": "text/javascript; charset=utf-8",
 }
 
 routes = web.RouteTableDef()

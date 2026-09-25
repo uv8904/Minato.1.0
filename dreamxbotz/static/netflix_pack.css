@@ -1,0 +1,465 @@
+/* ==========================================================================
+   Netflix Pack · Enhanced Player + Continue Watching + My List + Trailers
+   Served from the bot's own web server (/static/netflix_pack.css).
+   Everything scoped under .nfx-* so existing styles stay untouched.
+   ========================================================================== */
+
+/* ---------- Continue Watching & My List rails ---------- */
+.nfx-rail {
+    margin: 46px 0 10px;
+    --nfx-gold: #f5c518;
+    --nfx-gold2: #ffdd7a;
+}
+.nfx-rail-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.nfx-rail-title {
+    margin: 0;
+    font-family: var(--font-display, "Sora", sans-serif);
+    font-size: clamp(20px, 3.4vw, 27px);
+    font-weight: 600;
+    letter-spacing: -0.4px;
+    color: #eef0f7;
+}
+.nfx-rail-title span {
+    background: linear-gradient(135deg, var(--nfx-gold), var(--nfx-gold2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+.nfx-rail-sub {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #9aa1b9;
+}
+.nfx-rail-count {
+    flex: none;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(245,197,24,0.12);
+    border: 1px solid rgba(245,197,24,0.3);
+    color: #ffdd7a;
+    font-size: 12px;
+    font-weight: 700;
+}
+.nfx-rail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
+}
+.nfx-rail-grid.is-empty {
+    display: block;
+}
+.nfx-empty {
+    padding: 28px 20px;
+    text-align: center;
+    border: 1px dashed rgba(245,197,24,0.25);
+    border-radius: 16px;
+    background: rgba(255,255,255,0.02);
+}
+.nfx-empty-icon {
+    display: grid;
+    place-items: center;
+    width: 48px; height: 48px;
+    margin: 0 auto 10px;
+    border-radius: 12px;
+    background: rgba(245,197,24,0.1);
+    border: 1px solid rgba(245,197,24,0.2);
+    color: #f5c518;
+}
+.nfx-empty-icon svg { width: 22px; height: 22px; }
+.nfx-empty p { margin: 0; color: #9aa1b9; font-size: 13px; }
+.nfx-empty small { display: block; margin-top: 6px; color: #6b7280; font-size: 11.5px; }
+
+/* Continue Watching card */
+.nfx-cw-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #101320;
+    border: 1px solid rgba(255,255,255,0.09);
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    text-align: left;
+}
+.nfx-cw-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(245,197,24,0.5);
+    box-shadow: 0 20px 40px -20px rgba(0,0,0,0.8);
+}
+.nfx-cw-art {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: linear-gradient(135deg, #1b2036, #07080c);
+    overflow: hidden;
+}
+.nfx-cw-art img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+.nfx-cw-art img.on { opacity: 1; }
+.nfx-cw-play {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    background: rgba(0,0,0,0.28);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.nfx-cw-card:hover .nfx-cw-play { opacity: 1; }
+.nfx-cw-play span {
+    display: grid; place-items: center;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #7c5cff, #22d3ee);
+    color: #06070c;
+}
+.nfx-cw-play svg { width: 18px; height: 18px; margin-left: 2px; }
+.nfx-cw-progress {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 4px;
+    background: rgba(255,255,255,0.15);
+}
+.nfx-cw-progress i {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #f5c518, #ffdd7a);
+    border-radius: 0 4px 4px 0;
+    transition: width 0.3s ease;
+}
+.nfx-cw-body {
+    padding: 10px 12px 11px;
+}
+.nfx-cw-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #eef0f7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.nfx-cw-meta {
+    font-size: 11.5px;
+    color: #9aa1b9;
+    margin-top: 2px;
+}
+.nfx-cw-remove {
+    position: absolute;
+    top: 8px; right: 8px;
+    width: 28px; height: 28px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #fff;
+    opacity: 0;
+    transition: opacity 0.18s ease, background 0.18s ease;
+}
+.nfx-cw-card:hover .nfx-cw-remove { opacity: 1; }
+.nfx-cw-remove:hover { background: rgba(248,113,113,0.9); }
+.nfx-cw-remove svg { width: 14px; height: 14px; }
+
+/* My List card - same as poster wall but smaller */
+.nfx-mylist-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    gap: 14px;
+}
+.nfx-ml-card {
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #101320;
+    border: 1px solid rgba(255,255,255,0.09);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+    cursor: pointer;
+}
+.nfx-ml-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(245,197,24,0.5);
+}
+.nfx-ml-art {
+    position: relative;
+    aspect-ratio: 2 / 3;
+    background: linear-gradient(155deg, hsl(var(--h1, 260) 70% 45%), #07080c);
+    overflow: hidden;
+}
+.nfx-ml-art img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+.nfx-ml-art img.on { opacity: 1; }
+.nfx-ml-info {
+    padding: 10px 11px;
+}
+.nfx-ml-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #eef0f7;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.nfx-ml-sub {
+    font-size: 11.5px;
+    color: #9aa1b9;
+    margin-top: 3px;
+}
+.nfx-ml-heart {
+    position: absolute;
+    top: 8px; right: 8px;
+    width: 32px; height: 32px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.62);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #ff5a6a;
+    backdrop-filter: blur(6px);
+    transition: transform 0.18s ease, background 0.18s ease;
+    z-index: 2;
+}
+.nfx-ml-heart:hover { transform: scale(1.1); background: rgba(0,0,0,0.78); }
+.nfx-ml-heart svg { width: 16px; height: 16px; fill: currentColor; }
+
+/* Heart button on any poster (wall, trending, newly_uploaded) */
+.nfx-heart {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 3;
+    width: 32px; height: 32px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.58);
+    border: 1px solid rgba(255,255,255,0.14);
+    color: rgba(255,255,255,0.9);
+    backdrop-filter: blur(6px);
+    cursor: pointer;
+    transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+.nfx-heart:hover { transform: scale(1.08); background: rgba(0,0,0,0.75); }
+.nfx-heart.is-active {
+    color: #ff3b5e;
+    background: rgba(255,59,94,0.18);
+    border-color: rgba(255,59,94,0.5);
+}
+.nfx-heart svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; }
+.nfx-heart.is-active svg { fill: currentColor; stroke: currentColor; }
+.nfx-heart:active { transform: scale(0.92); }
+
+/* Make poster cards positioning context for heart */
+.poster, .nu-card, .trend { position: relative; }
+
+/* ---------- Trailer preview on hover ---------- */
+.nfx-trailer {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.96);
+    transition: opacity 0.28s ease, transform 0.28s ease;
+    box-shadow: 0 24px 50px -12px rgba(0,0,0,0.9);
+}
+.nfx-trailer.on {
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1);
+}
+.nfx-trailer iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    border: 0;
+}
+.nfx-trailer-label {
+    position: absolute;
+    left: 8px; bottom: 8px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+}
+.nfx-trailer-close {
+    position: absolute;
+    top: 8px; right: 8px;
+    width: 26px; height: 26px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.7);
+    border: 0;
+    color: #fff;
+    cursor: pointer;
+}
+@media (hover: none) {
+    .nfx-trailer { display: none; }
+}
+
+/* ---------- Enhanced Player ---------- */
+.player.is-theatre {
+    aspect-ratio: 21 / 9;
+    max-height: 68vh;
+}
+.player.is-theatre video {
+    object-fit: contain;
+}
+.theatre-backdrop {
+    display: none;
+}
+.player.is-theatre ~ .theatre-backdrop {
+    display: block;
+}
+.nfx-skip-intro {
+    position: absolute;
+    right: 16px;
+    bottom: 72px;
+    z-index: 5;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: rgba(245,197,24,0.96);
+    color: #20180a;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    border: 0;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.nfx-skip-intro.on {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+.nfx-skip-intro:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+.nfx-theatre-btn.is-active {
+    background: rgba(245,197,24,0.2) !important;
+    color: #ffdd7a !important;
+}
+
+/* Screenshot flash */
+.nfx-flash-shot {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    background: rgba(255,255,255,0.92);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+.nfx-flash-shot.on { opacity: 1; }
+
+/* Shortcuts modal */
+.nfx-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: none;
+    place-items: center;
+    padding: 20px;
+    background: rgba(4,5,9,0.78);
+    backdrop-filter: blur(10px);
+}
+.nfx-modal.on { display: grid; }
+.nfx-modal-box {
+    width: min(560px, 100%);
+    max-height: 86vh;
+    overflow: auto;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: linear-gradient(180deg, #151928, #0d0f1a);
+    box-shadow: 0 30px 80px -20px rgba(0,0,0,0.9);
+}
+.nfx-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.nfx-modal-head h3 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+}
+.nfx-modal-close {
+    width: 36px; height: 36px;
+    display: grid; place-items: center;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #eef0f7;
+    cursor: pointer;
+}
+.nfx-modal-body {
+    padding: 16px 20px 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+.nfx-kbd-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+}
+.nfx-kbd-row span { font-size: 13px; color: #9aa1b9; }
+.nfx-kbd-row b { font-size: 12px; }
+.nfx-kbd {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.nfx-kbd kbd {
+    min-width: 28px;
+    padding: 4px 7px;
+    border-radius: 6px;
+    background: #1e2235;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-bottom-width: 2px;
+    color: #eef0f7;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+}
+@media (max-width: 640px) {
+    .nfx-modal-body { grid-template-columns: 1fr; }
+    .nfx-rail-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 68vw; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 8px; scrollbar-width: none; }
+    .nfx-rail-grid::-webkit-scrollbar { display: none; }
+    .nfx-rail-grid > * { scroll-snap-align: start; }
+    .nfx-mylist-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 42vw; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 8px; scrollbar-width: none; }
+    .nfx-mylist-grid::-webkit-scrollbar { display: none; }
+    .nfx-mylist-grid > * { scroll-snap-align: start; }
+    .player.is-theatre { aspect-ratio: 16/9; max-height: none; }
+}
