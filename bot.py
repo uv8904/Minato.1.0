@@ -173,6 +173,16 @@ async def dreamxbotz_start():
         b_users, b_chats = [], []
     temp.BANNED_USERS = b_users
     temp.BANNED_CHATS = b_chats
+    # Maintenance mode (docs/MAINTENANCE_MODE.md): restore the persisted flag
+    # so an admin-toggled maintenance window survives restarts.  A Mongo hiccup
+    # means "maintenance off" instead of a dead bot.
+    try:
+        temp.MAINTENANCE = await db.get_maintenance_mode()
+    except Exception as e:
+        logging.exception("Couldn't load the maintenance flag – starting with maintenance OFF: %s", e)
+        temp.MAINTENANCE = False
+    if temp.MAINTENANCE:
+        logging.warning("Maintenance mode is ON – only ADMINS can use the bot until '/maint off'.")
     # Index creation is idempotent, Mongo is often still slow while the
     # container comes up – don't let it block the start.
     try:
