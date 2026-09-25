@@ -90,6 +90,7 @@ from dreamxbotz.util.fampay_qr import (
     build_upi_intent,
     format_inr,
     generate_qr_png,
+    pay_link_html,
     unique_payable_amount,
 )
 
@@ -209,13 +210,25 @@ def _plan_detail_buttons(amount: int):
     )
 
 
+def _is_url_button_safe(url: str) -> bool:
+    """Inline-keyboard ``url=`` only accepts http(s)/tg schemes.
+
+    Telegram rejects any other scheme (``upi://``, ``intent://`` …) with
+    ``400 BUTTON_URL_INVALID`` **before** the message is sent — the send then
+    throws and the buyer just sees "Order ban nahi paya".  The UPI deep link
+    therefore lives inside the *caption* as a text-link entity
+    (:func:`pay_link_html`), where arbitrary schemes are allowed.
+    """
+    return str(url or "").lower().startswith(("https://", "http://", "tg://"))
+
+
 def _order_buttons(order: dict, upi_intent: str, checkout_url: str = ""):
     """Buttons for a QR order, including the explicit post-payment step."""
     order_id = order["order_id"]
     rows = []
-    if upi_intent:
+    if _is_url_button_safe(upi_intent):  # upi:// goes to the caption instead
         rows.append([green("📲 ᴘᴀʏ ᴠɪᴀ ᴜᴘɪ ᴀᴘᴘ", url=upi_intent)])
-    if checkout_url:
+    if _is_url_button_safe(checkout_url):
         rows.append([green("🌐 ᴡᴇʙ ᴄʜᴇᴄᴋᴏᴜᴛ", url=checkout_url)])
     if not order.get("order_placed_at"):
         rows.append([green("✅ ᴘᴀɪᴅ — ɴᴏᴡ ᴄᴏɴꜰɪʀᴍ", callback_data=f"famplaced_{order_id}")])
@@ -432,7 +445,17 @@ async def fulfil_order(client: Client, order_id: str, utr: str = "", sender_name
                 parse_mode=ParseMode.HTML,
             )
         except Exception:
-            pass
+            # The order may have been sent as a text fallback (no caption).
+            try:
+                await client.edit_message_text(
+                    chat_id,
+                    qr_message_id,
+                    text=_paid_text(plan_time, payable, utr, expiry_str),
+                    parse_mode=ParseMode.HTML,
+                    disable_web_page_preview=True,
+                )
+            except Exception:
+                pass
 
     # 3) log channel
     try:
@@ -538,7 +561,6 @@ async def send_payment_message(client: Client, chat_id: int, order: dict):
     paise = f"{payable:.2f}".split(".")[1]
     upi_intent = _upi_intent_for_order(order)
 
-    photo, intent, checkout_url = await _qr_photo(order, upi_intent)
     caption = script.FAMPAY_ORDER_TXT.format(
         plan=plan_label(plan_time),
         payable=format_inr(payable),
@@ -546,14 +568,30 @@ async def send_payment_message(client: Client, chat_id: int, order: dict):
         order_id=order["order_id"],
         upi_id=FAMPAY_UPI_ID,
         expiry=FAMPAY_ORDER_EXPIRY_MINUTES,
+        pay_link=pay_link_html(upi_intent),
     )
-    sent = await client.send_photo(
-        chat_id=chat_id,
-        photo=photo,
-        caption=caption,
-        parse_mode=ParseMode.HTML,
-        reply_markup=_order_buttons(order, intent, checkout_url),
-    )
+    buttons = _order_buttons(order, upi_intent, order.get("fg_checkout_url") or "")
+    try:
+        photo, intent, checkout_url = await _qr_photo(order, upi_intent)
+        sent = await client.send_photo(
+            chat_id=chat_id,
+            photo=photo,
+            caption=caption,
+            parse_mode=ParseMode.HTML,
+            reply_markup=_order_buttons(order, intent, checkout_url),
+        )
+    except Exception as exc:
+        # A QR/photo hiccup (or Telegram rejecting some media/button piece)
+        # must NOT kill the checkout: buyers can still pay from the in-caption
+        # pay link, so degrade to a text message instead of "Order ban nahi paya".
+        logger.warning("FamPay: QR send failed for %s (%s); falling back to text", order["order_id"], exc)
+        sent = await client.send_message(
+            chat_id=chat_id,
+            text=caption,
+            parse_mode=ParseMode.HTML,
+            reply_markup=buttons,
+            disable_web_page_preview=True,
+        )
     await paydb.set_message_ref(order["order_id"], chat_id, sent.id)
     return sent
 
@@ -1114,7 +1152,15 @@ async def fampay_cancel_callback(client: Client, callback_query: CallbackQuery):
             parse_mode=ParseMode.HTML,
         )
     except Exception:
-        pass
+        # Text-fallback order message has no caption to replace.
+        try:
+            await callback_query.message.edit_text(
+                script.FAMPAY_CANCELLED_TXT.format(order_id=order_id),
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
+        except Exception:
+            pass
     await callback_query.answer("Order cancel kar diya gaya.")
 
 

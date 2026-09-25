@@ -84,6 +84,26 @@ def unique_payable_amount(base_amount: float, taken: Iterable[float]) -> float:
     return base
 
 
+def pay_link_html(upi_intent: str) -> str:
+    """Render a UPI deep link as a caption-safe inline link.
+
+    Inline-keyboard URL buttons may only use http(s)/tg schemes: Telegram
+    rejects anything else (``upi://``, ``intent://`` …) with
+    ``400 BUTTON_URL_INVALID`` **before the message is even sent** – on both
+    the Bot API and the MTProto layer pyrogram/electrogram speaks.  Text-link
+    entities inside a caption have no such scheme restriction, so the
+    checkout keeps its "Pay in UPI app" tap target here instead of a button.
+
+    ``&`` must be HTML-escaped in the href attribute, otherwise the caption
+    fails entity parsing and the send errors out the same way.
+    """
+    href = (upi_intent or "").strip()
+    if not href:
+        return ""
+    href = href.replace("&", "&amp;").replace('"', "%22").replace("<", "%3C").replace(">", "%3E")
+    return f'<a href="{href}">📲 ᴛᴀᴘ ʜᴇʀᴇ ᴛᴏ ᴘᴀʏ ɪɴ ᴜᴘɪ ᴀᴘᴘ</a>'
+
+
 def format_inr(amount: float) -> str:
     """``10.07`` → ``₹10.07`` (always two decimals, Indian grouping)."""
     return f"₹{round2(amount):,.2f}"
