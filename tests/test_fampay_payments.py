@@ -332,10 +332,45 @@ def test_order_placed_and_utr_are_review_metadata_not_payment(store):
         assert (await store.get_reviewable_order(99))["order_id"] == "FMP-TEST01"
         assert await store.submit_utr("FMP-TEST01", user_id=100, utr="420987654321") is None
 
+        shot = await store.submit_screenshot(
+            "FMP-TEST01", user_id=99, file_id="AgAC_test_shot"
+        )
+        assert shot["status"] == STATUS_PENDING
+        assert shot["screenshot_file_id"] == "AgAC_test_shot"
+        assert shot["screenshot_submitted_at"] is not None
+        assert await store.submit_screenshot(
+            "FMP-TEST01", user_id=100, file_id="AgAC_other"
+        ) is None
+
         await store.mark_paid("FMP-TEST01", utr="420987654321", verified_by="imap")
         assert await store.submit_utr("FMP-TEST01", user_id=99, utr="420987654321") is None
+        assert await store.submit_screenshot(
+            "FMP-TEST01", user_id=99, file_id="AgAC_late"
+        ) is None
 
     asyncio.run(_run())
+
+
+def test_plain_utr_extractor_accepts_free_text():
+    """Buyers type the UTR directly — no /utr command required."""
+    import re as _re
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "plugins" / "FamPay.py"
+    source = path.read_text(encoding="utf-8")
+    # Pull the pure helper without importing pyrogram-heavy module.
+    ns = {
+        "re": _re,
+        "_UTR_VALUE_RE": _re.compile(r"^[0-9]{6,22}$"),
+    }
+    start = source.index("def _extract_utr_from_text")
+    end = source.index("\nasync def _prompt_utr_confirmation", start)
+    exec(source[start:end], ns)
+    extract = ns["_extract_utr_from_text"]
+    assert extract("420987654321") == "420987654321"
+    assert extract("UTR: 420987654321") == "420987654321"
+    assert extract("ref 987654321000 paid") == "987654321000"
+    assert extract("hello") == ""
 
 
 def test_unmatched_utr_event_claim_is_restart_safe(event_store):
@@ -482,6 +517,8 @@ def test_plugin_registers_expected_handlers():
         'filters.command("fampay")',
         'filters.command("fampay_orders")',
         'filters.command("utr")',
+        "fampay_plain_utr_message",
+        "fampay_screenshot_message",
         'filters.regex(r"^fampay_info$")',
         'filters.regex(r"^fampay_(\\d+)$")',
         'filters.regex(r"^famplaced_(\\S+)$")',
@@ -491,6 +528,8 @@ def test_plugin_registers_expected_handlers():
         'filters.regex(r"^famreject_(\\S+)$")',
         "def start_fampay_workers",
         "def imap_scan_once",
+        "submit_screenshot",
+        "_extract_utr_from_text",
     ):
         assert needle in source, f"missing {needle}"
 
