@@ -40,6 +40,7 @@ START_CHAR = ('\'', '"', SMART_OPEN)
 class temp(object):   
     BANNED_USERS = []
     BANNED_CHATS = []
+    MAINTENANCE = False   # maintenance mode flag (docs/MAINTENANCE_MODE.md)
     ME = None
     CURRENT=int(os.environ.get("SKIP", 2))
     CANCEL = False

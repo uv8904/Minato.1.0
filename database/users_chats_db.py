@@ -116,7 +116,27 @@ class Database:
         b_chats = [chat['id'] async for chat in chats]
         b_users = [user['id'] async for user in users]
         return b_users, b_chats
-    
+
+    # ------------------------------------------------------------------ #
+    # Maintenance mode (docs/MAINTENANCE_MODE.md)                        #
+    #                                                                    #
+    # While the flag is on, only ADMINS may use the bot; every other     #
+    # user gets the "under maintenance" notice.  The flag is persisted   #
+    # so a restart during a maintenance window keeps the window closed.  #
+    # ------------------------------------------------------------------ #
+    MAINTENANCE_DOC_ID = "maintenance_mode"
+
+    async def set_maintenance_mode(self, status: bool):
+        await self.botcol.update_one(
+            {'id': self.MAINTENANCE_DOC_ID},
+            {'$set': {'enabled': bool(status), 'updated_at': datetime.datetime.utcnow()}},
+            upsert=True,
+        )
+
+    async def get_maintenance_mode(self) -> bool:
+        doc = await self.botcol.find_one({'id': self.MAINTENANCE_DOC_ID})
+        return bool(doc and doc.get('enabled'))
+
     async def add_chat(self, chat, title):
         chat = self.new_group(chat, title)
         await self.grp.insert_one(chat)

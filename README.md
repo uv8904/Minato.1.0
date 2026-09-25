@@ -245,6 +245,7 @@ batch               – Create bulk post link
 deleteall           – Delete all files from DB
 delete              – Delete a specific file
 deletefiles         – Remove PreDVD and CamRip files
+maint               – Maintenance mode: "/maint on" blocks normal users with an under-maintenance notice, "/maint off" brings the bot back instantly, "/maint status" shows the state (admin)
 broadcast           – Broadcast to users
 grp_broadcast       – Broadcast to groups
 enable              – Enable group joining

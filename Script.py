@@ -52,6 +52,31 @@ class script(object):
 🛠️ Bᴜɪʟᴅ Sᴛᴀᴛᴜs: <code> v1.4 [ Sᴛᴀʙʟᴇ ]</code>
 </b>"""
 
+    # Maintenance mode (docs/MAINTENANCE_MODE.md).  Shown to every non-admin
+    # user while an admin has put the bot under maintenance.
+    MAINTENANCE_TXT = """<b>🚧 Bᴏᴛ Is Uɴᴅᴇʀ Mᴀɪɴᴛᴇɴᴀɴᴄᴇ 🚧</b>
+
+<b>Hᴇʏ {},</b>
+
+<b>⚠️ Tʜᴇ ʙᴏᴛ ɪs ᴄᴜʀʀᴇɴᴛʟʏ ᴜɴᴅᴇʀ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ ᴀɴᴅ ɪs ɴᴏᴛ ᴀᴠᴀɪʟᴀʙʟᴇ ғᴏʀ ɴᴏʀᴍᴀʟ ᴜsᴇʀs.</b>
+
+<b>🔧 Oᴜʀ ᴀᴅᴍɪɴs ᴀʀᴇ ᴡᴏʀᴋɪɴɢ ᴏɴ ɪᴛ – ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ᴀғᴛᴇʀ sᴏᴍᴇ ᴛɪᴍᴇ.</b>
+<b>🤖 Tʜᴇ ʙᴏᴛ ᴡɪʟʟ ʙᴇ ʙᴀᴄᴋ ᴏɴʟɪɴᴇ ᴀs sᴏᴏɴ ᴀs ᴛʜᴇ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ ɪs ᴏᴠᴇʀ.</b>
+
+<b>Tʜᴀɴᴋs ғᴏʀ ʏᴏᴜʀ ᴘᴀᴛɪᴇɴᴄᴇ ❤️</b>"""
+
+    MAINTENANCE_ALERT_TXT = "🚧 Bot is under maintenance! Only admins can use it right now. Please try again later."
+
+    MAINTENANCE_ON_TXT = """<b>🚧 Mᴀɪɴᴛᴇɴᴀɴᴄᴇ Mᴏᴅᴇ Eɴᴀʙʟᴇᴅ ✅</b>
+
+<b>⚠️ Nᴏʀᴍᴀʟ ᴜsᴇʀs ᴀʀᴇ ɴᴏᴡ ʙʟᴏᴄᴋᴇᴅ ᴀɴᴅ ᴡɪʟʟ sᴇᴇ ᴛʜᴇ "ᴜɴᴅᴇʀ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ" ɴᴏᴛɪᴄᴇ.</b>
+<b>👮 Oɴʟʏ ᴀᴅᴍɪɴs ᴄᴀɴ ᴜsᴇ ᴛʜᴇ ʙᴏᴛ ᴡʜɪʟᴇ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ ɪs ᴏɴ.</b>
+<b>🔁 Sᴇɴᴅ <code>/maint off</code> ᴡʜᴇɴ ʏᴏᴜ ᴀʀᴇ ᴅᴏɴᴇ – ᴛʜᴇ ʙᴏᴛ ᴡɪʟʟ ɢᴏ ʙᴀᴄᴋ ᴏɴʟɪɴᴇ ɪɴsᴛᴀɴᴛʟʏ (ɴᴏ ʀᴇsᴛᴀʀᴛ ɴᴇᴇᴅᴇᴅ).</b>"""
+
+    MAINTENANCE_OFF_TXT = """<b>✅ Mᴀɪɴᴛᴇɴᴀɴᴄᴇ Mᴏᴅᴇ Dɪsᴀʙʟᴇᴅ</b>
+
+<b>🤖 Tʜᴇ ʙᴏᴛ ɪs ʙᴀᴄᴋ ᴏɴʟɪɴᴇ ᴀɴᴅ ᴇᴠᴇʀʏᴏɴᴇ ᴄᴀɴ ᴜsᴇ ɪᴛ ᴀɢᴀɪɴ.</b>"""
+
     CHANNELS = """
 <b>⚡ ɢʀᴏᴜᴘs & ᴄʜᴀɴɴᴇʟs ɪɴғᴏ ⚡ 
 
