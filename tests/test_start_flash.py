@@ -202,3 +202,18 @@ def test_db_override_wins_and_is_cached(fake_mdb):
     )
     assert msg3.calls == ["sticker"]
     assert third.media == "CAACxyz"
+
+
+def test_flash_config_failure_uses_environment_default(monkeypatch):
+    async def mongo_down(*args, **kwargs):
+        raise ConnectionError("mongo unavailable")
+
+    monkeypatch.setattr(utils, "get_flash_value", mongo_down)
+    msg = _Msg()
+
+    sent = asyncio.get_event_loop().run_until_complete(
+        send_start_flash(msg, key="start_flash", env_default="🌿")
+    )
+
+    assert msg.calls == ["text"]
+    assert sent.media == "🌿"

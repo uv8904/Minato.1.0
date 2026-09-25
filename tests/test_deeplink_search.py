@@ -81,7 +81,7 @@ def test_msrch_payload_with_spaces():
 def test_unrelated_payload_does_not_search():
     searches = []
     try:
-        run_start("premium", searches)
+        run_start("unknown", searches)
     except RuntimeError:
         # Normal start flow continues and needs the (faked) database — fine.
         pass

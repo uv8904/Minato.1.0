@@ -1,7 +1,5 @@
 import sys
-import glob
 import importlib
-import importlib.util
 import types
 from pathlib import Path
 from pyrogram import Client, idle, __version__
@@ -36,8 +34,6 @@ logging.getLogger("aiohttp.web").setLevel(logging.ERROR)
 logging.getLogger("pymongo").setLevel(logging.WARNING)
 
 botStartTime = time.time()
-ppath = "plugins/*.py"
-files = glob.glob(ppath)
 
 # ---------------------------------------------------------------------------
 # Startup resilience (docs/STARTUP_RESILIENCE.md)
@@ -60,53 +56,78 @@ def startup_retry_delay(attempt: int) -> int:
     return int(min(START_RETRY_BASE_DELAY * 2 ** (attempt - 1), START_RETRY_MAX_DELAY))
 
 
-def quarantine_broken_plugins(root: str = "plugins") -> list:
-    """Syntax-check every plugin *before* the client imports them.
+def _disable_plugin(module_path: str, path: Path) -> None:
+    """Put an empty module in the import cache so the framework skips it."""
+    module = types.ModuleType(module_path)
+    module.__file__ = str(path)
+    module.__package__ = module_path.rpartition(".")[0]
+    sys.modules[module_path] = module
 
-    pyrogram imports ``plugins/**/*.py`` inside ``Client.start()`` and lets any
-    error bubble up, so a single typo in one plugin used to take the whole bot
-    down.  A file that does not even compile is replaced by an empty module in
-    ``sys.modules`` – pyrogram's ``import_module`` then finds no handlers in it
-    and every other plugin still loads.  Returns the dotted names it disabled.
-    """
+
+def quarantine_broken_plugins(root: str = "plugins") -> list:
+    """Syntax-check every plugin before the Telegram client imports it."""
     broken = []
     base = Path(root).parent                # "plugins/foo.py" -> "plugins.foo"
     for path in sorted(Path(root).rglob("*.py")):
-        if path.name == "__init__.py":      # packages – needed for imports to work at all
+        if path.name == "__init__.py":
             continue
+        module_path = ".".join(path.relative_to(base).with_suffix("").parts)
         try:
             compile(path.read_text(encoding="utf-8"), str(path), "exec")
-        except Exception as e:              # SyntaxError, UnicodeDecodeError, ...
-            module_path = ".".join(path.relative_to(base).with_suffix("").parts)
-            sys.modules[module_path] = types.ModuleType(module_path)
-            logging.error("Plugin %s is broken and has been DISABLED for this run: %s", module_path, e)
+        except Exception as exc:             # SyntaxError, UnicodeDecodeError, ...
+            _disable_plugin(module_path, path)
+            logging.error(
+                "Plugin %s is broken and has been DISABLED for this run: %s",
+                module_path,
+                exc,
+            )
             broken.append(module_path)
-    if broken:
-        logging.warning("%d broken plugin(s) skipped – fix them and restart: %s", len(broken), ", ".join(broken))
     return broken
 
 
-def load_plugins(skip=()) -> tuple:
-    """Import every plugins/*.py the classic way; one bad plugin is logged and skipped."""
-    loaded, failed = [], []
-    for name in files:
-        plugins_dir = Path(name)
-        plugin_name = plugins_dir.stem
-        import_path = "plugins.{}".format(plugin_name)
-        if import_path in skip:
+def preload_plugins(root: str = "plugins") -> tuple:
+    """Import each plugin exactly once and quarantine individual failures.
+
+    The framework scans the imported module objects for decorated handlers in
+    ``Client.start()``.  The old startup code then executed every top-level
+    plugin a *second* time with ``exec_module`` and replaced ``sys.modules``.
+    Registered handlers kept globals from copy A while FamPay workers and later
+    imports used copy B, splitting locks, queues and worker state.  Preloading
+    once gives the framework the same cached module object and still lets one
+    bad plugin be disabled without taking the whole bot offline.
+    """
+    syntax_broken = set(quarantine_broken_plugins(root))
+    loaded, failed = [], list(syntax_broken)
+    base = Path(root).parent
+
+    for path in sorted(Path(root).rglob("*.py")):
+        if path.name == "__init__.py":
+            continue
+        module_path = ".".join(path.relative_to(base).with_suffix("").parts)
+        if module_path in syntax_broken:
             continue
         try:
-            spec = importlib.util.spec_from_file_location(import_path, plugins_dir)
-            load = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(load)
-            sys.modules[import_path] = load
-            print("DreamxBotz Imported => " + plugin_name)
-            loaded.append(plugin_name)
-        except Exception as e:
-            logging.exception("Plugin %s failed to load and was skipped: %s", plugin_name, e)
-            failed.append(plugin_name)
+            importlib.import_module(module_path)
+            loaded.append(module_path)
+        except Exception as exc:
+            # importlib normally removes a half-imported module, but replacing
+            # it explicitly also covers failures after decorators ran.
+            _disable_plugin(module_path, path)
+            failed.append(module_path)
+            logging.exception(
+                "Plugin %s failed to import and has been DISABLED: %s",
+                module_path,
+                exc,
+            )
+
     if failed:
-        logging.warning("%d plugin(s) failed to load: %s", len(failed), ", ".join(failed))
+        logging.warning(
+            "%d plugin(s) disabled; all other handlers will still start: %s",
+            len(failed),
+            ", ".join(failed),
+        )
+    else:
+        logging.info("Preloaded %d plugin modules (single execution).", len(loaded))
     return loaded, failed
 
 
@@ -120,8 +141,10 @@ async def stop_client_quietly():
 
 
 async def dreamxbotz_start():
-    print('\n\nInitalizing DreamxBotz')
-    broken_plugins = quarantine_broken_plugins()
+    print('\n\nInitializing DreamxBotz')
+    # Import once before Client.start(). The framework will discover handlers
+    # from these cached modules; failed plugins have already been quarantined.
+    preload_plugins()
     # --- required: without a connected client there is no bot -------------
     await dreamxbotz.start()
     bot_info = await dreamxbotz.get_me()
@@ -131,7 +154,6 @@ async def dreamxbotz_start():
         await initialize_clients()
     except Exception as e:
         logging.exception("Multi-client init failed – continuing with the main bot only: %s", e)
-    load_plugins(skip=broken_plugins)
     # FamPay auto-approval: start the IMAP scanner + status poller now that the
     # plugins have registered their handlers (docs/FAMPAY_SETUP.md).
     try:

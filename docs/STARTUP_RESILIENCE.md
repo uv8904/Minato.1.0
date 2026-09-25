@@ -12,16 +12,16 @@ Telegram client and its handlers. Everything else is **best effort** now.
 ```
 python bot.py
    │
-   ├─ quarantine_broken_plugins()   plugins/**/*.py that don't even compile are
-   │                                replaced by an empty module → pyrogram skips
-   │                                them, all the other plugins still load
-   ├─ dreamxbotz.start()            REQUIRED — an error here goes to the retry loop
+   ├─ preload_plugins()             plugins/**/*.py are imported exactly once;
+   │  └─ quarantine failures        syntax/runtime failures become empty modules,
+   │                                so the framework skips only the broken plugin
+   ├─ dreamxbotz.start()            REQUIRED — discovers handlers from those same
+   │                                cached modules and connects to Telegram
    ├─ get_me()                      REQUIRED
    │
    │   ── best effort from here on (logged, never fatal) ──
    ├─ initialize_clients()          extra MULTI_TOKEN clients
-   ├─ load_plugins()                classic per-file import, one bad file is skipped
-   ├─ FamPay workers                (already guarded)
+   ├─ FamPay workers                same module instance as registered handlers
    ├─ db.get_banned()               Mongo down → empty ban lists for this run
    ├─ Media/Media2.ensure_indexes() Mongo slow → indexes are created next restart
    ├─ newly-uploaded worker         (already guarded)
@@ -44,7 +44,8 @@ __main__ retry loop
 | Bot is not admin in `LOG_CHANNEL` / wrong id | crash right after `started on @Bot` | `WARNING Couldn't send the restart message to LOG_CHANNEL …` and the bot works |
 | Mongo unreachable at boot | crash in `get_banned()` / `ensure_indexes()` | `ERROR … starting with empty lists` / `… will retry next restart`, bot works |
 | `PORT` already in use | crash | `ERROR Web server failed to start on port …`, Telegram side works |
-| Syntax error in `plugins/foo.py` | crash inside `Client.start()` | `ERROR Plugin plugins.foo is broken and has been DISABLED for this run`, everything else loads |
+| Syntax/import error in `plugins/foo.py` | crash inside `Client.start()` | `ERROR Plugin plugins.foo … DISABLED`, everything else loads |
+| Every plugin executed twice | registered handlers and background workers could use different module globals | preload once, then let the framework scan that exact cached module |
 | One invalid `MULTI_TOKEN_n` | `TypeError` from `dict([None])` | that client is skipped, the rest are used |
 | Telegram unreachable while the container comes up | crash | `ERROR Startup failed (attempt 1) … retrying in 5s`, then 10s, 20s, … |
 

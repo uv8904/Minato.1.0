@@ -63,25 +63,29 @@ def test_quarantine_is_a_noop_for_the_real_plugins_folder():
     assert bot.quarantine_broken_plugins("plugins") == []
 
 
-def test_load_plugins_skips_a_failing_plugin_and_keeps_the_rest(tmp_path, monkeypatch):
-    good = tmp_path / "good_plugin.py"
-    good.write_text("LOADED = True\n")
-    bad = tmp_path / "bad_plugin.py"
-    bad.write_text("raise RuntimeError('boom at import time')\n")
-    skipped = tmp_path / "skipped_plugin.py"
-    skipped.write_text("raise AssertionError('must not even be executed')\n")
-    monkeypatch.setattr(bot, "files", [str(bad), str(good), str(skipped)])
-    for name in ("plugins.good_plugin", "plugins.bad_plugin", "plugins.skipped_plugin"):
+def test_preload_plugins_quarantines_import_errors_and_executes_once(tmp_path, monkeypatch):
+    root = tmp_path / "fakeplugins"
+    root.mkdir()
+    (root / "__init__.py").write_text("")
+    (root / "good.py").write_text(
+        "LOADS = globals().get('LOADS', 0) + 1\nLOADED = True\n"
+    )
+    (root / "bad.py").write_text("raise RuntimeError('boom at import time')\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    for name in ("fakeplugins", "fakeplugins.good", "fakeplugins.bad"):
         monkeypatch.delitem(sys.modules, name, raising=False)
 
-    loaded, failed = bot.load_plugins(skip=["plugins.skipped_plugin"])
+    loaded, failed = bot.preload_plugins(str(root))
+    # A second preload must get the same cached module, not execute its body
+    # again like the old exec_module loop did.
+    bot.preload_plugins(str(root))
 
-    assert loaded == ["good_plugin"]
-    assert failed == ["bad_plugin"]
-    assert sys.modules["plugins.good_plugin"].LOADED is True
-    assert "plugins.bad_plugin" not in sys.modules
-    assert "plugins.skipped_plugin" not in sys.modules
-    monkeypatch.delitem(sys.modules, "plugins.good_plugin", raising=False)
+    assert loaded == ["fakeplugins.good"]
+    assert failed == ["fakeplugins.bad"]
+    assert sys.modules["fakeplugins.good"].LOADED is True
+    assert sys.modules["fakeplugins.good"].LOADS == 1
+    assert isinstance(sys.modules["fakeplugins.bad"], types.ModuleType)
+    assert not [n for n in vars(sys.modules["fakeplugins.bad"]) if not n.startswith("__")]
 
 
 # ------------------------------------------------------ dreamxbotz_start()
@@ -164,8 +168,11 @@ def _wire(monkeypatch, *, client, db, media, media2, web_server, reached):
     monkeypatch.setattr(bot, "web_server", web_server)
     monkeypatch.setattr(bot, "idle", fake_idle)
     monkeypatch.setattr(bot, "initialize_clients", failing_clients)
-    monkeypatch.setattr(bot, "quarantine_broken_plugins", lambda root="plugins": ["plugins.broken"])
-    monkeypatch.setattr(bot, "load_plugins", lambda skip=(): reached.__setitem__("skip", list(skip)) or ([], []))
+    monkeypatch.setattr(
+        bot,
+        "preload_plugins",
+        lambda root="plugins": reached.__setitem__("preloaded", True) or ([], []),
+    )
     monkeypatch.setattr(bot, "check_expired_premium", _noop)
     monkeypatch.setattr(bot, "keep_alive", _noop)
     monkeypatch.setattr(bot, "ON_HEROKU", False)
@@ -197,7 +204,7 @@ def test_start_reaches_idle_when_every_optional_step_fails(monkeypatch):
     assert bot.temp.BANNED_USERS == [] and bot.temp.BANNED_CHATS == []   # DB down -> empty lists
     assert bot.temp.ME == 42 and bot.temp.U_NAME == "TestBot"
     assert client.sent == [-100123, 777, 888]                # kept going after each failure
-    assert reached["skip"] == ["plugins.broken"]             # quarantined plugin not re-imported
+    assert reached["preloaded"] is True                       # handlers prepared exactly once
     assert reached["fampay"] is True
 
 
