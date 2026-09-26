@@ -23,7 +23,42 @@ hui, kaunsi, koi fail hui to reason).
 
 ## Setup (5 minute)
 
-### Step 1 — Session string banao (apne PC/Termux pe)
+### Step 1 — Session string banao
+
+#### 📱 Tarika A: Sirf phone browser se (PC ki zaroorat NAHI — Google Colab)
+
+1. Phone browser me kholo: **[colab.research.google.com](https://colab.research.google.com)** → Google account se login → **New notebook**
+
+2. Pehle cell me ye paste karo aur **▶ (Run)** dabao:
+   ```
+   !pip -q install electrogram
+   ```
+
+3. Neeche **naya cell (+ Code)** banao, ye paste karo aur **▶** dabao:
+   ```python
+   import asyncio
+   from pyrogram import Client
+
+   api_id = int(input("API_ID: "))
+   api_hash = input("API_HASH: ").strip()
+
+   async def main():
+       async with Client("gen", api_id=api_id, api_hash=api_hash, in_memory=True) as app:
+           me = await app.get_me()
+           print("\n✅ Login:", me.first_name)
+           print("\n👇 Ye string COPY karo (ye hi USER_SESSION hai):\n")
+           print(await app.export_session_string())
+
+   asyncio.run(main())
+   ```
+
+4. Input box me poochega: `API_ID` aur `API_HASH` → **wahi daalo jo tumhare bot ke env me pade hain** (Koyeb/Heroku dashboard → Environment/Settings me dikhega). Phir Telegram phone number (`+91xxxxxxxxxx`) → Telegram app me aaya **login code** → (2FA ho to wo password).
+
+5. Last me jo **lambi string** print hogi use copy karo.
+
+6. ⚠️ **Safety:** string copy karne ke baad wo Colab notebook **delete kar do** (File → Delete notebook) — notebook Google Drive me save hoti hai aur uske output me session string pada hota hai.
+
+#### 💻 Tarika B: PC/Termux se (agar Colab pasand na ho)
 
 ```bash
 pip install electrogram
