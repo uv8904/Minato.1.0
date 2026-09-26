@@ -154,6 +154,15 @@ async def dreamxbotz_start():
         await initialize_clients()
     except Exception as e:
         logging.exception("Multi-client init failed – continuing with the main bot only: %s", e)
+    # Auto-Import userbot (docs/AUTO_IMPORT.md): optional USER_SESSION se chalne
+    # wala personal-account client jo watched chats ki files ko file-channel me
+    # auto-copy karta hai. Best effort – failure here never blocks the bot.
+    try:
+        from plugins.auto_import import start_userbot
+
+        await start_userbot()
+    except Exception as e:
+        logging.warning(f"Auto-Import userbot not started: {e}")
     # FamPay auto-approval: start the IMAP scanner + status poller now that the
     # plugins have registered their handlers (docs/FAMPAY_SETUP.md).
     try:

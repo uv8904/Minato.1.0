@@ -3,17 +3,17 @@
     "description": "When you going to send file on telegram channel this bot will save that in database, So you can search that easily in inline mode",
     "stack": "container",
     "keywords": [
-      "telegram",
-      "auto-filter",
-      "filter",
-      "best",
-      "indian",
-      "pyrogram",
-      "media",
-      "search",
-      "channel",
-      "index",
-      "inline"
+        "telegram",
+        "auto-filter",
+        "filter",
+        "best",
+        "indian",
+        "pyrogram",
+        "media",
+        "search",
+        "channel",
+        "index",
+        "inline"
     ],
     "website": "https://github.com/DreamXBotz/Auto_Filter_Bot.git",
     "repository": "https://github.com/DreamXBotz/Auto_Filter_Bot.git",
@@ -53,6 +53,14 @@
         "LOG_CHANNEL": {
             "description": "Bot Logs,Give a channel id with -100xxxxxxx",
             "required": true
+        },
+        "USER_SESSION": {
+            "description": "Optional: Auto-Import userbot ke liye apne Telegram account ki Pyrogram StringSession (tools/generate_session.py). Khali = feature off.",
+            "required": false
+        },
+        "AUTO_IMPORT_DELAY": {
+            "description": "Auto-Import: do copies ke beech ka gap seconds me (default 3, flood-safe).",
+            "required": false
         },
         "AUTH_USERS": {
             "description": "Username or ID of users to give access of inline search. Separate multiple users by space.\nLeave it empty if you don't want to restrict bot usage.",
@@ -269,9 +277,11 @@
         }
     },
     "addons": [],
-    "buildpacks": [{
-        "url": "heroku/python"
-    }],
+    "buildpacks": [
+        {
+            "url": "heroku/python"
+        }
+    ],
     "formation": {
         "worker": {
             "quantity": 1,
