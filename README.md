@@ -94,6 +94,7 @@ Join our support group for assistance:
 - ✅ Admin Commands  
 - ✅ Group Broadcast  
 - ✅ Full File Indexing Support  
+- ✅ **Auto-Import Userbot** — doosre bots se mangwai files manual channel me daalne ka jhanjhat khatam: `USER_SESSION` set karo, watched bot ki files tumhare PM me aate hi automatic file-channel me copy + index ho jayengi (`/watch`, `/autoimport`, `/target`, `/grab` — guide: docs/AUTO_IMPORT.md)  
 - ✅ ID & User Info  
 - ✅ Stats & Analytics  
 - ✅ User Ban/Unban  
@@ -256,8 +257,24 @@ unban               – Unban user
 add_premium         – Add premium access
 remove_premium      – Remove premium access
 premium_users       – List premium users
+autoimport          – Auto-Import userbot on/off + status (admin): "autoimport on|off"
+watch               – Kisi bot/channel ki files auto-copy me add karo: "/watch @botname" (admin)
+watchlist           – Auto-Import watchlist dekho (admin)
+unwatch             – Watchlist se hatao: "/unwatch 1" ya "/unwatch @botname" (admin)
+target              – Auto-Import copy destination channel set karo (admin)
+grab                – Kisi channel ki files bulk-copy: "/grab @channel 1 5000" (admin)
 restart             – Restart the bot
 ```
+
+---
+
+## 📥 Auto-Import Userbot (optional)
+
+Doosre bots se files mangwa kar manual channel me daalne ka jhanjhat khatam —
+apne Telegram account ki `USER_SESSION` env me do, `/watch @botname` karo, aur
+watched bot ki files tumhare PM me aate hi automatic file-channel me copy ho
+kar index ho jayengi. `/grab` se kisi bhi channel (jisme tumhara account hai)
+ki puri files bulk-copy ho jaati hain. Full guide: [docs/AUTO_IMPORT.md](docs/AUTO_IMPORT.md)
 
 ---
 

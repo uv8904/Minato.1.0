@@ -70,6 +70,18 @@ SUBSCRIPTION = (environ.get('SUBSCRIPTION', 'https://graph.org/file/29f442bf51cc
 FSUB_PICS = (environ.get('FSUB_PICS', 'https://graph.org/file/6d70cacead407c34d0606-1d86dd5024e769358c.jpg')).split()  # Fsub pic
 
 # ============================
+# Auto-Import Userbot (optional) — docs/AUTO_IMPORT.md
+# ============================
+# Apne Telegram account ka Pyrogram StringSession (tools/generate_session.py se
+# banakar yahan daalo). Set karne par tumhare account pe PM me aayi files —
+# jinhe tum /watch se watchlist me daalte ho — automatically file-channel me
+# copy ho jati hain, jahan se bot normal auto-index kar leta hai.
+# Khali ('') chhoda to ye feature band rahega, bot ka kaam kisi tarah affect
+# nahi hoga.
+USER_SESSION = environ.get('USER_SESSION', '')
+AUTO_IMPORT_DELAY = env_int('AUTO_IMPORT_DELAY', 3)   # har copy ke beech gap (seconds) — flood-safe
+
+# ============================
 # Admin, Channels & Users Configuration
 # ============================
 ADMINS = [int(admin) if id_pattern.search(admin) else admin for admin in environ.get('ADMINS', '8023726997 6389414945').split()] # Replace with the actual admin ID(s) to add
