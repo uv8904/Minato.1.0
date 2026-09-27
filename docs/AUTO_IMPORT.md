@@ -79,6 +79,7 @@ Hosting (Koyeb/Heroku/Railway) ke env vars me:
 ```
 USER_SESSION = <step 1 wali string>
 AUTO_IMPORT_DELAY = 3        # optional, copies ke beech gap (seconds)
+AUTO_IMPORT_RETRY_DELAY = 300  # optional, userbot self-heal retry (seconds)
 ```
 
 Bot restart karo. Logs me dikhega:
@@ -136,6 +137,40 @@ bas tumhara account member ho).
 Private channel ho to pehle **apne account se us channel ko join karo**,
 phir grab karo.
 
+## Troubleshooting — "kal chal raha tha, ab nahi chal raha"
+
+Pehle status dekho — bot ke PM me:
+
+```
+/autoimport
+```
+
+Usme ek **🔗 Userbot:** line hoti hai:
+
+| Line | Matlab | Kya kare |
+|---|---|---|
+| 🟢 userbot online | Sab theek | Files watched chat se aate hi copy honi chahiye; confirmations Saved Messages me dekho |
+| 🟡 userbot offline — auto-retry me | Session set hai par connect nahi hua (boot par network/Mongo slow tha, ya connection gira) | Kuch mat karo — bot khud har `AUTO_IMPORT_RETRY_DELAY` (default 5 min) me retry karta hai. Jaldi chahiye to `/autoimport off` → `/autoimport on` (retry turant kick hota hai) |
+| 🔴 userbot off (USER_SESSION missing) | Env var hi set nahi | Step 1-2 dobara karo (session string regenerate kabhi kabhi zaroori) |
+
+Common wajahen:
+
+1. **Hosting restart + boot par Mongo/Telegram slow** — pehle ye poora
+   feature maar deta tha; ab userbot phir bhi start hota hai aur settings
+   khud recover ho jati hain. `/autoimport` se confirm karo.
+2. **Session revoked** — Telegram pe (kisi aur device/login ya security
+   scan) session band ho gaya: `Settings → Active Sessions`. Naya session
+   string banao (`tools/generate_session.py`) → env update → restart.
+3. **Flood limit (raat ko `/grab` ke baad common)** — bulk copy ke baad
+   Telegram thodi der limit lagata hai. Saved Messages me
+   "⏳ Telegram flood limit" dikhe to bas wait karo — nayi files aane par
+   auto-copy apne aap chalu ho jayega. Copy fail nahi hoti, slow hoti hai.
+4. **Target channel access** — "target channel access nahi ho pa raha" aaye
+   to apne userbot account ko destination channel me admin banao.
+5. **Watchlist check** — `/watchlist` se confirm karo ki sahi bot/channel
+   watch me hai (`@username` ya chat id dono chalte hain — `t.me/c/` link
+   wala bare id bhi).
+
 ## Commands Summary
 
 | Command | Kaam |
@@ -152,7 +187,7 @@ phir grab karo.
 - `USER_SESSION` **khali** hai to ye poora feature off rehta hai — bot ki
   koi aur cheez affect nahi hoti.
 - Copy ke beech `AUTO_IMPORT_DELAY` (default 3s) ka gap + `FloodWait`
-  auto-handling — reasonable rate pe account limit nahi hoti.
+  auto-handling (retries ke saath) — reasonable rate pe account limit nahi hoti.
 - Userbot client **bina plugins** start hota hai, isliye bot ke saare
   handlers (start, pmfilter, admin, ...) **sirf bot pe** chalte hain —
   tumhara account kisi user ko reply nahi karta.

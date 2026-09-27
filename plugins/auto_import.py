@@ -29,7 +29,12 @@ NOTES:
       par sirf is module ke manually add kiye handlers chalti hain.
     • Settings MongoDB me persist hoti hain (restart-safe).
     • Copy flood-safe hai: har copy ke beech AUTO_IMPORT_DELAY seconds gap +
-      FloodWait auto-handle.
+      FloodWait auto-handle (retries), aur /grab progress edits cosmetic hain —
+      edit fail hone se bulk copy kabhi cancel nahi hoti.
+    • SELF-HEAL: agar boot par Mongo/Telegram thoda slow ho ya userbot client
+      beech me disconnect ho jaye, ek supervisor har AUTO_IMPORT_RETRY_DELAY
+      seconds me dobara start karne ki koshish karta hai — bot restart ki
+      zaroorat nahi. /autoimport status me "online/retrying" dikhta hai.
 """
 
 import asyncio
@@ -42,7 +47,7 @@ from pyrogram.errors.exceptions.bad_request_400 import ChannelInvalid, ChannelPr
 from pyrogram.handlers import MessageHandler
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from info import ADMINS, API_ID, API_HASH, CHANNELS, USER_SESSION, AUTO_IMPORT_DELAY
+from info import ADMINS, API_ID, API_HASH, CHANNELS, USER_SESSION, AUTO_IMPORT_DELAY, AUTO_IMPORT_RETRY_DELAY
 from database.config_db import mdb
 
 logger = logging.getLogger(__name__)
@@ -65,6 +70,8 @@ ubot: Client = None                       # user session client (None = feature 
 queue: asyncio.Queue = asyncio.Queue()    # incoming files awaiting copy
 worker_task = None
 flusher_task = None
+supervisor_task = None
+start_lock = asyncio.Lock()               # ek waqt me ek hi start/stop cycle
 
 grab_lock = asyncio.Lock()                # ek waqt me ek /grab
 grab_cancel = False
@@ -75,6 +82,17 @@ settings = {
     "watch": [],      # normalized entries: "@botusername" / "-1001234567890"
     "target": None,   # copy destination chat id
 }
+settings_loaded = False                   # Mongo se load hua ya nahi (self-heal)
+
+# Diagnostics — /autoimport status me dikhta hai
+health = {
+    "state": "off",          # "off" | "online" | "retrying" | "disabled"
+    "last_error": "",
+    "restarts": 0,
+}
+
+BOOT_RETRY_BASE_DELAY = 2   # boot attempts ke beech backoff (tests ise zero kar dete hain)
+GRAB_COPY_DELAY = 1.0        # /grab ke har copy ke beech gap (seconds)
 
 # Summary counters (Saved Messages me flush hote hain)
 pending = {"copied": 0, "failed": 0, "last_error": "", "names": []}
@@ -107,24 +125,45 @@ def norm_entry(entry):
     return "@" + entry.lower()
 
 
+def _id_aliases(value):
+    """Ek numeric chat-id ke sabhi matching forms.
+
+    '-1002086319581' (supergroup) ⇄ '2086319581' (t.me/c/ link me aata hai).
+    Users ke plain ids bhi rakhe jate hain — matching form-insensitive rahe.
+    """
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return set()
+    out = {str(n)}
+    if n <= -1000000000000 and str(n).startswith("-100"):
+        out.add(str(abs(n) - 1000000000000))
+    elif n > 0:
+        out.add(str(-(1000000000000 + n)))
+    return out
+
+
 def chat_keys(message):
-    """Ek message ko kin keys se match kar sakte hain (username + ids)."""
+    """Ek message ko kin keys se match kar sakte hain (username + ids + aliases)."""
     keys = set()
     chat = message.chat
     if chat:
         if getattr(chat, "username", None):
             keys.add("@" + chat.username.lower())
-        keys.add(str(chat.id))
+        keys |= _id_aliases(chat.id)
     sender = message.from_user
     if sender:
         if getattr(sender, "username", None):
             keys.add("@" + sender.username.lower())
-        keys.add(str(sender.id))
+        keys |= _id_aliases(sender.id)
     return keys
 
 
 def is_watched(message):
-    return bool(chat_keys(message) & set(settings["watch"]))
+    watched = set()
+    for entry in settings["watch"]:
+        watched |= _id_aliases(entry) if str(entry).lstrip("-").isdigit() else {entry}
+    return bool(chat_keys(message) & watched)
 
 
 def media_of(message):
@@ -134,26 +173,45 @@ def media_of(message):
 
 
 async def load_settings():
-    settings["enabled"] = bool(await mdb.get_config(CFG_ENABLED, False))
-    watch = await mdb.get_config(CFG_WATCH, []) or []
-    settings["watch"] = [e for e in (norm_entry(x) for x in watch) if e]
-    target = await mdb.get_config(CFG_TARGET, None)
+    """Mongo se settings load karo. Mongo down ho to RAISE mat karo — purane
+    in-memory values rakho aur supervisor baad me retry karega (self-heal)."""
+    global settings_loaded
     try:
-        settings["target"] = int(target) if target else (CHANNELS[0] if CHANNELS else None)
-    except (TypeError, ValueError):
-        settings["target"] = target  # "@username" jaisa string target as-is
+        settings["enabled"] = bool(await mdb.get_config(CFG_ENABLED, False))
+        watch = await mdb.get_config(CFG_WATCH, []) or []
+        settings["watch"] = [e for e in (norm_entry(x) for x in watch) if e]
+        target = await mdb.get_config(CFG_TARGET, None)
+        try:
+            settings["target"] = int(target) if target else (CHANNELS[0] if CHANNELS else None)
+        except (TypeError, ValueError):
+            settings["target"] = target  # "@username" jaisa string target as-is
+        settings_loaded = True
+        health["last_error"] = ""
+    except Exception as e:
+        settings_loaded = False
+        health["last_error"] = f"settings load: {type(e).__name__}: {e}"[:120]
+        logger.warning("Auto-Import settings load failed (will retry): %s", e)
 
 
 async def save_enabled():
-    await mdb.set_config(CFG_ENABLED, settings["enabled"])
+    try:
+        await mdb.set_config(CFG_ENABLED, settings["enabled"])
+    except Exception as e:
+        logger.warning("Auto-Import: enabled flag persist nahi ho paya (in-memory chalega): %s", e)
 
 
 async def save_watch():
-    await mdb.set_config(CFG_WATCH, settings["watch"])
+    try:
+        await mdb.set_config(CFG_WATCH, settings["watch"])
+    except Exception as e:
+        logger.warning("Auto-Import: watchlist persist nahi ho payi (in-memory chalegi): %s", e)
 
 
 async def save_target():
-    await mdb.set_config(CFG_TARGET, settings["target"])
+    try:
+        await mdb.set_config(CFG_TARGET, settings["target"])
+    except Exception as e:
+        logger.warning("Auto-Import: target persist nahi ho paya (in-memory chalega): %s", e)
 
 
 def setup_needed_text():
@@ -169,6 +227,42 @@ def setup_needed_text():
         "<code>USER_SESSION</code> me daalo aur bot restart karo\n\n"
         "Full guide: <code>docs/AUTO_IMPORT.md</code>"
     )
+
+
+def offline_text():
+    err = health.get("last_error") or "unknown"
+    return (
+        "<b>⚠️ Auto-Import userbot abhi offline hai.</b>\n\n"
+        f"<code>USER_SESSION</code> set hai, par userbot account connect nahi "
+        f"ho paya (last error: <code>{err}</code>).\n\n"
+        f"Bot khud har <code>{AUTO_IMPORT_RETRY_DELAY}s</code> me retry karta "
+        "rahega — kuch der baad <code>/autoimport</code> se status dekho.\n\n"
+        "Agar lagataar na chale:\n"
+        "• Session string sahi hai? (regenerate: <code>tools/generate_session.py</code>)\n"
+        "• Telegram ne session revoke to nahi kiya (Settings → Active Sessions)?\n"
+        "• Logs me <code>Auto-Import userbot start FAILED</code> dhoondho."
+    )
+
+
+def userbot_problem_text():
+    """ubot None hai to sahi wajah batao — 'setup adhura' har baar nahi."""
+    return setup_needed_text() if not USER_SESSION else offline_text()
+
+
+async def _safe_edit(status, text, reply_markup=None):
+    """Progress edit cosmetic hai — fail hone par kabhi grab/copy na toote."""
+    try:
+        await status.edit(text, reply_markup=reply_markup)
+        return True
+    except FloodWait as e:
+        await asyncio.sleep(int(getattr(e, "value", 1) or 1) + 1)
+        try:
+            await status.edit(text, reply_markup=reply_markup)
+            return True
+        except Exception:
+            return False
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -191,32 +285,52 @@ async def _on_incoming(client, message):
 async def _copy_one(message):
     target = settings["target"]
     media = media_of(message)
-    try:
+    last_err = None
+    for attempt in range(3):
         try:
             await ubot.copy_message(target, message.chat.id, message.id)
+            pending["copied"] += 1
+            pending["names"].append((getattr(media, "file_name", None) or "file")[:64])
+            pending["names"] = pending["names"][-3:]
+            return
         except FloodWait as e:
-            logger.warning("FloodWait %ss during auto-import copy, waiting", e.value)
-            await asyncio.sleep(e.value + 1)
-            await ubot.copy_message(target, message.chat.id, message.id)
-        pending["copied"] += 1
-        pending["names"].append((getattr(media, "file_name", None) or "file")[:64])
-        pending["names"] = pending["names"][-3:]
-    except Exception as e:
-        pending["failed"] += 1
-        pending["last_error"] = f"{type(e).__name__}: {e}"[:120]
-        logger.error("Auto-import copy failed: %s", pending["last_error"])
-        # Target channel tak nahi pahunch sakte — har file pe retry bekaar,
-        # user ko turant batao (Saved Messages me).
-        if isinstance(e, (ChannelInvalid, ChannelPrivate, PeerIdInvalid)):
-            try:
-                await ubot.send_message(
-                    "me",
-                    "⚠️ <b>Auto-Import: target channel access nahi ho pa raha.</b>\n"
-                    "Apne userbot account ko destination channel me <b>admin</b> "
-                    "banao, phir /autoimport off → on karke test karo.",
-                )
-            except Exception:
-                pass
+            # Flood limit: utha ke so jao, phir retry. Long waits yahin absorb
+            # hote hain — isliye copy fail nahi hoti, sirf slow hoti hai.
+            wait = int(getattr(e, "value", 1) or 1) + 1
+            logger.warning("Auto-import: FloodWait %ss (attempt %d), waiting", wait, attempt + 1)
+            await asyncio.sleep(wait)
+            last_err = e
+        except (ChannelInvalid, ChannelPrivate, PeerIdInvalid) as e:
+            last_err = e
+            break
+        except Exception as e:
+            last_err = e
+            break
+    pending["failed"] += 1
+    pending["last_error"] = f"{type(last_err).__name__}: {last_err}"[:120]
+    logger.error("Auto-import copy failed: %s", pending["last_error"])
+    # Target channel tak nahi pahunch sakte — har file pe retry bekaar,
+    # user ko turant batao (Saved Messages me).
+    if isinstance(last_err, (ChannelInvalid, ChannelPrivate, PeerIdInvalid)):
+        try:
+            await ubot.send_message(
+                "me",
+                "⚠️ <b>Auto-Import: target channel access nahi ho pa raha.</b>\n"
+                "Apne userbot account ko destination channel me <b>admin</b> "
+                "banao, phir /autoimport off → on karke test karo.",
+            )
+        except Exception:
+            pass
+    elif isinstance(last_err, FloodWait):
+        try:
+            await ubot.send_message(
+                "me",
+                f"⏳ <b>Auto-Import: Telegram flood limit</b> — copy abhi fail hui "
+                f"(<code>{pending['last_error']}</code>). Bulk /grab ke baad ye "
+                "normal hai; thodi der baad files dobara aane par auto-copy chalu.",
+            )
+        except Exception:
+            pass
 
 
 async def _copy_worker():
@@ -238,6 +352,12 @@ async def _summary_flusher():
         await asyncio.sleep(20)
         if not (pending["copied"] or pending["failed"]):
             continue
+        if ubot is None:
+            pending["copied"] = 0
+            pending["failed"] = 0
+            pending["last_error"] = ""
+            pending["names"] = []
+            continue
         lines = []
         if pending["copied"]:
             lines.append(f"✅ <b>{pending['copied']}</b> file(s) auto-import ho gayi")
@@ -255,49 +375,127 @@ async def _summary_flusher():
         pending["names"] = []
 
 
-async def start_userbot():
-    """bot.py se best-effort call hota hai. USER_SESSION nahi to kuch nahi hota."""
+# ---------------------------------------------------------------------------
+# Userbot lifecycle (boot + self-healing supervisor)
+# ---------------------------------------------------------------------------
+async def _boot_userbot():
+    """Client banao + start karo. Exception propagate nahi karti — health me
+    record karti hai. Success par True return."""
     global ubot, worker_task, flusher_task
-    await load_settings()
     if not USER_SESSION:
+        health["state"] = "disabled"
         logger.info("USER_SESSION empty – Auto-Import userbot off (docs/AUTO_IMPORT.md)")
-        return
+        return False
+    last_err = None
+    for attempt in range(3):
+        if attempt:
+            await asyncio.sleep(BOOT_RETRY_BASE_DELAY * attempt)   # transient net/Mongo errors
+        try:
+            client = Client(
+                name="autoimport_userbot",
+                api_id=API_ID,
+                api_hash=API_HASH,
+                session_string=USER_SESSION,
+                in_memory=True,
+                sleep_threshold=30,
+            )
+            await client.start()
+            me = await client.get_me()
+            ubot = client
+            # SIRF is module ka handler — bina plugins ke start hua hai isliye bot
+            # ke saare handlers (start/pmfilter/...) userbot pe kabhi nahi chalenge.
+            client.add_handler(
+                MessageHandler(_on_incoming, filters.incoming & ~filters.service),
+                group=-3,
+            )
+            for task in (worker_task, flusher_task):
+                if task:
+                    task.cancel()
+            worker_task = asyncio.create_task(_copy_worker())
+            flusher_task = asyncio.create_task(_summary_flusher())
+            health["state"] = "online"
+            health["last_error"] = ""
+            health["restarts"] += 1
+            logger.info(
+                "Auto-Import userbot online as %s | watch=%s target=%s",
+                getattr(me, "username", None) or me.id,
+                settings["watch"] or "-",
+                settings["target"],
+            )
+            return True
+        except Exception as e:
+            last_err = e
+            ubot = None
+            logger.warning(
+                "Auto-Import userbot start attempt %d/3 failed: %s", attempt + 1, e
+            )
+    health["state"] = "retrying"
+    health["last_error"] = f"{type(last_err).__name__}: {last_err}"[:120]
+    logger.error(
+        "Auto-Import userbot start FAILED (bot normal chalega, %ss me auto-retry): %s",
+        AUTO_IMPORT_RETRY_DELAY,
+        health["last_error"],
+    )
+    return False
+
+
+async def start_userbot():
+    """bot.py se best-effort call hota hai. USER_SESSION nahi to kuch nahi hota.
+
+    Idempotent: dobara call par pehle wala client/tasks band karke naya start
+    hota hai (duplicate handlers/copies rokne ke liye). Kabhi raise nahi karti.
+    """
+    global supervisor_task
     try:
-        client = Client(
-            name="autoimport_userbot",
-            api_id=API_ID,
-            api_hash=API_HASH,
-            session_string=USER_SESSION,
-            in_memory=True,
-            sleep_threshold=30,
-        )
-        await client.start()
-        me = await client.get_me()
-        ubot = client
-        # SIRF is module ka handler — bina plugins ke start hua hai isliye bot
-        # ke saare handlers (start/pmfilter/...) userbot pe kabhi nahi chalenge.
-        client.add_handler(
-            MessageHandler(_on_incoming, filters.incoming & ~filters.service),
-            group=-3,
-        )
-        worker_task = asyncio.create_task(_copy_worker())
-        flusher_task = asyncio.create_task(_summary_flusher())
-        logger.info(
-            "Auto-Import userbot online as %s | watch=%s target=%s",
-            getattr(me, "username", None) or me.id,
-            settings["watch"] or "-",
-            settings["target"],
-        )
+        async with start_lock:
+            await load_settings()
+            if ubot is not None:
+                await stop_userbot()
+            await _boot_userbot()
+        if supervisor_task is None or supervisor_task.done():
+            supervisor_task = asyncio.create_task(_supervisor())
     except Exception as e:
-        ubot = None
-        logger.error("Auto-Import userbot start FAILED (bot normal chalega): %s", e)
+        health["state"] = "retrying"
+        health["last_error"] = f"{type(e).__name__}: {e}"[:120]
+        logger.error("Auto-Import userbot not started (will auto-retry): %s", e)
+        if supervisor_task is None or supervisor_task.done():
+            try:
+                supervisor_task = asyncio.create_task(_supervisor())
+            except Exception:
+                logger.exception("Auto-Import supervisor bhi start nahi ho paya")
+
+
+async def _supervisor_tick():
+    """Ek self-heal cycle: settings reload karo, dead client hatao, offline
+    userbot dobara start karo. Tests ise directly call kar sakte hain."""
+    async with start_lock:
+        if not settings_loaded:
+            await load_settings()
+        if ubot is not None and not getattr(ubot, "is_connected", True):
+            logger.warning("Auto-Import: userbot connection dead — restarting")
+            await stop_userbot()
+        if ubot is None and USER_SESSION:
+            await _boot_userbot()
+
+
+async def _supervisor():
+    """Har AUTO_IMPORT_RETRY_DELAY seconds me self-heal. Zombie mode: kabhi
+    marne nahi deta (exceptions yahin dab jate hain)."""
+    while True:
+        await asyncio.sleep(max(5, AUTO_IMPORT_RETRY_DELAY))
+        try:
+            await _supervisor_tick()
+        except Exception:
+            logger.exception("auto-import supervisor error")
 
 
 async def stop_userbot():
-    global ubot
+    global ubot, worker_task, flusher_task
     for task in (worker_task, flusher_task):
         if task:
             task.cancel()
+    worker_task = None
+    flusher_task = None
     if ubot:
         try:
             await ubot.stop()
@@ -315,7 +513,15 @@ async def autoimport_cmd(client, message):
     if len(args) > 1 and args[1].lower() in ("on", "off"):
         want = args[1].lower() == "on"
         if want and ubot is None:
-            return await message.reply(setup_needed_text())
+            if not USER_SESSION:
+                return await message.reply(setup_needed_text())
+            # Session set hai par userbot offline — turant retry kick karo.
+            asyncio.create_task(start_userbot())
+            return await message.reply(
+                offline_text()
+                + "\n\n🔄 <b>Retry kick kar diya</b> — kuch seconds baad "
+                "<code>/autoimport</code> dobara bhejo."
+            )
         settings["enabled"] = want
         await save_enabled()
         if want:
@@ -333,8 +539,15 @@ async def autoimport_cmd(client, message):
         return
 
     status = "🟢 ON" if settings["enabled"] else "🔴 OFF"
+    if not USER_SESSION:
+        link = "🔴 userbot off (USER_SESSION missing)"
+    elif ubot is not None:
+        link = "🟢 userbot online"
+    else:
+        link = f"🟡 userbot offline — auto-retry me ({health.get('last_error') or 'starting…'})"
     await message.reply(
         f"<b>⚙️ Auto-Import</b> — {status}\n"
+        f"🔗 Userbot: {link}\n"
         f"👀 Watchlist: <code>{len(settings['watch'])}</code> chat(s)\n"
         f"🎯 Target: <code>{settings['target']}</code>\n\n"
         "<b>Commands:</b>\n"
@@ -351,8 +564,6 @@ async def autoimport_cmd(client, message):
 
 @Client.on_message(filters.command("watch") & filters.private & filters.user(ADMINS), group=1)
 async def watch_cmd(client, message):
-    if ubot is None:
-        return await message.reply(setup_needed_text())
     parts = (message.text or "").split(maxsplit=1)
     entry = norm_entry(parts[1]) if len(parts) > 1 else None
     if not entry:
@@ -370,6 +581,8 @@ async def watch_cmd(client, message):
         + ("🟢 Auto-Import ON hai — is chat ki files ab copy hongi."
            if settings["enabled"] else
            "🔴 Auto-Import abhi <b>OFF</b> hai — <code>/autoimport on</code> se chalu karo.")
+        + ("\n⚠️ Userbot abhi offline hai — " + offline_text().split("\n")[0]
+           if ubot is None and USER_SESSION else "")
     )
 
 
@@ -426,9 +639,23 @@ async def target_cmd(client, message):
     if not entry:
         return await message.reply("❌ Invalid channel id/username.")
     try:
-        settings["target"] = int(entry) if not entry.startswith("@") else entry
+        new_target = int(entry) if not entry.startswith("@") else entry
     except ValueError:
         return await message.reply("❌ Invalid channel id.")
+    # t.me/c/ link wala bare id (e.g. 2086319581) bhi accept karo — jo form
+    # actually resolve hoti hai wahi store karo.
+    if ubot is not None and isinstance(new_target, int):
+        candidates = [new_target]
+        if abs(new_target) < 1000000000000:
+            candidates.append(-(1000000000000 + abs(new_target)))
+        for cand in candidates:
+            try:
+                await ubot.get_chat(cand)
+                new_target = cand
+                break
+            except Exception:
+                continue
+    settings["target"] = new_target
     await save_target()
     notes = []
     in_channels = any(abs_chat_id(c) == abs_chat_id(settings["target"]) for c in CHANNELS)
@@ -462,11 +689,13 @@ LINK_RE = (
 
 
 def abs_chat_id(value):
-    """-100123 -> 100123, '@name' -> '@name' — CHANNELS membership check ke liye."""
+    """Canonical chat id — '-1002086319581' aur '2086319581' same samjho
+    (CHANNELS membership check ke liye)."""
     try:
-        return abs(int(value))
+        n = abs(int(value))
     except (TypeError, ValueError):
         return str(value)
+    return n - 1000000000000 if n >= 1000000000000 else n
 
 
 def parse_grab_args(text):
@@ -512,7 +741,7 @@ async def grab_cancel_cb(client, query):
 @Client.on_message(filters.command("grab") & filters.private & filters.user(ADMINS), group=1)
 async def grab_cmd(client, message):
     if ubot is None:
-        return await message.reply(setup_needed_text())
+        return await message.reply(userbot_problem_text())
     chat, start, end, err = parse_grab_args(message.text or "")
     if err:
         return await message.reply(f"❌ {err}")
@@ -539,18 +768,21 @@ async def _run_grab(client, message, chat, start, end):
         try:
             await ubot.get_chat(chat)
         except (ChannelInvalid, ChannelPrivate, PeerIdInvalid):
-            return await status.edit(
+            return await _safe_edit(
+                status,
                 "❌ Ye channel tumhare <b>account</b> se accessible nahi hai.\n"
                 "Private channel ho to apne account se us channel me <b>join</b> "
                 "hona zaroori hai, phir dobara /grab karo."
             )
+        except Exception as e:
+            return await _safe_edit(status, f"❌ Channel resolve nahi ho paya: <code>{e}</code>")
         if end is None:
             end = await _detect_last_id(chat)
             if end is None:
-                return await status.edit("❌ Last message id detect nahi ho paya — explicitly do: <code>/grab @channel 1 5000</code>")
+                return await _safe_edit(status, "❌ Last message id detect nahi ho paya — explicitly do: <code>/grab @channel 1 5000</code>")
         total = end - start + 1
         if total <= 0:
-            return await status.edit("🚫 Copy karne jaisi range nahi mili.")
+            return await _safe_edit(status, "🚫 Copy karne jaisi range nahi mili.")
         copied = failed = skipped = 0
         started = asyncio.get_event_loop().time()
         BATCH = 200
@@ -565,7 +797,7 @@ async def _run_grab(client, message, chat, start, end):
                     if not isinstance(msgs, list):
                         msgs = [msgs]
                 except FloodWait as e:
-                    await asyncio.sleep(e.value + 1)
+                    await asyncio.sleep(int(getattr(e, "value", 1) or 1) + 1)
                     continue
                 except Exception:
                     skipped += batch_end - batch_start + 1
@@ -579,7 +811,7 @@ async def _run_grab(client, message, chat, start, end):
                         await ubot.copy_message(target, chat, m.id)
                         copied += 1
                     except FloodWait as e:
-                        await asyncio.sleep(e.value + 1)
+                        await asyncio.sleep(int(getattr(e, "value", 1) or 1) + 1)
                         try:
                             await ubot.copy_message(target, chat, m.id)
                             copied += 1
@@ -587,12 +819,13 @@ async def _run_grab(client, message, chat, start, end):
                             failed += 1
                     except Exception:
                         failed += 1
-                    await asyncio.sleep(1.0)
+                    await asyncio.sleep(GRAB_COPY_DELAY)
                 batch_start = batch_end + 1
                 done = copied + failed + skipped
                 percent = done * 100 / total
                 rate = (asyncio.get_event_loop().time() - started) / max(done, 1)
-                await status.edit(
+                await _safe_edit(
+                    status,
                     "📥 <b>Grab Progress</b>\n"
                     f"{progress_bar(percent)} <code>{percent:.1f}%</code>\n\n"
                     f"✅ Copied: <code>{copied}</code>\n"
@@ -605,8 +838,8 @@ async def _run_grab(client, message, chat, start, end):
                 )
         except Exception as e:
             logger.exception("grab failed")
-            return await status.edit(f"❌ Grab error: <code>{e}</code>")
-        await status.edit(
+            return await _safe_edit(status, f"❌ Grab error: <code>{e}</code>")
+        summary = (
             "✅ <b>Grab khatam!</b>\n"
             f"✅ Copied: <code>{copied}</code> (target <code>{target}</code>)\n"
             f"⏭️ Skipped: <code>{skipped}</code>\n"
@@ -614,3 +847,9 @@ async def _run_grab(client, message, chat, start, end):
             "ℹ️ Copies channel me pahunchte hi bot apne aap index kar dega."
             + ("\n🚫 Cancel kiya gaya tha." if grab_cancel else "")
         )
+        if not await _safe_edit(status, summary):
+            # status message delete/edit fail ho gaya — kam se kam result bhej do
+            try:
+                await message.reply(summary)
+            except Exception:
+                pass

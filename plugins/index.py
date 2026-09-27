@@ -51,7 +51,15 @@ async def index_files(bot, query):
     await index_files_to_db(int(lst_msg_id), chat, msg, bot)
 
 
-@Client.on_message((filters.forwarded | (filters.regex(r"(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")) & filters.text ) & filters.private & filters.incoming)
+# NOTE: slash-commands are excluded on purpose — a command whose ARGUMENT
+# contains a t.me link (e.g. '/grab https://t.me/c/123/456') must reach its own
+# handler in group 1, not get hijacked here as a broken index request.
+@Client.on_message(
+    (filters.forwarded | (filters.regex(r"(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$") & filters.text))
+    & filters.private
+    & filters.incoming
+    & ~filters.regex(r"^/")
+)
 async def send_for_index(bot, message):
     if message.text:
         regex = re.compile(r"(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")
