@@ -130,28 +130,28 @@
         var svg =
             '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450">' +
             '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
-            '<stop offset="0" stop-color="#f5c518"/><stop offset="1" stop-color="#ffdd7a"/>' +
+            '<stop offset="0" stop-color="#822ce7"/><stop offset="1" stop-color="#ff3d9a"/>' +
             "</linearGradient>" +
             '<linearGradient id="b" x1="0" y1="0" x2="1" y2="1">' +
-            '<stop offset="0" stop-color="#161a28"/><stop offset="1" stop-color="#080a11"/>' +
+            '<stop offset="0" stop-color="#1a1a30"/><stop offset="1" stop-color="#0d0d18"/>' +
             "</linearGradient></defs>" +
             '<rect width="300" height="450" fill="url(#b)"/>' +
-            '<circle cx="60" cy="70" r="96" fill="#f5c518" opacity="0.07"/>' +
+            '<circle cx="60" cy="70" r="96" fill="#822ce7" opacity="0.07"/>' +
             '<g transform="translate(96 150)" fill="none" stroke="url(#g)" stroke-width="3">' +
             '<rect x="0" y="0" width="108" height="96" rx="10"/>' +
-            '<rect x="-13" y="-4" width="10" height="12" rx="3" fill="#f5c518" stroke="none"/>' +
-            '<rect x="-13" y="26" width="10" height="12" rx="3" fill="#f5c518" stroke="none"/>' +
-            '<rect x="-13" y="56" width="10" height="12" rx="3" fill="#f5c518" stroke="none"/>' +
-            '<rect x="-13" y="86" width="10" height="12" rx="3" fill="#f5c518" stroke="none"/>' +
-            '<rect x="111" y="-4" width="10" height="12" rx="3" fill="#f5c518" stroke="none"/>' +
-            '<rect x="111" y="26" width="10" height="12" rx="3" fill="#f5c518" stroke="none"/>' +
-            '<rect x="111" y="56" width="10" height="12" rx="3" fill="#f5c518" stroke="none"/>' +
-            '<rect x="111" y="86" width="10" height="12" rx="3" fill="#f5c518" stroke="none"/>' +
-            '<path d="M44 32 76 48 44 64Z" fill="#f5c518" stroke="none"/></g>' +
+            '<rect x="-13" y="-4" width="10" height="12" rx="3" fill="#822ce7" stroke="none"/>' +
+            '<rect x="-13" y="26" width="10" height="12" rx="3" fill="#822ce7" stroke="none"/>' +
+            '<rect x="-13" y="56" width="10" height="12" rx="3" fill="#822ce7" stroke="none"/>' +
+            '<rect x="-13" y="86" width="10" height="12" rx="3" fill="#822ce7" stroke="none"/>' +
+            '<rect x="111" y="-4" width="10" height="12" rx="3" fill="#822ce7" stroke="none"/>' +
+            '<rect x="111" y="26" width="10" height="12" rx="3" fill="#822ce7" stroke="none"/>' +
+            '<rect x="111" y="56" width="10" height="12" rx="3" fill="#822ce7" stroke="none"/>' +
+            '<rect x="111" y="86" width="10" height="12" rx="3" fill="#822ce7" stroke="none"/>' +
+            '<path d="M44 32 76 48 44 64Z" fill="#822ce7" stroke="none"/></g>' +
             '<text x="150" y="310" text-anchor="middle" font-family="Sora, Segoe UI, sans-serif" ' +
             'font-size="17" font-weight="600" fill="#f4f6fb">' + label + "</text>" +
             '<text x="150" y="336" text-anchor="middle" font-family="Inter, Segoe UI, sans-serif" ' +
-            'font-size="11" letter-spacing="2" fill="#f5c518">MINATOVERSE</text></svg>';
+            'font-size="11" letter-spacing="2" fill="#822ce7">MINATOVERSE</text></svg>';
         return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
     }
 
