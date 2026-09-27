@@ -57,6 +57,9 @@ BOT_TOKEN = environ.get('BOT_TOKEN', '')    # Bot token from @BotFather
 # Bot Settings Configuration
 # ============================
 CACHE_TIME = env_int('CACHE_TIME', 300)    # Cache time in seconds (default: 5 minutes)
+# Process-local search cache: 0 disables it. Conservative RAM/TTL caps.
+SEARCH_CACHE_SIZE = min(1024, max(0, env_int('SEARCH_CACHE_SIZE', 128)))
+SEARCH_CACHE_TTL = min(300, max(0, env_int('SEARCH_CACHE_TTL', 30)))
 USE_CAPTION_FILTER = is_enabled(environ.get('USE_CAPTION_FILTER', 'True'), True)  # Use caption filter for search results
 INDEX_CAPTION = is_enabled(environ.get('SAVE_CAPTION', 'True'), True) # Save caption in db when indexing; set False if you don't use USE_CAPTION_FILTER
 #Making it false will not save caption in db SO you can save some storage space

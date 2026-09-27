@@ -2,7 +2,7 @@ import re
 import logging
 from pyrogram import Client, filters
 from info import DELETE_CHANNELS
-from database.ia_filterdb import Media, Media2, unpack_new_file_id
+from database.ia_filterdb import invalidate_search_cache, Media, Media2, unpack_new_file_id
 logger = logging.getLogger(__name__)
 
 media_filter = filters.document | filters.video | filters.audio
@@ -24,10 +24,12 @@ async def deletemultiplemedia(bot, message):
         result = await Media.collection.delete_one({
             '_id': file_id,
         })
+        invalidate_search_cache()
     else:
         result = await Media2.collection.delete_one({
             '_id': file_id,
         })
+        invalidate_search_cache()
     if result.deleted_count:
         logger.info('File is successfully deleted from database.')
     else:
@@ -37,6 +39,7 @@ async def deletemultiplemedia(bot, message):
             'file_size': media.file_size,
             'mime_type': media.mime_type
             })
+        invalidate_search_cache()
         if result.deleted_count:
             logger.info('File is successfully deleted from database.')
         else:
@@ -45,6 +48,7 @@ async def deletemultiplemedia(bot, message):
                 'file_size': media.file_size,
                 'mime_type': media.mime_type
                 })
+            invalidate_search_cache()
             if result.deleted_count:
                 logger.info('File is successfully deleted from database.')
             else:
@@ -53,6 +57,7 @@ async def deletemultiplemedia(bot, message):
                     'file_size': media.file_size,
                     'mime_type': media.mime_type
                 })
+                invalidate_search_cache()
                 if result.deleted_count:
                     logger.info('File is successfully deleted from database.')
                 else:
@@ -61,6 +66,7 @@ async def deletemultiplemedia(bot, message):
                         'file_size': media.file_size,
                         'mime_type': media.mime_type
                     })
+                    invalidate_search_cache()
                     if result.deleted_count:
                         logger.info('File is successfully deleted from database.')
                     else:

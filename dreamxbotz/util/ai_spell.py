@@ -94,13 +94,13 @@ async def groq_correct(query: str) -> str | None:
 async def imdb_fallback(wrong_name: str, chat_id=None) -> str | None:
     """IMDb + fuzzywuzzy fallback. Optionally require the title to exist in the file DB."""
     from fuzzywuzzy import process
-    from utils import imdb
+    from utils import search_imdb_titles
 
     wrong_name = _clean(wrong_name)
     if not wrong_name:
         return None
     try:
-        results = imdb.search_movie(wrong_name) or []
+        results = await search_imdb_titles(wrong_name) or []
     except Exception as e:
         logger.warning("IMDb search failed: %s", e)
         return None

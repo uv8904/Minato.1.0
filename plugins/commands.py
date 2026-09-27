@@ -15,7 +15,7 @@ from database.config_db import mdb
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardMarkup
 from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
-from database.ia_filterdb import Media, Media2, get_file_details, unpack_new_file_id, get_bad_files
+from database.ia_filterdb import invalidate_search_cache, Media, Media2, get_file_details, unpack_new_file_id, get_bad_files
 from database.users_chats_db import db
 from info import *
 from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename, start_buttons, blue, green, red, send_start_flash, get_flash_value, parse_flash_value
@@ -725,10 +725,12 @@ async def delete(bot, message):
         result = await Media.collection.delete_one({
             '_id': file_id,
         })
+        invalidate_search_cache()
     else:
         result = await Media2.collection.delete_one({
             '_id': file_id,
         })
+        invalidate_search_cache()
     if result.deleted_count:
         await msg.edit('Fɪʟᴇ ɪs sᴜᴄᴄᴇssғᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ғʀᴏᴍ ᴅᴀᴛᴀʙᴀsᴇ ✅')
     else:
@@ -738,6 +740,7 @@ async def delete(bot, message):
             'file_size': media.file_size,
             'mime_type': media.mime_type
             })
+        invalidate_search_cache()
         if result.deleted_count:
             await msg.edit('Fɪʟᴇ ɪs sᴜᴄᴄᴇssғᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ғʀᴏᴍ ᴅᴀᴛᴀʙᴀsᴇ ✅')
         else:
@@ -746,6 +749,7 @@ async def delete(bot, message):
                 'file_size': media.file_size,
                 'mime_type': media.mime_type
             })
+            invalidate_search_cache()
             if result.deleted_count:
                 await msg.edit('Fɪʟᴇ ɪs sᴜᴄᴄᴇssғᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ғʀᴏᴍ ᴅᴀᴛᴀʙᴀsᴇ')
             else:
@@ -754,6 +758,7 @@ async def delete(bot, message):
                     'file_size': media.file_size,
                     'mime_type': media.mime_type
                 })
+                invalidate_search_cache()
                 if result.deleted_count:
                     await msg.edit('Fɪʟᴇ ɪs sᴜᴄᴄᴇssғᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ғʀᴏᴍ ᴅᴀᴛᴀʙᴀsᴇ ✅')
                 else:
@@ -762,6 +767,7 @@ async def delete(bot, message):
                         'file_size': media.file_size,
                         'mime_type': media.mime_type
                     })
+                    invalidate_search_cache()
                     if result.deleted_count:
                         await msg.edit('Fɪʟᴇ ɪs sᴜᴄᴄᴇssғᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ғʀᴏᴍ ᴅᴀᴛᴀʙᴀsᴇ ✅')
                     else:

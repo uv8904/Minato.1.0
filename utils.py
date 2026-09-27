@@ -4,6 +4,8 @@ import logging
 from info import  *
 from imdb import Cinemagoer 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from dreamxbotz.util.async_cache import AsyncTTLCache
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import InputUserDeactivated, UserNotParticipant, FloodWait, UserIsBlocked, PeerIdInvalid, ChatAdminRequired, MessageNotModified
 from pyrogram import enums
@@ -335,7 +337,32 @@ async def clear_junk(user_id, message):
     except Exception as e:
         return False, "Error"  
 
+_poster_cache = AsyncTTLCache(maxsize=64, ttl=300)
+# A single dedicated thread avoids both blocking the event loop and filling
+# asyncio's shared thread pool with calls waiting on Cinemagoer's client.
+_imdb_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="imdb")
+
+
 async def get_poster(query, bulk=False, id=False, file=None):
+    async def load():
+        return await asyncio.get_running_loop().run_in_executor(
+            _imdb_executor, _get_poster_sync, query, bulk, id, file
+        )
+
+    return await _poster_cache.get(("poster", query, bulk, id, file), load)
+
+
+async def search_imdb_titles(query):
+    """Raw IMDb suggestions used by spell correction, off the event loop too."""
+    async def load():
+        return await asyncio.get_running_loop().run_in_executor(
+            _imdb_executor, imdb.search_movie, query
+        )
+
+    return await _poster_cache.get(("suggest", query), load)
+
+
+def _get_poster_sync(query, bulk=False, id=False, file=None):
     if not id:
         query = (query.strip()).lower()
         title = query
