@@ -185,15 +185,29 @@ class FakeArtStore:
         return len(self.docs)
 
 
+def jpeg_bytes(size=(600, 900)):
+    """Real artwork bytes: the proxy must reject header-only/corrupt images."""
+    from io import BytesIO
+    from PIL import Image
+
+    output = BytesIO()
+    Image.new("RGB", size, (200, 40, 70)).save(output, format="JPEG")
+    return output.getvalue()
+
+
 class FakeResponse:
     def __init__(self, body=b"", status=200, headers=None):
         self.status = status
         self.headers = headers or {}
-        self.content = SimpleNamespace(read=self._read)
+        self.content = SimpleNamespace(read=self._read, iter_chunked=self._iter_chunked)
         self._body = body
 
     async def _read(self, size=-1):
         return self._body
+
+    async def _iter_chunked(self, size):
+        for offset in range(0, len(self._body), size):
+            yield self._body[offset:offset + size]
 
     async def __aenter__(self):
         return self
@@ -606,8 +620,8 @@ def test_poster_is_proxied_and_served_from_our_origin():
     app, _ = make_client([movie_doc()])
     session = FakeSession(
         FakeResponse(
-            body=b"\xff\xd8\xff\xe0fake-jpeg",
-            headers={"Content-Type": "image/jpeg", "Content-Length": "18"},
+            body=jpeg_bytes(),
+            headers={"Content-Type": "image/jpeg"},
         )
     )
     original_session = movie_api._session

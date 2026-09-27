@@ -18,7 +18,7 @@
     <link rel="stylesheet" href="/static/newly_uploaded.css?v={{ asset_version | e }}">
     <link rel="stylesheet" href="/static/coming_soon.css?v={{ asset_version | e }}">
 
-    <!-- Movie hero · strip above the player (poster + Telegram deep link) -->
+    <!-- Cinematic movie hero · complete poster + watch / Telegram actions -->
     {% if watch_hero_enabled %}
     <link rel="stylesheet" href="/static/watch_hero.css?v={{ asset_version | e }}">
     {% endif %}
@@ -1160,14 +1160,14 @@
             data-title="{{ watch_hero_title | e }}" data-year="{{ watch_hero_year }}"
             data-deeplink="{{ watch_hero_deeplink | e }}">
             <div class="mh-bg" aria-hidden="true">
-                <img id="mhBackdrop" alt="" decoding="async" fetchpriority="low" hidden>
+                <img id="mhBackdrop" alt="" width="1280" height="720" decoding="async" hidden>
             </div>
 
             <div class="mh-inner">
-                <a class="mh-poster" id="mhPosterCard" href="{{ watch_hero_deeplink | e }}"
-                    {%- if watch_hero_deeplink %} target="_blank" rel="noopener noreferrer"
+                <a class="mh-poster" id="mhPosterCard"
+                    {%- if watch_hero_deeplink %} href="{{ watch_hero_deeplink | e }}" target="_blank" rel="noopener noreferrer"
                     aria-label="Open {{ watch_hero_title | e }} in the Telegram bot"
-                    {%- else %} aria-disabled="true"{% endif %}>
+                    {%- else %} aria-disabled="true" aria-label="{{ watch_hero_title | e }} poster"{% endif %}>
                     <span class="mh-poster-fallback" aria-hidden="true">
                         <span class="mh-fallback-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -1180,7 +1180,7 @@
                         <span class="mh-fallback-text">{{ watch_hero_title | e }}</span>
                     </span>
                     <img class="mh-poster-img" id="mhPoster" alt="" width="480" height="720" decoding="async"
-                        hidden>
+                        loading="eager" fetchpriority="high" hidden>
                     {% if watch_hero_quality %}
                     <span class="mh-badge">{{ watch_hero_quality | e }}</span>
                     {% endif %}
@@ -1195,10 +1195,9 @@
 
                 <div class="mh-info">
                     <p class="mh-kicker">
-                        <span class="mh-dot" aria-hidden="true"></span>Now streaming
-                        {%- if watch_hero_added %}<span class="mh-kicker-sep">·</span><span
-                            class="mh-added">Added {{ watch_hero_added | e }}</span>{%- endif %}
-                        <span class="mh-kicker-sep">·</span><span class="mh-kind">{{ watch_hero_kind | e }}</span>
+                        <span class="mh-live"><span class="mh-dot" aria-hidden="true"></span>Now streaming</span>
+                        <span class="mh-kicker-sep" aria-hidden="true">/</span>
+                        <span class="mh-kind">{{ watch_hero_kind | e }}</span>
                     </p>
 
                     <h1 class="mh-title" id="mhTitle">{{ watch_hero_title | e }}</h1>
@@ -1211,12 +1210,18 @@
                     </div>
                     {% endif %}
 
-                    <p class="mh-sub">Tap the poster or the button below — the Telegram bot opens
-                        <b>{{ watch_hero_title | e }}</b> straight away, no searching needed.</p>
+                    <p class="mh-sub">Watch <b>{{ watch_hero_title | e }}</b> right here, or open it in
+                        Telegram to choose from the available files.</p>
 
                     <div class="mh-actions">
+                        <a class="mh-btn mh-btn-primary" id="mhPlay" href="#player">
+                            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <path d="M8 5.2v13.6a1 1 0 0 0 1.5.9l11-6.8a1 1 0 0 0 0-1.8l-11-6.8A1 1 0 0 0 8 5.2Z" />
+                            </svg>
+                            Watch now
+                        </a>
                         {% if watch_hero_deeplink %}
-                        <a class="mh-btn mh-btn-primary" id="mhOpen" href="{{ watch_hero_deeplink | e }}"
+                        <a class="mh-btn mh-btn-ghost" id="mhOpen" href="{{ watch_hero_deeplink | e }}"
                             target="_blank" rel="noopener noreferrer">
                             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                                 <path
@@ -1224,25 +1229,21 @@
                             </svg>
                             Open in Telegram
                         </a>
-                        <button class="mh-btn mh-btn-ghost" id="mhCopy" type="button">
+                        <button class="mh-btn mh-btn-ghost mh-btn-icon" id="mhCopy" type="button"
+                            title="Copy Telegram search link">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
                                 <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
                             </svg>
-                            Copy search link
+                            <span class="mh-sr-only">Copy search link</span>
                         </button>
                         {% else %}
-                        <span class="mh-btn mh-btn-primary" aria-disabled="true">Telegram link unavailable</span>
+                        <span class="mh-btn mh-btn-ghost" aria-disabled="true">Telegram link unavailable</span>
                         {% endif %}
-                        <a class="mh-btn mh-btn-ghost" id="mhPlay" href="#player">
-                            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                <path d="M8 5.2v13.6a1 1 0 0 0 1.5.9l11-6.8a1 1 0 0 0 0-1.8l-11-6.8A1 1 0 0 0 8 5.2Z" />
-                            </svg>
-                            Play here
-                        </a>
                     </div>
-                    <span class="mh-status" id="mhStatus" role="status" hidden></span>
+                    {% if watch_hero_added %}<p class="mh-added">Added {{ watch_hero_added | e }}</p>{% endif %}
+                    <span class="mh-status" id="mhStatus" role="status" aria-live="polite" hidden></span>
                 </div>
             </div>
         </section>
