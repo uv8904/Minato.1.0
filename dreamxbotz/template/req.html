@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="robots" content="noindex, nofollow">
-    <meta name="theme-color" content="#07080c">
+    <meta name="theme-color" content="#0b0b16">
     <meta name="description" content="Stream {{ file_name | e }} online on MinatoVerse — custom player, resume support and direct download.">
     <title>MinatoVerse · {{ file_name | e }}</title>
 
@@ -14,7 +14,7 @@
     <link rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
 
-    <!-- Newly Uploaded Movies · section styles (dark + gold theme) -->
+    <!-- Newly Uploaded Movies · section styles (JioHotstar-style dark + purple/pink theme) -->
     <link rel="stylesheet" href="/static/newly_uploaded.css?v={{ asset_version | e }}">
     <link rel="stylesheet" href="/static/coming_soon.css?v={{ asset_version | e }}">
 
@@ -29,23 +29,23 @@
     <!-- Stream UI · dreamxbotz · earlier page layout by @biisal -->
     <style>
         :root {
-            --bg: #07080c;
-            --panel: #101320;
-            --panel-2: #161a2a;
+            --bg: #0b0b16;
+            --panel: #121224;
+            --panel-2: #191930;
             --line: rgba(255, 255, 255, 0.09);
             --line-2: rgba(255, 255, 255, 0.05);
             --text: #eef0f7;
             --muted: #9aa1b9;
-            --brand: #7c5cff;
-            --brand-2: #22d3ee;
-            --accent: #f472b6;
+            --brand: #2e5bff;
+            --brand-2: #822ce7;
+            --accent: #ff3d9a;
             --ok: #34d399;
             --warn: #fbbf24;
             --bad: #f87171;
             --radius: 18px;
             --radius-sm: 12px;
             --shadow: 0 28px 70px -30px rgba(0, 0, 0, 0.9);
-            --grad: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+            --grad: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 52%, var(--accent) 100%);
             --font-display: "Sora", "Segoe UI", system-ui, sans-serif;
             --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
         }
@@ -78,8 +78,8 @@
             z-index: 0;
             pointer-events: none;
             background:
-                radial-gradient(1100px 620px at 12% -12%, rgba(124, 92, 255, 0.24), transparent 62%),
-                radial-gradient(900px 520px at 92% -6%, rgba(34, 211, 238, 0.16), transparent 58%);
+                radial-gradient(1100px 620px at 12% -12%, rgba(130, 44, 231, 0.24), transparent 62%),
+                radial-gradient(900px 520px at 92% -6%, rgba(46, 91, 255, 0.16), transparent 58%);
         }
 
         a {
@@ -110,7 +110,7 @@
             justify-content: space-between;
             gap: 14px;
             padding: 12px min(40px, 4vw);
-            background: rgba(7, 8, 12, 0.72);
+            background: rgba(11, 11, 22, 0.72);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border-bottom: 1px solid var(--line-2);
@@ -135,8 +135,8 @@
             font-weight: 700;
             font-size: 14px;
             letter-spacing: 0.5px;
-            color: #06070c;
-            box-shadow: 0 10px 26px -12px rgba(124, 92, 255, 0.9);
+            color: #ffffff;
+            box-shadow: 0 10px 26px -12px rgba(130, 44, 231, 0.9);
         }
 
         .brand-text {
@@ -197,7 +197,7 @@
         .btn-primary {
             background: var(--grad);
             border-color: transparent;
-            color: #06070c;
+            color: #ffffff;
         }
 
         .btn-primary:hover {
@@ -333,8 +333,8 @@
             height: 82px;
             border-radius: 50%;
             background: var(--grad);
-            color: #06070c;
-            box-shadow: 0 20px 44px -16px rgba(124, 92, 255, 0.95);
+            color: #ffffff;
+            box-shadow: 0 20px 44px -16px rgba(130, 44, 231, 0.95);
             transition: transform 0.18s ease;
         }
 
@@ -733,8 +733,8 @@
         }
 
         .ext:hover {
-            border-color: rgba(124, 92, 255, 0.6);
-            background: rgba(124, 92, 255, 0.12);
+            border-color: rgba(130, 44, 231, 0.6);
+            background: rgba(130, 44, 231, 0.12);
         }
 
         .meta-list {
@@ -813,7 +813,7 @@
 
         .trend:hover {
             transform: translateY(-3px);
-            border-color: rgba(124, 92, 255, 0.55);
+            border-color: rgba(130, 44, 231, 0.55);
         }
 
         .trend-rank {
@@ -964,7 +964,7 @@
         }
 
         .poster:hover .poster-art {
-            border-color: rgba(34, 211, 238, 0.55);
+            border-color: rgba(46, 91, 255, 0.55);
         }
 
         .poster-img {

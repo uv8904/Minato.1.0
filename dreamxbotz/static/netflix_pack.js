@@ -136,7 +136,7 @@
             var art = document.createElement("div");
             art.className = "nfx-cw-art";
             // gradient fallback with initial letter
-            art.style.background = "linear-gradient(135deg, #1b2036, #07080c)";
+            art.style.background = "linear-gradient(135deg, #1d1d38, #0b0b16)";
             art.textContent = "";
             var play = document.createElement("div");
             play.className = "nfx-cw-play";
@@ -643,12 +643,12 @@
                 card.style.position="relative";
                 var art=document.createElement("div");
                 art.className="nfx-ml-art";
-                art.style.background="linear-gradient(135deg, hsl("+(hashCode(rec.title)%360)+" 70% 45%), #07080c)";
+                art.style.background="linear-gradient(135deg, hsl("+(hashCode(rec.title)%360)+" 70% 45%), #0b0b16)";
                 var imgInfo = rec.title; // poster via iTunes fallback handled elsewhere
                 // no img yet, placeholder gradient is enough for demo
                 var info=document.createElement("div");
                 info.className="nfx-ml-info";
-                info.innerHTML='<div class="nfx-ml-title">'+escHtml(rec.title)+'</div><div class="nfx-ml-sub">'+escHtml(rec.genres.join(" · "))+'</div><div style="margin-top:6px;font-size:11px;color:#ffdd7a">'+escHtml(rec.reason)+'</div>';
+                info.innerHTML='<div class="nfx-ml-title">'+escHtml(rec.title)+'</div><div class="nfx-ml-sub">'+escHtml(rec.genres.join(" · "))+'</div><div style="margin-top:6px;font-size:11px;color:#d8b4fe">'+escHtml(rec.reason)+'</div>';
                 card.appendChild(art); card.appendChild(info);
                 grid.appendChild(card);
             });

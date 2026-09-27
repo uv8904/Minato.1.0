@@ -698,7 +698,7 @@ def test_hero_css_covers_theme_ratio_and_responsiveness():
     assert "aspect-ratio: 2 / 3" in css        # correct poster ratio
     assert "object-fit: cover" in css          # no squashed artwork
     assert "translateY(-5px) scale(1.03)" in css  # hover zoom
-    assert "0 0 34px rgba(245, 197, 24, 0.3)" in css  # gold glow
+    assert "0 0 34px rgba(130, 44, 231, 0.3)" in css  # JioHotstar purple glow
     assert "@media (max-width: 640px)" in css
     assert "@media (max-width: 420px)" in css
     assert "prefers-reduced-motion" in css

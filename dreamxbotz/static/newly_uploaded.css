@@ -3,18 +3,18 @@
    Served from the bot's own web server (/static/newly_uploaded.css).
    Everything is scoped under .nu-* and uses its own CSS variables, so the
    existing navbar / hero / trending / poster-wall styles stay untouched.
-   Theme: dark background + gold/yellow accent, matching the MinatoVerse pages.
+   Theme: JioHotstar-style dark background + purple/pink accent (blue #2e5bff → purple #822ce7 → pink #ff3d9a), matching the MinatoVerse pages.
    ========================================================================== */
 
 .nu-section {
-    --nu-gold: #f5c518;
-    --nu-gold-2: #ffdd7a;
+    --nu-accent: #822ce7;
+    --nu-accent-2: #ff3d9a;
     --nu-ink: #f4f6fb;
     --nu-muted: #9aa1b9;
-    --nu-card: #0b0d15;
+    --nu-card: #10101f;
     --nu-line: rgba(255, 255, 255, 0.09);
-    --nu-line-gold: rgba(245, 197, 24, 0.5);
-    --nu-glow: 0 24px 46px -26px rgba(245, 197, 24, 0.55);
+    --nu-line-accent: rgba(130, 44, 231, 0.5);
+    --nu-glow: 0 24px 46px -26px rgba(130, 44, 231, 0.55);
     --nu-font: var(--font-display, "Sora", "Segoe UI", system-ui, sans-serif);
     position: relative;
     margin: 46px 0 10px;
@@ -39,7 +39,7 @@
 }
 
 .nu-title span {
-    background: linear-gradient(135deg, var(--nu-gold) 0%, var(--nu-gold-2) 100%);
+    background: linear-gradient(135deg, var(--nu-accent) 0%, var(--nu-accent-2) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -59,9 +59,9 @@
     flex: none;
     padding: 7px 13px;
     border-radius: 999px;
-    border: 1px solid rgba(245, 197, 24, 0.32);
-    background: rgba(245, 197, 24, 0.08);
-    color: var(--nu-gold-2);
+    border: 1px solid rgba(130, 44, 231, 0.32);
+    background: rgba(130, 44, 231, 0.08);
+    color: var(--nu-accent-2);
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 1.5px;
@@ -73,15 +73,15 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--nu-gold);
-    box-shadow: 0 0 0 0 rgba(245, 197, 24, 0.65);
+    background: var(--nu-accent);
+    box-shadow: 0 0 0 0 rgba(130, 44, 231, 0.65);
     animation: nu-pulse 2.4s ease-out infinite;
 }
 
 @keyframes nu-pulse {
-    0% { box-shadow: 0 0 0 0 rgba(245, 197, 24, 0.55); }
-    70% { box-shadow: 0 0 0 9px rgba(245, 197, 24, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(245, 197, 24, 0); }
+    0% { box-shadow: 0 0 0 0 rgba(130, 44, 231, 0.55); }
+    70% { box-shadow: 0 0 0 9px rgba(130, 44, 231, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(130, 44, 231, 0); }
 }
 
 /* ---------- spotlight: the newest upload (Prime-Video-style banner) ---------- */
@@ -103,7 +103,7 @@
     min-height: 300px;
     border-radius: 22px;
     border: 1px solid var(--nu-line);
-    background: #07080d;
+    background: #0b0b16;
     box-shadow: 0 44px 90px -46px rgba(0, 0, 0, 0.98);
 }
 
@@ -113,8 +113,8 @@
     z-index: 0;
     overflow: hidden;
     background:
-        radial-gradient(900px 420px at 80% 10%, rgba(245, 197, 24, 0.16), transparent 60%),
-        linear-gradient(160deg, #161a2b 0%, #0a0c14 60%, #07080d 100%);
+        radial-gradient(900px 420px at 80% 10%, rgba(130, 44, 231, 0.16), transparent 60%),
+        linear-gradient(160deg, #1a1a30 0%, #0d0d18 60%, #0b0b16 100%);
 }
 
 .nu-spot-backdrop {
@@ -171,8 +171,8 @@
     border-radius: 16px;
     overflow: hidden;
     border: 1px solid rgba(255, 255, 255, 0.14);
-    background: linear-gradient(160deg, #151928 0%, #080a11 100%);
-    box-shadow: 0 34px 64px -30px rgba(0, 0, 0, 1), 0 0 0 1px rgba(245, 197, 24, 0.12);
+    background: linear-gradient(160deg, #191932 0%, #0d0d18 100%);
+    box-shadow: 0 34px 64px -30px rgba(0, 0, 0, 1), 0 0 0 1px rgba(130, 44, 231, 0.12);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -184,7 +184,7 @@
 }
 
 .nu-spot-poster:focus-visible {
-    box-shadow: var(--nu-glow), 0 0 0 3px rgba(245, 197, 24, 0.45);
+    box-shadow: var(--nu-glow), 0 0 0 3px rgba(130, 44, 231, 0.45);
 }
 
 .nu-spot-poster img {
@@ -211,9 +211,9 @@
     font-weight: 800;
     letter-spacing: 1.4px;
     text-transform: uppercase;
-    color: var(--nu-gold-2);
+    color: var(--nu-accent-2);
     background: rgba(12, 14, 22, 0.86);
-    border: 1px solid rgba(245, 197, 24, 0.55);
+    border: 1px solid rgba(130, 44, 231, 0.55);
     backdrop-filter: blur(4px);
 }
 
@@ -231,14 +231,14 @@
     font-weight: 700;
     letter-spacing: 2px;
     text-transform: uppercase;
-    color: var(--nu-gold-2);
+    color: var(--nu-accent-2);
 }
 
 .nu-spot-kicker i {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--nu-gold);
+    background: var(--nu-accent);
     animation: nu-pulse 2.4s ease-out infinite;
 }
 
@@ -286,8 +286,8 @@
 }
 
 .nu-spot-chip.is-quality {
-    color: #20180a;
-    background: linear-gradient(135deg, var(--nu-gold), var(--nu-gold-2));
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--nu-accent), var(--nu-accent-2));
     border-color: transparent;
 }
 
@@ -328,15 +328,15 @@
 }
 
 .nu-spot-btn:focus-visible {
-    outline: 3px solid rgba(245, 197, 24, 0.5);
+    outline: 3px solid rgba(130, 44, 231, 0.5);
     outline-offset: 2px;
 }
 
 .nu-spot-btn-primary {
-    color: #20180a;
-    background: linear-gradient(135deg, var(--nu-gold), var(--nu-gold-2));
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--nu-accent), var(--nu-accent-2));
     border-color: transparent;
-    box-shadow: 0 18px 36px -18px rgba(245, 197, 24, 0.95);
+    box-shadow: 0 18px 36px -18px rgba(130, 44, 231, 0.95);
 }
 
 .nu-spot-btn-primary:hover {
@@ -351,7 +351,7 @@
 
 /* A movie that arrived while the page was open (live refresh). */
 .nu-spot--fresh {
-    border-color: rgba(245, 197, 24, 0.6);
+    border-color: rgba(130, 44, 231, 0.6);
     box-shadow: var(--nu-glow), 0 44px 90px -46px rgba(0, 0, 0, 0.98);
     animation: nu-spot-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -362,17 +362,17 @@
 }
 
 .nu-card--newest {
-    border-color: rgba(245, 197, 24, 0.42);
+    border-color: rgba(130, 44, 231, 0.42);
 }
 
 .nu-section--fresh .nu-chip {
-    color: #20180a;
-    background: linear-gradient(135deg, var(--nu-gold), var(--nu-gold-2));
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--nu-accent), var(--nu-accent-2));
     border-color: transparent;
 }
 
 .nu-section--fresh .nu-chip i {
-    background: #20180a;
+    background: #ffffff;
     animation: none;
 }
 
@@ -405,13 +405,13 @@
 .nu-card:hover,
 .nu-card:focus-visible {
     transform: translateY(-6px);
-    border-color: var(--nu-line-gold);
+    border-color: var(--nu-line-accent);
     box-shadow: var(--nu-glow);
     outline: none;
 }
 
 .nu-card:focus-visible {
-    box-shadow: var(--nu-glow), 0 0 0 3px rgba(245, 197, 24, 0.45);
+    box-shadow: var(--nu-glow), 0 0 0 3px rgba(130, 44, 231, 0.45);
 }
 
 /* Poster keeps a true 2:3 movie-poster ratio at every width. */
@@ -420,7 +420,7 @@
     display: block;
     aspect-ratio: 2 / 3;
     overflow: hidden;
-    background: linear-gradient(160deg, #151928 0%, #080a11 100%);
+    background: linear-gradient(160deg, #191932 0%, #0d0d18 100%);
 }
 
 .nu-art img {
@@ -459,9 +459,9 @@
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.6px;
-    color: #20180a;
-    background: linear-gradient(135deg, var(--nu-gold), var(--nu-gold-2));
-    box-shadow: 0 12px 22px -14px rgba(245, 197, 24, 0.95);
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--nu-accent), var(--nu-accent-2));
+    box-shadow: 0 12px 22px -14px rgba(130, 44, 231, 0.95);
 }
 
 .nu-new {
@@ -474,9 +474,9 @@
     font-weight: 700;
     letter-spacing: 1.1px;
     text-transform: uppercase;
-    color: var(--nu-gold-2);
+    color: var(--nu-accent-2);
     background: rgba(12, 14, 22, 0.82);
-    border: 1px solid rgba(245, 197, 24, 0.45);
+    border: 1px solid rgba(130, 44, 231, 0.45);
     backdrop-filter: blur(4px);
 }
 
@@ -520,8 +520,8 @@
     border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
-    color: #20180a;
-    background: linear-gradient(135deg, var(--nu-gold), var(--nu-gold-2));
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--nu-accent), var(--nu-accent-2));
     box-shadow: 0 16px 30px -16px rgba(0, 0, 0, 0.9);
     opacity: 0;
     transition: opacity 0.25s ease, transform 0.25s ease;
@@ -544,7 +544,7 @@
     position: relative;
     border-radius: 16px;
     border: 1px solid var(--nu-line);
-    background: linear-gradient(160deg, #12151f 0%, #0a0c13 100%);
+    background: linear-gradient(160deg, #14142a 0%, #0e0e1c 100%);
     overflow: hidden;
 }
 
@@ -571,7 +571,7 @@
 
 .nu-skel-line.short {
     width: 58%;
-    background: rgba(245, 197, 24, 0.14);
+    background: rgba(130, 44, 231, 0.14);
 }
 
 .nu-skel::after {
@@ -580,9 +580,9 @@
     inset: 0;
     background: linear-gradient(100deg,
             transparent 18%,
-            rgba(245, 197, 24, 0.07) 42%,
+            rgba(130, 44, 231, 0.07) 42%,
             rgba(255, 255, 255, 0.12) 50%,
-            rgba(245, 197, 24, 0.07) 58%,
+            rgba(130, 44, 231, 0.07) 58%,
             transparent 82%);
     background-size: 220% 100%;
     animation: nu-shimmer 1.5s linear infinite;
@@ -602,7 +602,7 @@
     padding: 34px 18px;
     text-align: center;
     border-radius: 18px;
-    border: 1px dashed rgba(245, 197, 24, 0.26);
+    border: 1px dashed rgba(130, 44, 231, 0.26);
     background: rgba(255, 255, 255, 0.02);
 }
 
@@ -612,9 +612,9 @@
     width: 54px;
     height: 54px;
     border-radius: 16px;
-    color: var(--nu-gold);
-    background: rgba(245, 197, 24, 0.1);
-    border: 1px solid rgba(245, 197, 24, 0.28);
+    color: var(--nu-accent);
+    background: rgba(130, 44, 231, 0.1);
+    border: 1px solid rgba(130, 44, 231, 0.28);
 }
 
 .nu-state-icon svg {
@@ -653,10 +653,10 @@
     border-radius: 12px;
     font: inherit;
     font-weight: 600;
-    color: #20180a;
-    background: linear-gradient(135deg, var(--nu-gold), var(--nu-gold-2));
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--nu-accent), var(--nu-accent-2));
     cursor: pointer;
-    box-shadow: 0 16px 30px -18px rgba(245, 197, 24, 0.9);
+    box-shadow: 0 16px 30px -18px rgba(130, 44, 231, 0.9);
     transition: filter 0.2s ease, transform 0.2s ease;
 }
 
@@ -666,7 +666,7 @@
 }
 
 .nu-retry:focus-visible {
-    outline: 3px solid rgba(245, 197, 24, 0.5);
+    outline: 3px solid rgba(130, 44, 231, 0.5);
     outline-offset: 2px;
 }
 

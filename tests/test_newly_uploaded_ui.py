@@ -198,7 +198,7 @@ def test_section_loads_only_its_own_assets(page, request):
     assert '<script src="/static/newly_uploaded.js?v=' in html
     assert " defer></script>" in html
     # No inline style/script duplication of the section.
-    assert "--nu-gold" not in html
+    assert "--nu-accent" not in html
 
 
 @pytest.mark.parametrize("page", ["stream_page", "download_page"])
@@ -258,10 +258,10 @@ def js_text():
     return (STATIC / "newly_uploaded.js").read_text(encoding="utf-8")
 
 
-def test_stylesheet_matches_the_dark_gold_theme_and_stays_scoped():
+def test_stylesheet_matches_the_jiohotstar_theme_and_stays_scoped():
     css = css_text()
     assert ".nu-section {" in css
-    assert "--nu-gold: #f5c518" in css
+    assert "--nu-accent: #822ce7" in css
     # Poster aspect ratio is preserved everywhere.
     assert "aspect-ratio: 2 / 3" in css
     # Responsive: auto-fill grid on desktop …
@@ -280,7 +280,7 @@ def test_stylesheet_matches_the_dark_gold_theme_and_stays_scoped():
     assert "prefers-reduced-motion" in css
     assert "nu-skel" in css and "nu-shimmer" in css
     assert ".nu-state" in css and ".nu-retry" in css
-    # "Just added" spotlight: wide artwork + poster card + gold CTA.
+    # "Just added" spotlight: wide artwork + poster card + gradient CTA.
     assert ".nu-spot {" in css and ".nu-spot-backdrop {" in css
     assert ".nu-spot-backdrop--poster" in css  # portrait fallback → blurred ambient bg
     assert ".nu-spot-btn-primary" in css and ".nu-spot--fresh" in css

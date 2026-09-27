@@ -14,9 +14,9 @@
    ========================================================================== */
 
 .mh-hero {
-    --mh-gold: #f5c518;
-    --mh-gold-2: #ffdd7a;
-    --mh-ink: #0a0c13;
+    --mh-accent: #822ce7;
+    --mh-accent-2: #ff3d9a;
+    --mh-ink: #ffffff;
     position: relative;
     isolation: isolate;
     margin: 22px 0 4px;
@@ -39,8 +39,8 @@
     z-index: 0;
     overflow: hidden;
     background:
-        radial-gradient(120% 130% at 12% 0%, rgba(245, 197, 24, 0.16) 0%, rgba(245, 197, 24, 0) 55%),
-        linear-gradient(120deg, #171b2c 0%, #0d101b 55%, #07080d 100%);
+        radial-gradient(120% 130% at 12% 0%, rgba(130, 44, 231, 0.16) 0%, rgba(130, 44, 231, 0) 55%),
+        linear-gradient(120deg, #1a1a30 0%, #0e0e1a 55%, #0b0b16 100%);
 }
 
 .mh-bg img {
@@ -92,8 +92,8 @@
     overflow: hidden;
     text-decoration: none;
     color: inherit;
-    background: linear-gradient(160deg, #1b2036 0%, #0a0c14 62%, #07080d 100%);
-    border: 1px solid rgba(245, 197, 24, 0.32);
+    background: linear-gradient(160deg, #1d1d38 0%, #0d0d18 62%, #0b0b16 100%);
+    border: 1px solid rgba(130, 44, 231, 0.32);
     box-shadow: 0 22px 50px -20px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(0, 0, 0, 0.4);
     transition: transform 0.35s cubic-bezier(0.22, 0.68, 0.3, 1), box-shadow 0.35s ease;
 }
@@ -109,12 +109,12 @@
 .mh-poster:hover,
 .mh-poster:focus-visible {
     transform: translateY(-5px) scale(1.03);
-    box-shadow: 0 30px 70px -22px rgba(0, 0, 0, 1), 0 0 34px rgba(245, 197, 24, 0.3);
+    box-shadow: 0 30px 70px -22px rgba(0, 0, 0, 1), 0 0 34px rgba(130, 44, 231, 0.3);
     outline: none;
 }
 
 .mh-poster:focus-visible {
-    box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.55), 0 30px 70px -22px rgba(0, 0, 0, 1);
+    box-shadow: 0 0 0 3px rgba(130, 44, 231, 0.55), 0 30px 70px -22px rgba(0, 0, 0, 1);
 }
 
 .mh-poster-img {
@@ -145,8 +145,8 @@
     padding: 16px;
     text-align: center;
     background:
-        radial-gradient(90% 70% at 50% 6%, rgba(245, 197, 24, 0.14) 0%, rgba(245, 197, 24, 0) 60%),
-        linear-gradient(160deg, #1b2036 0%, #0a0c14 62%, #07080d 100%);
+        radial-gradient(90% 70% at 50% 6%, rgba(130, 44, 231, 0.14) 0%, rgba(130, 44, 231, 0) 60%),
+        linear-gradient(160deg, #1d1d38 0%, #0d0d18 62%, #0b0b16 100%);
 }
 
 .mh-poster.is-ready .mh-poster-fallback {
@@ -159,9 +159,9 @@
     width: 42px;
     height: 42px;
     border-radius: 12px;
-    border: 1px solid rgba(245, 197, 24, 0.45);
-    color: var(--mh-gold);
-    background: rgba(245, 197, 24, 0.08);
+    border: 1px solid rgba(130, 44, 231, 0.45);
+    color: var(--mh-accent);
+    background: rgba(130, 44, 231, 0.08);
 }
 
 .mh-fallback-icon svg {
@@ -191,8 +191,8 @@
     z-index: 3;
     padding: 5px 9px;
     border-radius: 999px;
-    background: linear-gradient(135deg, var(--mh-gold) 0%, var(--mh-gold-2) 100%);
-    color: #14161f;
+    background: linear-gradient(135deg, var(--mh-accent) 0%, var(--mh-accent-2) 100%);
+    color: #16162c;
     font-family: var(--font-body, "Inter", system-ui, sans-serif);
     font-size: 10.5px;
     font-weight: 800;
@@ -228,7 +228,7 @@
 .mh-poster-hint svg {
     width: 14px;
     height: 14px;
-    color: var(--mh-gold);
+    color: var(--mh-accent);
 }
 
 .mh-poster:hover .mh-poster-hint,
@@ -247,28 +247,29 @@
     align-items: center;
     flex-wrap: wrap;
     gap: 9px;
-    margin: 0;
+    /* pushed a bit lower on request – was flush with the top of the info column */
+    margin: 14px 0 0;
     font-family: var(--font-body, "Inter", system-ui, sans-serif);
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: var(--mh-gold);
+    color: var(--mh-accent);
 }
 
 .mh-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--mh-gold);
-    box-shadow: 0 0 0 0 rgba(245, 197, 24, 0.55);
+    background: var(--mh-accent);
+    box-shadow: 0 0 0 0 rgba(130, 44, 231, 0.55);
     animation: mh-pulse 2.4s ease-out infinite;
 }
 
 @keyframes mh-pulse {
-    0% { box-shadow: 0 0 0 0 rgba(245, 197, 24, 0.5); }
-    70% { box-shadow: 0 0 0 9px rgba(245, 197, 24, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(245, 197, 24, 0); }
+    0% { box-shadow: 0 0 0 0 rgba(130, 44, 231, 0.5); }
+    70% { box-shadow: 0 0 0 9px rgba(130, 44, 231, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(130, 44, 231, 0); }
 }
 
 .mh-kicker-sep {
@@ -313,8 +314,8 @@
 }
 
 .mh-chip.is-quality {
-    border-color: rgba(245, 197, 24, 0.45);
-    background: rgba(245, 197, 24, 0.12);
+    border-color: rgba(130, 44, 231, 0.45);
+    background: rgba(130, 44, 231, 0.12);
     color: #ffdf85;
 }
 
@@ -363,15 +364,15 @@
 }
 
 .mh-btn-primary {
-    background: linear-gradient(135deg, var(--mh-gold) 0%, var(--mh-gold-2) 100%);
+    background: linear-gradient(135deg, var(--mh-accent) 0%, var(--mh-accent-2) 100%);
     color: var(--mh-ink);
-    box-shadow: 0 14px 30px -14px rgba(245, 197, 24, 0.75);
+    box-shadow: 0 14px 30px -14px rgba(130, 44, 231, 0.75);
 }
 
 .mh-btn-primary:hover {
     transform: translateY(-2px);
     filter: brightness(1.05);
-    box-shadow: 0 18px 38px -14px rgba(245, 197, 24, 0.85);
+    box-shadow: 0 18px 38px -14px rgba(130, 44, 231, 0.85);
 }
 
 .mh-btn-primary:active {
@@ -509,6 +510,7 @@
     .mh-kicker {
         font-size: 10px;
         letter-spacing: 0.14em;
+        margin-top: 8px;
     }
 
     .mh-title {

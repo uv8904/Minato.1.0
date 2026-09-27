@@ -3,19 +3,19 @@
    Served from the bot's own web server (/static/coming_soon.css).
    Everything is scoped under .cs-* with its own variables, so the navbar,
    hero, trending wall and the .nu-* "Newly Uploaded" rail stay untouched.
-   Theme: the same dark background + gold accent as the rest of the page — the
+   Theme: JioHotstar-style dark background + purple/pink accent, same as the rest of the page — the
    countdown digits are the loudest element on purpose, they are the feature.
    ========================================================================== */
 
 .cs-section {
-    --cs-gold: #f5c518;
-    --cs-gold-2: #ffdd7a;
+    --cs-accent: #822ce7;
+    --cs-accent-2: #ff3d9a;
     --cs-ink: #f4f6fb;
     --cs-muted: #9aa1b9;
-    --cs-card: #0b0d15;
+    --cs-card: #10101f;
     --cs-line: rgba(255, 255, 255, 0.09);
-    --cs-line-gold: rgba(245, 197, 24, 0.5);
-    --cs-glow: 0 24px 46px -26px rgba(245, 197, 24, 0.55);
+    --cs-line-accent: rgba(130, 44, 231, 0.5);
+    --cs-glow: 0 24px 46px -26px rgba(130, 44, 231, 0.55);
     --cs-font: var(--font-display, "Sora", "Segoe UI", system-ui, sans-serif);
     position: relative;
     margin: 46px 0 10px;
@@ -40,7 +40,7 @@
 }
 
 .cs-title span {
-    background: linear-gradient(135deg, var(--cs-gold) 0%, var(--cs-gold-2) 100%);
+    background: linear-gradient(135deg, var(--cs-accent) 0%, var(--cs-accent-2) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -87,18 +87,18 @@
 
 .cs-card:hover {
     transform: translateY(-3px);
-    border-color: var(--cs-line-gold);
+    border-color: var(--cs-line-accent);
     box-shadow: var(--cs-glow);
 }
 
 /* A release inside COMING_SOON_SOON_DAYS gets the gold treatment. */
 .cs-card.cs-soon {
-    border-color: var(--cs-line-gold);
+    border-color: var(--cs-line-accent);
 }
 
 .cs-card.cs-soon .cs-chip {
-    background: linear-gradient(135deg, var(--cs-gold) 0%, var(--cs-gold-2) 100%);
-    color: #1a1400;
+    background: linear-gradient(135deg, var(--cs-accent) 0%, var(--cs-accent-2) 100%);
+    color: #ffffff;
     border-color: transparent;
 }
 
@@ -113,7 +113,7 @@
     position: relative;
     aspect-ratio: 2 / 3;
     overflow: hidden;
-    background: #12141d;
+    background: #15152a;
 }
 
 .cs-art img {
@@ -147,7 +147,7 @@
     font-weight: 600;
     letter-spacing: 0.5px;
     text-transform: uppercase;
-    color: var(--cs-gold);
+    color: var(--cs-accent);
 }
 
 /* ---------- body ---------- */
@@ -192,9 +192,9 @@
     align-items: center;
     gap: 2px;
     padding: 6px 2px;
-    border: 1px solid var(--cs-line-gold);
+    border: 1px solid var(--cs-line-accent);
     border-radius: 8px;
-    background: rgba(245, 197, 24, 0.07);
+    background: rgba(130, 44, 231, 0.07);
 }
 
 .cs-unit b {
@@ -203,7 +203,7 @@
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     line-height: 1;
-    color: var(--cs-gold);
+    color: var(--cs-accent);
 }
 
 .cs-unit i {
@@ -218,7 +218,7 @@
     margin: 2px 0 0;
     font-size: 12px;
     font-weight: 600;
-    color: var(--cs-gold);
+    color: var(--cs-accent);
 }
 
 .cs-waiting {
@@ -232,25 +232,25 @@
     margin-top: auto;
     padding: 9px 10px;
     border-radius: 9px;
-    border: 1px solid var(--cs-line-gold);
-    background: rgba(245, 197, 24, 0.1);
+    border: 1px solid var(--cs-line-accent);
+    background: rgba(130, 44, 231, 0.1);
     font-size: 12.5px;
     font-weight: 600;
     text-align: center;
     text-decoration: none;
-    color: var(--cs-gold);
+    color: var(--cs-accent);
     transition: background 0.18s ease, color 0.18s ease;
 }
 
 .cs-open:hover {
-    background: linear-gradient(135deg, var(--cs-gold) 0%, var(--cs-gold-2) 100%);
-    color: #1a1400;
+    background: linear-gradient(135deg, var(--cs-accent) 0%, var(--cs-accent-2) 100%);
+    color: #ffffff;
     text-decoration: none;
 }
 
 /* ---------- loading / empty / error ---------- */
 .cs-skeleton .cs-art {
-    background: linear-gradient(100deg, #14161f 30%, #1c1f2b 50%, #14161f 70%);
+    background: linear-gradient(100deg, #16162c 30%, #20203a 50%, #16162c 70%);
     background-size: 220% 100%;
     animation: cs-shimmer 1.3s infinite linear;
 }
@@ -262,7 +262,7 @@
 
 .cs-ph {
     border-radius: 8px;
-    background: linear-gradient(100deg, #14161f 30%, #1c1f2b 50%, #14161f 70%);
+    background: linear-gradient(100deg, #16162c 30%, #20203a 50%, #16162c 70%);
     background-size: 220% 100%;
     animation: cs-shimmer 1.3s infinite linear;
 }
@@ -297,18 +297,18 @@
 
 .cs-retry {
     padding: 8px 16px;
-    border: 1px solid var(--cs-line-gold);
+    border: 1px solid var(--cs-line-accent);
     border-radius: 9px;
-    background: rgba(245, 197, 24, 0.1);
+    background: rgba(130, 44, 231, 0.1);
     font-size: 12.5px;
     font-weight: 600;
-    color: var(--cs-gold);
+    color: var(--cs-accent);
     cursor: pointer;
 }
 
 .cs-retry:hover {
-    background: linear-gradient(135deg, var(--cs-gold) 0%, var(--cs-gold-2) 100%);
-    color: #1a1400;
+    background: linear-gradient(135deg, var(--cs-accent) 0%, var(--cs-accent-2) 100%);
+    color: #ffffff;
 }
 
 /* ---------- small screens ---------- */

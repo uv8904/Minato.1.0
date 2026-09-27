@@ -7,8 +7,8 @@
 /* ---------- Continue Watching & My List rails ---------- */
 .nfx-rail {
     margin: 46px 0 10px;
-    --nfx-gold: #f5c518;
-    --nfx-gold2: #ffdd7a;
+    --nfx-accent: #822ce7;
+    --nfx-accent2: #ff3d9a;
 }
 .nfx-rail-head {
     display: flex;
@@ -26,7 +26,7 @@
     color: #eef0f7;
 }
 .nfx-rail-title span {
-    background: linear-gradient(135deg, var(--nfx-gold), var(--nfx-gold2));
+    background: linear-gradient(135deg, var(--nfx-accent), var(--nfx-accent2));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -40,9 +40,9 @@
     flex: none;
     padding: 6px 12px;
     border-radius: 999px;
-    background: rgba(245,197,24,0.12);
-    border: 1px solid rgba(245,197,24,0.3);
-    color: #ffdd7a;
+    background: rgba(130,44,231,0.12);
+    border: 1px solid rgba(130,44,231,0.3);
+    color: #d8b4fe;
     font-size: 12px;
     font-weight: 700;
 }
@@ -57,7 +57,7 @@
 .nfx-empty {
     padding: 28px 20px;
     text-align: center;
-    border: 1px dashed rgba(245,197,24,0.25);
+    border: 1px dashed rgba(130,44,231,0.25);
     border-radius: 16px;
     background: rgba(255,255,255,0.02);
 }
@@ -67,9 +67,9 @@
     width: 48px; height: 48px;
     margin: 0 auto 10px;
     border-radius: 12px;
-    background: rgba(245,197,24,0.1);
-    border: 1px solid rgba(245,197,24,0.2);
-    color: #f5c518;
+    background: rgba(130,44,231,0.1);
+    border: 1px solid rgba(130,44,231,0.2);
+    color: #c084fc;
 }
 .nfx-empty-icon svg { width: 22px; height: 22px; }
 .nfx-empty p { margin: 0; color: #9aa1b9; font-size: 13px; }
@@ -82,7 +82,7 @@
     flex-direction: column;
     border-radius: 14px;
     overflow: hidden;
-    background: #101320;
+    background: #14142a;
     border: 1px solid rgba(255,255,255,0.09);
     cursor: pointer;
     transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
@@ -90,13 +90,13 @@
 }
 .nfx-cw-card:hover {
     transform: translateY(-4px);
-    border-color: rgba(245,197,24,0.5);
+    border-color: rgba(130,44,231,0.5);
     box-shadow: 0 20px 40px -20px rgba(0,0,0,0.8);
 }
 .nfx-cw-art {
     position: relative;
     aspect-ratio: 16 / 9;
-    background: linear-gradient(135deg, #1b2036, #07080c);
+    background: linear-gradient(135deg, #1d1d38, #0b0b16);
     overflow: hidden;
 }
 .nfx-cw-art img {
@@ -119,8 +119,8 @@
     display: grid; place-items: center;
     width: 44px; height: 44px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #7c5cff, #22d3ee);
-    color: #06070c;
+    background: linear-gradient(135deg, #822ce7, #ff3d9a);
+    color: #ffffff;
 }
 .nfx-cw-play svg { width: 18px; height: 18px; margin-left: 2px; }
 .nfx-cw-progress {
@@ -132,7 +132,7 @@
 .nfx-cw-progress i {
     display: block;
     height: 100%;
-    background: linear-gradient(90deg, #f5c518, #ffdd7a);
+    background: linear-gradient(90deg, #822ce7, #ff3d9a);
     border-radius: 0 4px 4px 0;
     transition: width 0.3s ease;
 }
@@ -178,19 +178,19 @@
     position: relative;
     border-radius: 14px;
     overflow: hidden;
-    background: #101320;
+    background: #14142a;
     border: 1px solid rgba(255,255,255,0.09);
     transition: transform 0.2s ease, border-color 0.2s ease;
     cursor: pointer;
 }
 .nfx-ml-card:hover {
     transform: translateY(-4px);
-    border-color: rgba(245,197,24,0.5);
+    border-color: rgba(130,44,231,0.5);
 }
 .nfx-ml-art {
     position: relative;
     aspect-ratio: 2 / 3;
-    background: linear-gradient(155deg, hsl(var(--h1, 260) 70% 45%), #07080c);
+    background: linear-gradient(155deg, hsl(var(--h1, 265) 70% 45%), #0b0b16);
     overflow: hidden;
 }
 .nfx-ml-art img {
@@ -337,8 +337,8 @@
     z-index: 5;
     padding: 8px 14px;
     border-radius: 8px;
-    background: rgba(245,197,24,0.96);
-    color: #20180a;
+    background: rgba(130,44,231,0.96);
+    color: #ffffff;
     font-size: 12px;
     font-weight: 800;
     letter-spacing: 0.5px;
@@ -358,8 +358,8 @@
 .nfx-skip-intro:hover { filter: brightness(1.08); transform: translateY(-1px); }
 
 .nfx-theatre-btn.is-active {
-    background: rgba(245,197,24,0.2) !important;
-    color: #ffdd7a !important;
+    background: rgba(130,44,231,0.2) !important;
+    color: #d8b4fe !important;
 }
 
 /* Screenshot flash */
@@ -392,7 +392,7 @@
     overflow: auto;
     border-radius: 18px;
     border: 1px solid rgba(255,255,255,0.12);
-    background: linear-gradient(180deg, #151928, #0d0f1a);
+    background: linear-gradient(180deg, #1a1a30, #0e0e1c);
     box-shadow: 0 30px 80px -20px rgba(0,0,0,0.9);
 }
 .nfx-modal-head {
