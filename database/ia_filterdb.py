@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from struct import pack
 import re
@@ -13,7 +14,7 @@ from info import *
 from utils import get_settings, save_group_settings
 from dreamxbotz.util.new_uploaded import notify_new_file
 from datetime import datetime, timedelta
-import logging
+from dreamxbotz.util.async_cache import AsyncTTLCache
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -21,6 +22,17 @@ logger.setLevel(logging.INFO)
 
 # Global cache for DB size
 _db_stats_cache = {"timestamp": None, "primary_size": 0.0}
+
+# Keep page payloads bounded; counts can be shared across every pagination click.
+_search_pages = AsyncTTLCache(SEARCH_CACHE_SIZE, SEARCH_CACHE_TTL)
+_search_counts = AsyncTTLCache(SEARCH_CACHE_SIZE, SEARCH_CACHE_TTL)
+
+
+def invalidate_search_cache():
+    """Call after every indexed-file mutation (including administrative deletes)."""
+    _search_pages.clear()
+    _search_counts.clear()
+
 
 # Primary DB
 client = AsyncIOMotorClient(DATABASE_URI)
@@ -135,6 +147,7 @@ async def save_file(media):
             f"[ERROR] Failed commit of '{file_name}' to {target_db} DB.", exc_info=e
         )
         return False, 3
+    invalidate_search_cache()
     logger.info(f"[SUCCESS] '{file_name}' saved to {target_db} DB.")
     # Stream Mode → "Newly Uploaded Movies" (see docs/NEWLY_UPLOADED_MOVIES.md):
     # queue the file so the website section picks it up automatically.  The
@@ -164,6 +177,11 @@ async def get_search_results(
             await save_group_settings(int(chat_id), "max_btn", False)
             settings = await get_settings(int(chat_id))
             max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
+    offset = max(0, int(offset))
+    max_results = max(1, int(max_results))
+    # Do not lowercase regex queries: escape classes such as \D are case-sensitive.
+    query_key = tuple(q.strip() for q in query) if isinstance(query, list) else query.strip()
+    cache_key = (query_key, file_type, bool(USE_CAPTION_FILTER), bool(MULTIPLE_DB))
     if isinstance(query, list):
         regex_list = []
         for q in query:
@@ -176,6 +194,8 @@ async def get_search_results(
                 raw = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()]")
             regex_list.append(re.compile(raw, re.IGNORECASE))
 
+        if not regex_list:
+            return [], "", 0
         if USE_CAPTION_FILTER:
             filter_mongo = {
                 "$or": (
@@ -208,31 +228,44 @@ async def get_search_results(
             filter_mongo = {"file_name": regex}
     if file_type:
         filter_mongo["file_type"] = file_type
-    total_results = await Media.count_documents(filter_mongo)
-    if MULTIPLE_DB:
-        total_results += await Media2.count_documents(filter_mongo)
+    async def load_counts():
+        if MULTIPLE_DB:
+            return tuple(await asyncio.gather(
+                Media.count_documents(filter_mongo),
+                Media2.count_documents(filter_mongo),
+            ))
+        return await Media.count_documents(filter_mongo), 0
 
-    # if max_results % 2:
-    #     max_results += 1
-
-    cursor1 = (
-        Media.find(filter_mongo).sort("$natural", -1).skip(offset).limit(max_results)
-    )
-    files1 = await cursor1.to_list(length=max_results)
-
-    if MULTIPLE_DB:
-        remaining = max_results - len(files1)
-        cursor2 = (
-            Media2.find(filter_mongo).sort("$natural", -1).skip(offset).limit(remaining)
+    async def load_page():
+        # Count scans and first-page retrieval no longer wait for each other.
+        counts, files1 = await asyncio.gather(
+            _search_counts.get(cache_key, load_counts),
+            Media.find(filter_mongo).sort("$natural", -1)
+                .skip(offset).limit(max_results).to_list(length=max_results),
         )
-        files2 = await cursor2.to_list(length=remaining)
-        files = files1 + files2
-    else:
+        primary_count, secondary_count = counts
+        total_results = primary_count + secondary_count
         files = files1
-    next_offset = offset + len(files)
-    if next_offset >= total_results:
-        next_offset = ""
-    return files, next_offset, total_results
+        remaining = max_results - len(files1)
+        if MULTIPLE_DB and remaining > 0 and secondary_count:
+            # One logical sequence: primary newest-first, then secondary.
+            # Applying the global offset to both DBs skipped secondary files.
+            secondary_offset = max(0, offset - primary_count)
+            files2 = await (
+                Media2.find(filter_mongo).sort("$natural", -1)
+                .skip(secondary_offset).limit(remaining).to_list(length=remaining)
+            )
+            files = files1 + files2
+        next_offset = offset + len(files)
+        if next_offset >= total_results or not files:
+            next_offset = ""
+        return tuple(files), next_offset, total_results
+
+    files, next_offset, total = await _search_pages.get(
+        (cache_key, offset, max_results), load_page
+    )
+    # Callers keep/reorder their own result lists (Send All, filters, etc.).
+    return list(files), next_offset, total
 
 
 async def get_bad_files(query, file_type=None):

@@ -1,6 +1,7 @@
 from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, save_group_settings, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, start_buttons, blue, green, red
 from dreamxbotz.util.file_labels import file_button_label, normalize_file_name
-import tracemalloc
+from time import perf_counter
+from dreamxbotz.util.message_cleanup import delete_later
 from dreamxbotz.util.ai_spell import correct_title as groq_correct_title
 from dreamxbotz.util.title_suggest import auto_pick as db_auto_pick_title, suggest as db_title_suggest
 from dreamxbotz.util.title_notify import (
@@ -13,7 +14,7 @@ from dreamxbotz.util.title_notify import (
 from dreamxbotz.util.file_properties import get_name, get_hash
 from urllib.parse import quote_plus
 import logging
-from database.ia_filterdb import Media, Media2, get_file_details, get_search_results, get_bad_files
+from database.ia_filterdb import invalidate_search_cache, Media, Media2, get_file_details, get_search_results, get_bad_files
 from database.config_db import mdb
 from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid, ChatAdminRequired, UserNotParticipant
 from pyrogram import Client, filters, enums
@@ -38,7 +39,6 @@ logger = logging.getLogger(__name__)
 # Koyeb/Heroku logs so another silent-routing regression is diagnosable.
 logger.setLevel(logging.INFO)
 
-tracemalloc.start()
 
 
 TIMEZONE = "Asia/Kolkata"
@@ -344,8 +344,7 @@ async def advantage_spoll_choker(bot, query):
         remember_search(notify_key, movie)
         btn = notify_keyboard(notify_key, query.from_user.id if query.from_user else 0, movie)
         k = await query.message.edit(script.MVE_NT_FND, reply_markup=btn)
-        await asyncio.sleep(120)
-        await k.delete()
+        delete_later(120, k)
 
 @Client.on_callback_query(filters.regex(r"^sdb#"))
 async def spell_db_cb_handler(bot, query):
@@ -383,8 +382,7 @@ async def spell_db_cb_handler(bot, query):
         remember_search(notify_key, title)
         btn = notify_keyboard(notify_key, query.from_user.id if query.from_user else 0, title)
         k = await query.message.edit(script.MVE_NT_FND, reply_markup=btn)
-        await asyncio.sleep(120)
-        await k.delete()
+        delete_later(120, k)
         return
     # The user's original message must still exist (auto_filter replies to it).
     if not getattr(query.message, "reply_to_message", None):
@@ -797,8 +795,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("autofilter_delete"):
         await Media.collection.drop()
+        invalidate_search_cache()
         if MULTIPLE_DB:    
             await Media2.collection.drop()
+            invalidate_search_cache()
         await query.answer("Eᴠᴇʀʏᴛʜɪɴɢ's Gᴏɴᴇ")
         await query.message.edit('ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ ᴀʟʟ ɪɴᴅᴇxᴇᴅ ꜰɪʟᴇꜱ ✅')
 
@@ -846,10 +846,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     result = await Media.collection.delete_one({
                         '_id': file_ids,
                     })
+                    invalidate_search_cache()
                     if not result.deleted_count and MULTIPLE_DB:
                         result = await Media2.collection.delete_one({
                             '_id': file_ids,
                         })
+                        invalidate_search_cache()
                     if result.deleted_count:
                         logger.info(
                             f'ꜰɪʟᴇ ꜰᴏᴜɴᴅ ꜰᴏʀ ʏᴏᴜʀ ǫᴜᴇʀʏ {keyword}! ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴅᴇʟᴇᴛᴇᴅ {file_name} ꜰʀᴏᴍ ᴅᴀᴛᴀʙᴀꜱᴇ.')
@@ -1765,7 +1767,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
 
 async def auto_filter(client, msg, spoll=False):
-    curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
+    started = perf_counter()
     if not spoll:
         message = msg
         if message.text.startswith("/"):
@@ -1775,7 +1777,7 @@ async def auto_filter(client, msg, spoll=False):
         if len(message.text) < 100:
             search = message.text
             search = search.lower()
-            m = await message.reply_text(f'**🔎 sᴇᴀʀᴄʜɪɴɢ** `{search}`', reply_to_message_id=message.id)
+            display_search = search
             find = search.split(" ")
             search = ""
             removes = ["in", "upload", "series", "full",
@@ -1789,7 +1791,11 @@ async def auto_filter(client, msg, spoll=False):
             search = re.sub(r"\s+", " ", search).strip()
             search = search.replace("-", " ")
             search = search.replace(":", "")
-            files, offset, total_results = await get_search_results(message.chat.id, search, offset=0, filter=True)
+            m, search_result = await asyncio.gather(
+                message.reply_text(f'**🔎 sᴇᴀʀᴄʜɪɴɢ** `{display_search}`', reply_to_message_id=message.id),
+                get_search_results(message.chat.id, search, offset=0, filter=True),
+            )
+            files, offset, total_results = search_result
             settings = await get_settings(message.chat.id)
             if not files:
                 if settings["spell_check"]:
@@ -1841,10 +1847,7 @@ async def auto_filter(client, msg, spoll=False):
 
     imdb = await get_poster(search, file=(files[0]).file_name) if settings["imdb"] else None
 
-    cur_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
-    time_difference = timedelta(hours=cur_time.hour, minutes=cur_time.minute, seconds=(cur_time.second+(cur_time.microsecond/1000000))) -         timedelta(hours=curr_time.hour, minutes=curr_time.minute,
-                  seconds=(curr_time.second+(curr_time.microsecond/1000000)))
-    remaining_seconds = "{:.2f}".format(time_difference.total_seconds())
+    remaining_seconds = f"{perf_counter() - started:.2f}"
     TEMPLATE = script.IMDB_TEMPLATE_TXT
     settings = await get_settings(message.chat.id)
     if settings['template']:
@@ -1891,59 +1894,26 @@ async def auto_filter(client, msg, spoll=False):
 
     if imdb and imdb.get('poster') and settings["imdb"]:
         try:
-            hehe = await message.reply_photo(photo=imdb.get('poster'), caption=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
-            await m.delete()
-            try:
-                if settings['auto_delete']:
-                    await asyncio.sleep(DELETE_TIME)
-                    await hehe.delete()
-                    await message.delete()
-            except KeyError:
-                await save_group_settings(message.chat.id, 'auto_delete', True)
-                await asyncio.sleep(DELETE_TIME)
-                await hehe.delete()
-                await message.delete()
+            result = await message.reply_photo(photo=imdb.get('poster'), caption=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
         except (MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty):
-            pic = imdb.get('poster')
-            poster = pic.replace('.jpg', "._V1_UX360.jpg")
-            hmm = await message.reply_photo(photo=poster, caption=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
-            await m.delete()
-            try:
-                if settings['auto_delete']:
-                    await asyncio.sleep(DELETE_TIME)
-                    await hmm.delete()
-                    await message.delete()
-            except KeyError:
-                await save_group_settings(message.chat.id, 'auto_delete', True)
-                await asyncio.sleep(DELETE_TIME)
-                await hmm.delete()
-                await message.delete()
+            poster = imdb.get('poster').replace('.jpg', "._V1_UX360.jpg")
+            result = await message.reply_photo(photo=poster, caption=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
         except Exception as e:
             logger.exception(e)
-            dxb = await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
-            try:
-                if settings['auto_delete']:
-                    await asyncio.sleep(DELETE_TIME)
-                    await dxb.delete()
-                    await message.delete()
-            except KeyError:
-                await save_group_settings(message.chat.id, 'auto_delete', True)
-                await asyncio.sleep(DELETE_TIME)
-                await dxb.delete()
-                await message.delete()
+            result = await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
     else:
-        dxb = await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True, parse_mode=enums.ParseMode.HTML)
+        result = await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True, parse_mode=enums.ParseMode.HTML)
+    # Timers must not hold one of the finite dispatcher workers for DELETE_TIME.
+    # Schedule before deleting the progress message: cleanup still runs if that
+    # message was already removed or Telegram rejects its deletion.
+    if 'auto_delete' not in settings:
+        await save_group_settings(message.chat.id, 'auto_delete', True)
+    if settings.get('auto_delete', True):
+        delete_later(DELETE_TIME, result, message)
+    try:
         await m.delete()
-        try:
-            if settings['auto_delete']:
-                await asyncio.sleep(DELETE_TIME)
-                await dxb.delete()
-                await message.delete()
-        except KeyError:
-            await save_group_settings(message.chat.id, 'auto_delete', True)
-            await asyncio.sleep(DELETE_TIME)
-            await dxb.delete()
-            await message.delete()
+    except Exception:
+        logger.debug("Search progress message already gone", exc_info=True)
 
 
 async def ai_spell_check(chat_id, wrong_name):
@@ -1989,12 +1959,7 @@ async def advantage_spell_chok(client, message):
     if not db_titles and not movies:
         # Truly nothing close - old no-results screen (with Google button).
         k = await message.reply_text(text=script.I_CUDNT.format(search), reply_markup=notify_keyboard(key, user, search))
-        await asyncio.sleep(60)
-        await k.delete()
-        try:
-            await message.delete()
-        except:
-            pass
+        delete_later(60, k, message)
         return
 
     buttons = []
@@ -2009,9 +1974,4 @@ async def advantage_spell_chok(client, message):
     buttons += notify_rows(key, user, search)
     buttons.append([red("🚫 ᴄʟᴏsᴇ 🚫", callback_data='close_data')])
     d = await message.reply_text(text=script.CUDNT_FND, reply_markup=InlineKeyboardMarkup(buttons), reply_to_message_id=message.id)
-    await asyncio.sleep(60)
-    await d.delete()
-    try:
-        await message.delete()
-    except:
-        pass
+    delete_later(60, d, message)
