@@ -3,9 +3,10 @@
 What it is
 ----------
 ``/watch/<id>/<file>?hash=…`` (``req.html``) now opens with a full-width
-"movie hero": a 16:9 backdrop band with a 2:3 poster card of the movie that is
-being streamed, a Telegram deep-link button for that exact movie
-(``https://t.me/<BOT_USERNAME>?start=movie_<MOVIE_ID>``) and a copy button.
+cinematic "movie hero": a sharp wide backdrop with a complete 2:3 poster card
+of the movie being streamed, a Watch now action, a Telegram deep-link button
+for that exact movie (``https://t.me/<BOT_USERNAME>?start=movie_<MOVIE_ID>``)
+and a copy button.
 
 Why it is server rendered
 -------------------------

@@ -39,6 +39,7 @@ from test_newly_uploaded import (  # noqa: E402
     FakeStore,
     make_client,
     movie_doc,
+    jpeg_bytes,
     run,
     _get,
     _get_binary,
@@ -310,8 +311,8 @@ def test_backdrop_is_proxied_and_resized(monkeypatch):
     app, _ = make_client([], art=art)
     session = FakeSession(
         FakeResponse(
-            body=b"\xff\xd8\xff\xe0fake-wide-jpeg",
-            headers={"Content-Type": "image/jpeg", "Content-Length": "20"},
+            body=jpeg_bytes((1600, 900)),
+            headers={"Content-Type": "image/jpeg"},
         )
     )
     original = movie_api._session
@@ -332,7 +333,7 @@ def test_backdrop_falls_back_to_the_poster_when_there_is_no_wide_art(monkeypatch
         {"_id": "marco-2024", "title": "Marco", "poster_url": POSTER_URL, "checked_at": NOW},
     ])
     app, _ = make_client([], art=art)
-    session = FakeSession(FakeResponse(body=b"jpeg", headers={"Content-Type": "image/jpeg"}))
+    session = FakeSession(FakeResponse(body=jpeg_bytes(), headers={"Content-Type": "image/jpeg"}))
     original = movie_api._session
     movie_api._session = lambda request=None: session
     try:
@@ -379,7 +380,7 @@ def test_poster_proxy_serves_hero_only_movies(monkeypatch):
         {"_id": "marco-2024", "title": "Marco", "poster_url": POSTER_URL, "checked_at": NOW},
     ])
     app, _ = make_client([], art=art)
-    session = FakeSession(FakeResponse(body=b"jpeg-bytes", headers={"Content-Type": "image/jpeg"}))
+    session = FakeSession(FakeResponse(body=jpeg_bytes(), headers={"Content-Type": "image/jpeg"}))
     original = movie_api._session
     movie_api._session = lambda request=None: session
     try:
@@ -387,7 +388,12 @@ def test_poster_proxy_serves_hero_only_movies(monkeypatch):
     finally:
         movie_api._session = original
     assert response.status == 200
-    assert body == b"jpeg-bytes"
+    from io import BytesIO
+    from PIL import Image
+
+    with Image.open(BytesIO(body)) as poster:
+        poster.load()
+        assert poster.size == (480, 720)
 
 
 def test_poster_proxy_never_starts_a_lookup(monkeypatch):
@@ -696,9 +702,14 @@ def test_hero_new_answers_supersede_pending_retries():
 def test_hero_css_covers_theme_ratio_and_responsiveness():
     css = (ROOT / "dreamxbotz/static/watch_hero.css").read_text(encoding="utf-8")
     assert "aspect-ratio: 2 / 3" in css        # correct poster ratio
-    assert "object-fit: cover" in css          # no squashed artwork
-    assert "translateY(-5px) scale(1.03)" in css  # hover zoom
-    assert "0 0 34px rgba(130, 44, 231, 0.3)" in css  # JioHotstar purple glow
+    poster_css = css.split(".mh-poster-img {", 1)[1].split("}", 1)[0]
+    assert "object-fit: contain" in poster_css  # all source edges stay visible
+    backdrop_css = css.split(".mh-bg img {", 1)[1].split("}", 1)[0]
+    assert "object-fit: cover" in backdrop_css  # only decorative art may crop
+    assert "blur(" not in backdrop_css         # cinematic artwork stays sharp
+    assert "--mh-gradient:" in css
+    assert "grid-template-areas:" in css
+    assert ".mh-btn:focus-visible" in css
     assert "@media (max-width: 640px)" in css
     assert "@media (max-width: 420px)" in css
     assert "prefers-reduced-motion" in css
@@ -722,3 +733,24 @@ def test_static_assets_serve_the_hero_files():
     assert css.status == 200 and css.headers["Content-Type"].startswith("text/css")
     assert js.status == 200 and js.headers["Content-Type"].startswith("text/javascript")
     assert missing.status == 404  # only whitelisted files are served
+
+
+def test_hero_prioritizes_the_complete_poster_and_watch_action(stream_page):
+    _, html = stream_page
+    parsed = _parse(html)
+    assert parsed.ids["mhPoster"][1]["loading"] == "eager"
+    assert parsed.ids["mhPoster"][1]["fetchpriority"] == "high"
+    assert "mh-btn-primary" in parsed.ids["mhPlay"][1]["class"]
+    assert html.index('id="mhPlay"') < html.index('id="mhOpen"')
+    assert "Watch now" in html
+    assert "Copy search link" in html  # icon-only button has an accessible name
+
+
+def test_hero_waits_for_decode_and_revalidates_art_metadata():
+    source = _hero_js()
+    loader = _function_body(source, "loadImage")
+    assert "image.decode().then(reveal, fail)" in loader
+    assert "image.naturalWidth" in loader and "image.naturalHeight" in loader
+    assert loader.index("image.onload =") < loader.index('setAttribute("srcset"')
+    assert loader.index('setAttribute("sizes"') < loader.index('setAttribute("srcset"')
+    assert 'cache: "no-cache"' in _function_body(source, "requestArt")

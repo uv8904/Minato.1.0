@@ -17,7 +17,7 @@
    * re-validates every URL it receives – a compromised API can point at
      nothing but our own /api/movies/ endpoints,
    * degrades to the built-in placeholder instead of a broken image, and keeps
-     the "Copy search link" / "Play here" buttons working with no artwork at
+     the "Copy search link" / "Watch now" buttons working with no artwork at
      all (and with JavaScript disabled the strip is still readable).
 
    The poster card must never sit blank:
@@ -41,9 +41,9 @@
     }
 
     /* --- config + validation rules (declared before the first use below) --- */
-    var POSTER_WIDTHS = [320, 480, 800, 1600];
+    var POSTER_WIDTHS = [200, 320, 480, 640, 800];
     var BACKDROP_WIDTHS = [720, 960, 1280, 1920];
-    var POSTER_SIZES = "(max-width: 420px) 108px, (max-width: 640px) 124px, (max-width: 900px) 170px, 208px";
+    var POSTER_SIZES = "(max-width: 420px) 128px, (max-width: 640px) 144px, (max-width: 900px) 176px, 224px";
     var SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
     var SAFE_DEEPLINK = /^https:\/\/t\.me\/([A-Za-z0-9_]{4,32})\?start=movie_[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
     var REQUEST_TIMEOUT = 9000;
@@ -228,30 +228,53 @@
         }
         var sequence = (image._mhSeq || 0) + 1;
         image._mhSeq = sequence;
+        var failed = false;
         var widest = widths[widths.length - 2] || widths[widths.length - 1];
-        image.setAttribute("srcset", srcsetFor(target, widths));
-        image.setAttribute("sizes", sizes);
-        if (alt !== undefined) {
-            image.setAttribute("alt", alt);
+
+        function fail() {
+            if (image._mhSeq !== sequence || failed) {
+                return;
+            }
+            failed = true;
+            image.setAttribute("hidden", "hidden");
+            if (onFail) {
+                onFail();
+            }
         }
-        image.onload = function () {
-            if (image._mhSeq !== sequence) {
+
+        function reveal() {
+            if (image._mhSeq !== sequence || failed) {
+                return;
+            }
+            if (!image.naturalWidth || !image.naturalHeight) {
+                fail();
                 return;
             }
             image.removeAttribute("hidden");
             if (onReady) {
                 onReady();
             }
-        };
-        image.onerror = function () {
+        }
+
+        // Install handlers before any source attribute (cached images can be
+        // ready immediately). Keep the placeholder until decoding completes.
+        image.onload = function () {
             if (image._mhSeq !== sequence) {
                 return;
             }
-            image.setAttribute("hidden", "hidden");
-            if (onFail) {
-                onFail();
+            failed = false;
+            if (typeof image.decode === "function") {
+                image.decode().then(reveal, fail);
+            } else {
+                reveal();
             }
         };
+        image.onerror = fail;
+        if (alt !== undefined) {
+            image.setAttribute("alt", alt);
+        }
+        image.setAttribute("sizes", sizes);
+        image.setAttribute("srcset", srcsetFor(target, widths));
         image.setAttribute("src", withWidth(target, widest));
     }
 
@@ -282,6 +305,9 @@
 
         var options = {
             credentials: "same-origin",
+            // Revalidate artwork metadata on a new visit so revised image
+            // URLs replace previously cached partial posters immediately.
+            cache: "no-cache",
             headers: { Accept: "application/json" }
         };
         if (bypassCache) {
@@ -319,6 +345,7 @@
         if (!posterImg) {
             return;
         }
+        posterImg._mhSeq = (posterImg._mhSeq || 0) + 1;
         posterImg.onload = null;
         posterImg.onerror = null;
         posterImg.removeAttribute("srcset");
@@ -346,6 +373,10 @@
                 hideStatus();
             },
             function () {
+                if (posterCard) {
+                    posterCard.classList.remove("is-ready");
+                }
+                setState("loading");
                 schedulePosterRetry();
             }
         );
@@ -378,13 +409,14 @@
             backdropImg,
             target,
             BACKDROP_WIDTHS,
-            "100vw",
+            "(max-width: 640px) calc(100vw - 32px), (max-width: 1212px) calc(82vw - 26px), 968px",
             "",
             function () {
                 backdropRetries = 0;
                 hero.classList.add("is-art");
             },
             function () {
+                hero.classList.remove("is-art");
                 scheduleBackdropRetry();
             }
         );
@@ -524,10 +556,11 @@
 
     if (copyBtn) {
         copyBtn.addEventListener("click", function () {
-            copyLink().then(function (ok) {
+            function report(ok) {
                 showStatus(ok ? "Search link copied — paste it anywhere" : "Copy failed — press and hold the poster link");
                 window.setTimeout(hideStatus, 2600);
-            });
+            }
+            copyLink().then(report, function () { report(false); });
         });
     }
 
@@ -542,6 +575,22 @@
             player.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
             if (typeof player.focus === "function") {
                 player.focus({ preventScroll: true });
+            }
+            // A user-initiated Watch now click starts playback, not just a
+            // scroll. Never autoplay on page load or leave a rejected promise.
+            var video = document.getElementById("video");
+            if (video && video.paused && typeof video.play === "function") {
+                function playFailed() {
+                    showStatus("Playback could not start — use the player controls or open in Telegram");
+                }
+                try {
+                    var playback = video.play();
+                    if (playback && typeof playback.catch === "function") {
+                        playback.catch(playFailed);
+                    }
+                } catch (error) {
+                    playFailed();
+                }
             }
         });
     }

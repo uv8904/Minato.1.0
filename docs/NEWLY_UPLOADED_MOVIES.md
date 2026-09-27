@@ -406,8 +406,14 @@ python tools/preview_section.py            # http://127.0.0.1:8080
 # Test suite
 pytest tests/test_newly_uploaded.py tests/test_newly_uploaded_ui.py -q
 pytest tests/test_preview_upload_simulator.py -q   # upload → spotlight/rail flow
-pytest tests/test_watch_hero.py -q         # the watch-page hero
+pytest tests/test_watch_hero.py tests/test_poster_delivery.py -q  # hero + image delivery
 pytest tests/ -q                           # whole suite
+
+# Optional real-browser checks (no external network, bot or database)
+pip install playwright
+playwright install chromium
+RUN_BROWSER_TESTS=1 pytest tests/test_watch_hero_browser.py -q
+# Set CHROMIUM_PATH=/path/to/chromium to use a system browser instead.
 ```
 
 `tests/test_newly_uploaded.py` covers id/slug determinism, parsing, quality
@@ -430,10 +436,21 @@ order, caching, misses, hostile ids), the `movie_art` store and the markup
 ## 9. Movie hero on the watch page
 
 `/watch/<id>/<file>?hash=…` opens with a full-width **movie hero** above the
-player: a 16:9 backdrop band, the 2:3 poster card of the movie that is being
-streamed, its year/quality/language chips, the upload date, and the same
-Telegram deep link as the rail (`https://t.me/BOT_USERNAME?start=movie_MOVIE_ID`)
-— plus a *Copy search link* button and a *Play here* jump back to the player.
+player, with a **JioHotstar-inspired** dark cinematic layout: sharp wide
+backdrop, large title on the left, a complete 2:3 poster card on the right,
+year/quality/language chips and a blue–violet–pink **Watch now** button.
+On phones the complete poster sits above the information and full-width actions.
+The foreground poster uses `object-fit: contain` (including non-2:3 artwork);
+only the decorative backdrop is cropped. Directional scrims keep text readable
+without blurring the artwork. Keyboard focus, reduced motion and no-JavaScript
+fallbacks are preserved.
+
+**Watch now** scrolls/focuses the player and starts playback on that click
+(never autoplay on page load); without JavaScript it remains a `#player` link.
+The poster and **Open in Telegram** use the same exact-movie deep link as the
+rail (`https://t.me/BOT_USERNAME?start=movie_MOVIE_ID`). The adjacent link icon
+copies that URL and has an accessible *Copy search link* label. Failed playback
+or denied clipboard permission produces a status message, not an unhandled error.
 
 * Frontend: `dreamxbotz/static/watch_hero.css`, `dreamxbotz/static/watch_hero.js`
 * Page markup: `dreamxbotz/template/req.html` → `<section id="movieHero">`
@@ -467,6 +484,30 @@ Telegram deep link as the rail (`https://t.me/BOT_USERNAME?start=movie_MOVIE_ID`
 The browser never talks to TMDB/IMDb, never receives an upstream URL and never
 sees the bot token: the strip carries only the public `BOT_USERNAME`.
 
+### Complete image delivery and cache repair
+
+The image proxy reads the upstream response **to EOF in bounded chunks**.
+A single `StreamReader.read(n)` is not a full-body read: it may return only the
+first TCP packet, which previously produced a partially painted poster. The
+8 MiB cap is enforced while streaming, even without a trustworthy Content-Length.
+Pillow must decode the complete image before it can be resized, served or cached;
+invalid/truncated HTTP images and Telegram attachments are never passed through
+as successful JPEGs. Missing/failed artwork uses the short placeholder TTL,
+including the first response (not the normal one-day artwork TTL).
+
+`POSTER_ENCODING_VERSION` is included in the poster/backdrop URL version hashes,
+so previously cached partial images get new URLs after this fix. Hero metadata
+is revalidated on page visits; the existing same-origin proxy, host allow-list
+and server-side TMDB/IMDb resolution remain unchanged. No new configuration or
+database migration is needed. Pillow remains a required project dependency.
+
+`tests/test_poster_delivery.py` reproduces the bug with real multi-packet HTTP
+responses (with and without Content-Length), verifies the top and bottom of the
+resized image, and checks byte limits, invalid data, cache revisions and TTLs.
+The optional browser tests use the real template/assets at 320–1920 px and
+cover decoding, retries, fresh-upload polling, unavailable/hostile artwork,
+no-JavaScript, reduced motion, long titles and the playback/copy actions.
+
 ### Settings
 
 | Variable | Default | What it does |
@@ -481,8 +522,9 @@ sees the bot token: the strip carries only the public `BOT_USERNAME`.
 ### Behaviour
 
 The poster card **never sits blank**: `is-ready` is applied only after the
-image has actually loaded (the branded placeholder covers the card until
-then), an image that fails is retried with a fresh `&r=` cache-busting token
+image has loaded **and decoded** with non-zero dimensions (the branded
+placeholder covers the card until then). The poster is eager/high-priority and
+its responsive `sizes` matches each CSS breakpoint. An image that fails is retried with a fresh `&r=` cache-busting token
 after **1.5 s / 4 s / 9 s**, and a movie uploaded moments ago
 (`has_poster: false` in the artwork answer) gets the artwork API re-checked
 after **8 s** and **25 s** — the re-checks go out with `cache: no-store`, so

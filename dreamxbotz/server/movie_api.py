@@ -156,6 +156,8 @@ UPCOMING_MAX_LIMIT = 24
 ALLOWED_POSTER_WIDTHS = (200, 320, 480, 640, 800, 1600)
 #: 16:9 hero band artwork.
 ALLOWED_BACKDROP_WIDTHS = (480, 720, 960, 1280, 1920)
+#: Bump when encoding changes, including fixes to previously cached bytes.
+POSTER_ENCODING_VERSION = "2"
 MAX_POSTER_BYTES = 8 * 1024 * 1024
 POSTER_CACHE_BYTES = 24 * 1024 * 1024
 POSTER_TTL = 86400  # seconds – posters are immutable in practice
@@ -264,7 +266,7 @@ def _store():
 # Sanitizing
 # --------------------------------------------------------------------------- #
 def _poster_version(doc: Dict[str, Any]) -> str:
-    raw = f"{doc.get('poster_url') or ''}|{doc.get('updated_at')}"
+    raw = f"{POSTER_ENCODING_VERSION}|{doc.get('poster_url') or ''}|{doc.get('updated_at')}"
     return hashlib.md5(raw.encode("utf-8")).hexdigest()[:8]
 
 
@@ -353,7 +355,7 @@ def _safe_year(value) -> Optional[int]:
 
 def _art_version(movie_id: str, art: Dict[str, Any]) -> str:
     """Cache-busting token – changes as soon as better artwork is known."""
-    raw = f"{movie_id}|{art.get('poster') or ''}|{art.get('backdrop') or ''}"
+    raw = f"{POSTER_ENCODING_VERSION}|{movie_id}|{art.get('poster') or ''}|{art.get('backdrop') or ''}"
     return hashlib.md5(raw.encode("utf-8")).hexdigest()[:8]
 
 
@@ -764,13 +766,13 @@ async def upcoming_poster(request: web.Request) -> web.Response:
             return _not_found_poster(request)
         payload = (placeholder_svg(title), "image/svg+xml")
         _cache_put(cache_key, payload[0], payload[1], PLACEHOLDER_TTL)
-        return _image_response(payload[0], payload[1], request=request)
+        return _image_response(payload[0], payload[1], request=request, ttl=PLACEHOLDER_TTL)
 
     image = await _fetch_poster(cache_key, poster_url, width, _session(request))
     if image is None:
         payload = (placeholder_svg(title), "image/svg+xml")
         _cache_put(cache_key, payload[0], payload[1], PLACEHOLDER_TTL)
-        return _image_response(payload[0], payload[1], request=request)
+        return _image_response(payload[0], payload[1], request=request, ttl=PLACEHOLDER_TTL)
 
     return _image_response(image[0], image[1], request=request)
 
@@ -804,13 +806,13 @@ async def movie_poster(request: web.Request) -> web.Response:
             return _not_found_poster(request)
         payload = (placeholder_svg(title), "image/svg+xml")
         _cache_put(cache_key, payload[0], payload[1], PLACEHOLDER_TTL)
-        return _image_response(payload[0], payload[1], request=request)
+        return _image_response(payload[0], payload[1], request=request, ttl=PLACEHOLDER_TTL)
 
     image = await _fetch_poster(cache_key, poster_url, width, _session(request))
     if image is None:
         payload = (placeholder_svg(title), "image/svg+xml")
         _cache_put(cache_key, payload[0], payload[1], PLACEHOLDER_TTL)
-        return _image_response(payload[0], payload[1], request=request)
+        return _image_response(payload[0], payload[1], request=request, ttl=PLACEHOLDER_TTL)
 
     return _image_response(image[0], image[1], request=request)
 
@@ -867,13 +869,13 @@ async def movie_backdrop(request: web.Request) -> web.Response:
             return _not_found_art(request)
         payload = (placeholder_backdrop_svg(art.get("title")), "image/svg+xml")
         _cache_put(cache_key, payload[0], payload[1], PLACEHOLDER_TTL)
-        return _image_response(payload[0], payload[1], request=request)
+        return _image_response(payload[0], payload[1], request=request, ttl=PLACEHOLDER_TTL)
 
     image = await _fetch_poster(cache_key, source_url, width, _session(request))
     if image is None:
         payload = (placeholder_backdrop_svg(art.get("title")), "image/svg+xml")
         _cache_put(cache_key, payload[0], payload[1], PLACEHOLDER_TTL)
-        return _image_response(payload[0], payload[1], request=request)
+        return _image_response(payload[0], payload[1], request=request, ttl=PLACEHOLDER_TTL)
 
     return _image_response(image[0], image[1], request=request)
 
@@ -1183,9 +1185,11 @@ async def _fetch_telegram_poster(cache_key: str, file_id: str, width: int):
             return None
         if not data or len(data) > MAX_POSTER_BYTES:
             return None
+    result = _resize_jpeg(data, width)
+    if result is None:
+        return None  # never serve/cache a truncated photo or a non-image document
+    if not cached:
         _cache_put(raw_key, data, "application/octet-stream", POSTER_TTL)
-    # Telegram photos are JPEG already – without Pillow serve them as they are.
-    result = _resize_jpeg(data, width) or (data, "image/jpeg")
     _cache_put(cache_key, result[0], result[1], POSTER_TTL)
     return result
 
@@ -1241,27 +1245,33 @@ async def _download_and_encode(poster_url: str, width: int, session: ClientSessi
                     return None
             except (TypeError, ValueError):
                 pass
-        data = await response.content.read(MAX_POSTER_BYTES + 1)
-        if not data or len(data) > MAX_POSTER_BYTES:
+        # read(n) returns as soon as *any* bytes are available. It used to
+        # forward just the first TCP chunk as a successful JPEG, leaving most
+        # of the poster blank. Consume to EOF with a bound on decoded bytes
+        # (also protects chunked/gzip responses without a reliable length).
+        data = bytearray()
+        async for chunk in response.content.iter_chunked(64 * 1024):
+            if len(data) + len(chunk) > MAX_POSTER_BYTES:
+                return None
+            data.extend(chunk)
+        if not data:
             return None
 
-    resized = _resize_jpeg(data, width)
-    if resized:
-        return resized
-    if content_type.startswith("image/"):
-        return data, content_type
-    return None
+    # A Content-Type header is not proof of a valid image. If decoding fails,
+    # let the route serve its short-lived placeholder, never partial bytes.
+    return _resize_jpeg(bytes(data), width)
 
 
 def _resize_jpeg(data: bytes, width: int):
     """Resize + re-encode to progressive JPEG (strips EXIF, cuts bytes a lot)."""
     try:
         from PIL import Image
-    except Exception:  # Pillow missing – serve the original bytes instead
+    except ImportError:  # Pillow is required; fail closed if unavailable
         return None
     try:
         Image.MAX_IMAGE_PIXELS = 50_000_000
         with Image.open(BytesIO(data)) as img:
+            img.load()  # force a full decode before a rendition can be cached
             img = img.convert("RGB") if img.mode not in ("RGB", "L") else img
             if img.width > width:
                 height = max(1, round(img.height * (width / img.width)))
