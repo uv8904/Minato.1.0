@@ -80,6 +80,7 @@ FSUB_PICS = (environ.get('FSUB_PICS', 'https://graph.org/file/6d70cacead407c34d0
 # nahi hoga.
 USER_SESSION = environ.get('USER_SESSION', '')
 AUTO_IMPORT_DELAY = env_int('AUTO_IMPORT_DELAY', 3)   # har copy ke beech gap (seconds) — flood-safe
+AUTO_IMPORT_RETRY_DELAY = env_int('AUTO_IMPORT_RETRY_DELAY', 300)  # userbot self-heal retry (seconds)
 
 # ============================
 # Admin, Channels & Users Configuration

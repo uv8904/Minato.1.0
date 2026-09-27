@@ -62,6 +62,10 @@
             "description": "Auto-Import: do copies ke beech ka gap seconds me (default 3, flood-safe).",
             "required": false
         },
+        "AUTO_IMPORT_RETRY_DELAY": {
+            "description": "Auto-Import: userbot self-heal retry interval seconds me (default 300).",
+            "required": false
+        },
         "AUTH_USERS": {
             "description": "Username or ID of users to give access of inline search. Separate multiple users by space.\nLeave it empty if you don't want to restrict bot usage.",
             "required": false
