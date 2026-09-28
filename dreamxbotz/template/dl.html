@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="robots" content="noindex, nofollow">
-    <meta name="theme-color" content="#0b0b16">
+    <meta name="theme-color" content="#141230">
     <meta name="description" content="Download {{ file_name | e }} ({{ file_size | e }}) from MinatoVerse.">
     <title>MinatoVerse · download · {{ file_name | e }}</title>
 
@@ -55,7 +55,14 @@
 
         body {
             margin: 0;
-            background: var(--bg);
+            /* Cinematic night gradient – same look as the Stream Mode page */
+            background:
+                radial-gradient(1100px 620px at 12% -12%, rgba(130, 44, 231, 0.28), transparent 62%),
+                radial-gradient(900px 520px at 92% -6%, rgba(46, 91, 255, 0.22), transparent 58%),
+                radial-gradient(720px 460px at 100% 36%, rgba(255, 61, 154, 0.12), transparent 60%),
+                radial-gradient(900px 540px at 0% 108%, rgba(245, 197, 24, 0.07), transparent 58%),
+                linear-gradient(160deg, #17173c 0%, #0f0f26 40%, #140f2c 72%, #1e1132 100%);
+            background-attachment: fixed;
             color: var(--text);
             font-family: var(--font-body);
             line-height: 1.6;
@@ -63,15 +70,26 @@
             -webkit-font-smoothing: antialiased;
         }
 
+        /* Soft bottom vignette so content reads on the brighter base */
         body::before {
             content: "";
             position: fixed;
             inset: 0;
             z-index: 0;
             pointer-events: none;
-            background:
-                radial-gradient(1100px 620px at 85% -12%, rgba(46, 91, 255, 0.2), transparent 62%),
-                radial-gradient(900px 520px at 8% -6%, rgba(130, 44, 231, 0.2), transparent 58%);
+            background: radial-gradient(120% 95% at 50% 110%, rgba(5, 6, 12, 0.5), transparent 55%);
+        }
+
+        /* Fine film grain for a cinema feel (160px tile, blended over) */
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0.22;
+            mix-blend-mode: overlay;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
         }
 
         a {
@@ -102,7 +120,7 @@
             justify-content: space-between;
             gap: 14px;
             padding: 12px min(40px, 4vw);
-            background: rgba(11, 11, 22, 0.72);
+            background: rgba(15, 14, 40, 0.66);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border-bottom: 1px solid var(--line-2);

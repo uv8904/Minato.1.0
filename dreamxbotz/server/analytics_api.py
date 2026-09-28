@@ -237,6 +237,28 @@ _GENRE_MAP = {
     "Marco": ["Action","Thriller"],
 }
 
+#: Bundled poster per known title (served from /static/posters/, see
+#: static_assets.POSTERS).  The rec rail renders these directly, so every
+#: card gets its real poster instantly – no third-party lookup required and
+#: nothing is left on a bare gradient.
+_RECS_POSTERS = {
+    "Jawan": "/static/posters/jawan.jpg",
+    "Pushpa 2 The Rule": "/static/posters/pushpa-2.jpg",
+    "Pathaan": "/static/posters/pathaan.jpg",
+    "Jailer": "/static/posters/jailer.jpg",
+    "Leo": "/static/posters/leo.jpg",
+    "RRR": "/static/posters/rrr.jpg",
+    "3 Idiots": "/static/posters/3-idiots.jpg",
+    "Sholay": "/static/posters/sholay.jpg",
+    "Interstellar": "/static/posters/interstellar.jpg",
+    "Inception": "/static/posters/inception.jpg",
+    "Oppenheimer": "/static/posters/oppenheimer.jpg",
+    "Dune Part Two": "/static/posters/dune-part-two.jpg",
+    "Kalki 2898 AD": "/static/posters/kalki-2898-ad.jpg",
+    "Stree 2": "/static/posters/stree-2.jpg",
+    "Marco": "/static/posters/marco.jpg",
+}
+
 def _rec_score(base_titles: List[str], candidate: str) -> float:
     if candidate in base_titles:
         return -1
@@ -271,7 +293,12 @@ async def recommend(request: web.Request):
         for c in scored[:8]:
             if c in base:
                 continue
-            recs.append({"title": c, "genres": _GENRE_MAP.get(c, []), "reason": "Because you watched " + (base[0] if base else "trending")})
+            recs.append({
+                "title": c,
+                "genres": _GENRE_MAP.get(c, []),
+                "poster": _RECS_POSTERS.get(c, ""),
+                "reason": "Because you watched " + (base[0] if base else "trending"),
+            })
             if len(recs) >= 6:
                 break
         return web.json_response({"ok": True, "based_on": base, "recommendations": recs})

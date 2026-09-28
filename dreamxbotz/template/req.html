@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="robots" content="noindex, nofollow">
-    <meta name="theme-color" content="#0b0b16">
+    <meta name="theme-color" content="#141230">
     <meta name="description" content="Stream {{ file_name | e }} online on MinatoVerse — custom player, resume support and direct download.">
     <title>MinatoVerse · {{ file_name | e }}</title>
 
@@ -63,7 +63,16 @@
 
         body {
             margin: 0;
-            background: var(--bg);
+            /* Cinematic night gradient: violet/blue glows up top, a hint of
+               pink on the right, warm gold low on the left, over a deep
+               indigo base – clearly richer than the old flat near-black. */
+            background:
+                radial-gradient(1100px 620px at 12% -12%, rgba(130, 44, 231, 0.28), transparent 62%),
+                radial-gradient(900px 520px at 92% -6%, rgba(46, 91, 255, 0.22), transparent 58%),
+                radial-gradient(720px 460px at 100% 36%, rgba(255, 61, 154, 0.12), transparent 60%),
+                radial-gradient(900px 540px at 0% 108%, rgba(245, 197, 24, 0.07), transparent 58%),
+                linear-gradient(160deg, #17173c 0%, #0f0f26 40%, #140f2c 72%, #1e1132 100%);
+            background-attachment: fixed;
             color: var(--text);
             font-family: var(--font-body);
             line-height: 1.6;
@@ -71,15 +80,26 @@
             -webkit-font-smoothing: antialiased;
         }
 
+        /* Soft bottom vignette so content reads on the brighter base */
         body::before {
             content: "";
             position: fixed;
             inset: 0;
             z-index: 0;
             pointer-events: none;
-            background:
-                radial-gradient(1100px 620px at 12% -12%, rgba(130, 44, 231, 0.24), transparent 62%),
-                radial-gradient(900px 520px at 92% -6%, rgba(46, 91, 255, 0.16), transparent 58%);
+            background: radial-gradient(120% 95% at 50% 110%, rgba(5, 6, 12, 0.5), transparent 55%);
+        }
+
+        /* Fine film grain for a cinema feel (160px tile, blended over) */
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0.22;
+            mix-blend-mode: overlay;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
         }
 
         a {
@@ -110,7 +130,7 @@
             justify-content: space-between;
             gap: 14px;
             padding: 12px min(40px, 4vw);
-            background: rgba(11, 11, 22, 0.72);
+            background: rgba(15, 14, 40, 0.66);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border-bottom: 1px solid var(--line-2);
@@ -2145,6 +2165,25 @@
                 { title: "Dune Part Two", year: 2024, tag: "English · Sci-Fi" }
             ];
 
+            /* Bundled posters (served from our own /static/posters/) for the
+               known shelf titles – the wall paints instantly and never relies
+               on the iTunes lookup, which can be slow or blocked. Unknown
+               titles still fall back to the JSONP lookup below. */
+            var KNOWN_POSTERS = {
+                "Jawan": "/static/posters/jawan.jpg",
+                "Pushpa 2 The Rule": "/static/posters/pushpa-2.jpg",
+                "Pathaan": "/static/posters/pathaan.jpg",
+                "Jailer": "/static/posters/jailer.jpg",
+                "Leo": "/static/posters/leo.jpg",
+                "RRR": "/static/posters/rrr.jpg",
+                "3 Idiots": "/static/posters/3-idiots.jpg",
+                "Sholay": "/static/posters/sholay.jpg",
+                "Interstellar": "/static/posters/interstellar.jpg",
+                "Inception": "/static/posters/inception.jpg",
+                "Oppenheimer": "/static/posters/oppenheimer.jpg",
+                "Dune Part Two": "/static/posters/dune-part-two.jpg"
+            };
+
             function seedFrom(text) {
                 var hash = 2166136261;
                 var source = String(text || "MinatoVerse");
@@ -2218,6 +2257,12 @@
             }
 
             function fetchPoster(item) {
+                /* 1) bundled poster (own origin, instant, never blocks) */
+                if (KNOWN_POSTERS[item.label]) {
+                    posterCache[item.label] = KNOWN_POSTERS[item.label];
+                    applyPoster(item, KNOWN_POSTERS[item.label]);
+                    return;
+                }
                 if (Object.prototype.hasOwnProperty.call(posterCache, item.label)) {
                     applyPoster(item, posterCache[item.label]);
                     return;

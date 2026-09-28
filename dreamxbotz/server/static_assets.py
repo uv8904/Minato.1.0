@@ -28,6 +28,28 @@ ASSETS = {
     "netflix_pack.js": "text/javascript; charset=utf-8",
 }
 
+#: Poster files for the wall / trending / AI-recommendation rails, served from
+#: ``/static/posters/<name>``.  Bundled with the app so every known title gets
+#: its real poster even when third-party lookups (iTunes JSONP) are slow or
+#: blocked – the page never sits on a blank gradient again.
+POSTERS = {
+    "3-idiots.jpg": "image/jpeg",
+    "dune-part-two.jpg": "image/jpeg",
+    "inception.jpg": "image/jpeg",
+    "interstellar.jpg": "image/jpeg",
+    "jailer.jpg": "image/jpeg",
+    "jawan.jpg": "image/jpeg",
+    "kalki-2898-ad.jpg": "image/jpeg",
+    "leo.jpg": "image/jpeg",
+    "marco.jpg": "image/jpeg",
+    "oppenheimer.jpg": "image/jpeg",
+    "pathaan.jpg": "image/jpeg",
+    "pushpa-2.jpg": "image/jpeg",
+    "rrr.jpg": "image/jpeg",
+    "sholay.jpg": "image/jpeg",
+    "stree-2.jpg": "image/jpeg",
+}
+
 routes = web.RouteTableDef()
 
 
@@ -52,6 +74,27 @@ async def static_asset(request: web.Request) -> web.StreamResponse:
     )
 
 
+@routes.get("/static/posters/{name}", allow_head=True)
+async def static_poster(request: web.Request) -> web.StreamResponse:
+    """Serve one whitelisted poster (traversal-proof, long-cached)."""
+    name = request.match_info.get("name", "")
+    content_type = POSTERS.get(name)
+    if not content_type:
+        raise web.HTTPNotFound(text="Not found")
+    path = STATIC_DIR / "posters" / name
+    if not path.is_file():
+        raise web.HTTPNotFound(text="Not found")
+    return web.FileResponse(
+        path,
+        headers={
+            "Content-Type": content_type,
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+            "X-Robots-Tag": "noindex, nofollow",
+        },
+    )
+
+
 def asset_version(name: str) -> str:
     """Cache-busting token (last modification time) for one asset."""
     try:
@@ -61,5 +104,6 @@ def asset_version(name: str) -> str:
 
 
 def version_token() -> str:
-    """One token that changes whenever any section asset changes."""
-    return "-".join(asset_version(name) for name in sorted(ASSETS))
+    """One token that changes whenever any section asset or poster changes."""
+    names = sorted(list(ASSETS) + ["posters/" + name for name in POSTERS])
+    return "-".join(asset_version(name) for name in names)

@@ -478,9 +478,10 @@
                 var hueMatch=style.match(/--h1:\s*(\d+)/);
                 var hue=hueMatch?parseInt(hueMatch[1],10):null;
                 var item={ label:title, year:"", tag:tag, sub:tag, hue:hue, link:link, poster:"" };
-                // find poster img src if already loaded
+                // find poster img src if already loaded (bundled /static/posters/
+                // first, then the iTunes JSONP fallback)
                 var img=card.querySelector(".poster-img");
-                if(img && img.src && img.src.indexOf("itunes")!==-1) item.poster=img.src;
+                if(img && img.src && (img.src.indexOf("/static/posters/")!==-1 || img.src.indexOf("itunes")!==-1)) item.poster=img.src;
                 attachHeart(card, item);
                 enableTrailerOnCard(card, title);
             });
@@ -644,8 +645,18 @@
                 var art=document.createElement("div");
                 art.className="nfx-ml-art";
                 art.style.background="linear-gradient(135deg, hsl("+(hashCode(rec.title)%360)+" 70% 45%), #0b0b16)";
-                var imgInfo = rec.title; // poster via iTunes fallback handled elsewhere
-                // no img yet, placeholder gradient is enough for demo
+                // Real poster, bundled with the site (own origin): the gradient
+                // only stays visible if the image fails to load.
+                var poster=(typeof rec.poster==="string"&&rec.poster.indexOf("/static/posters/")===0)?rec.poster:"";
+                if(poster){
+                    var img=document.createElement("img");
+                    img.alt=rec.title+" poster";
+                    img.loading="lazy";
+                    img.addEventListener("load", function(){ img.classList.add("on"); });
+                    img.addEventListener("error", function(){ if(img.parentNode) img.parentNode.removeChild(img); });
+                    img.src=poster;
+                    art.appendChild(img);
+                }
                 var info=document.createElement("div");
                 info.className="nfx-ml-info";
                 info.innerHTML='<div class="nfx-ml-title">'+escHtml(rec.title)+'</div><div class="nfx-ml-sub">'+escHtml(rec.genres.join(" · "))+'</div><div style="margin-top:6px;font-size:11px;color:#d8b4fe">'+escHtml(rec.reason)+'</div>';
