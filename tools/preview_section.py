@@ -65,10 +65,11 @@ from aiohttp import web
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from database.ott_meta_db import OttMetaStore  # noqa: E402
 from database.recent_movies_db import SORT, RecentMoviesStore  # noqa: E402
 from database.upcoming_db import UpcomingMoviesStore  # noqa: E402
-from dreamxbotz.server import movie_api, static_assets  # noqa: E402
-from dreamxbotz.util import coming_soon  # noqa: E402
+from dreamxbotz.server import movie_api, ott_api, static_assets  # noqa: E402
+from dreamxbotz.util import coming_soon, ott_catalog  # noqa: E402
 from dreamxbotz.util.movie_titles import (  # noqa: E402
     build_deeplink,
     looks_like_series,
@@ -264,6 +265,51 @@ UPCOMING_STORE = UpcomingMoviesStore(
     collection_name="upcoming_movies",
     meta_collection_name="upcoming_meta",
 )
+
+#: The *real* OTT metadata store (genres/trailers) on an in-memory collection.
+OTT_META = OttMetaStore(collection=MemoryCollection(), collection_name="ott_meta")
+
+#: Genres, rating and trailer of every demo movie – exactly the shape the TMDB
+#: enrichment worker stores, so the storefront renders its real genre rails.
+#: (Trailer keys are the real YouTube ids, so the trailer hero plays something.)
+SAMPLE_OTT_META = {
+    "Jawan": (["Action", "Thriller"], 7.0, 169, "MwoUr5wPz9o"),
+    "Pushpa 2 The Rule": (["Action", "Crime", "Drama"], 7.4, 200, "g3JUbgOHgdw"),
+    "Kalki 2898 AD": (["Action", "Science Fiction", "Drama"], 6.9, 181, "yfuYLcToCls"),
+    "Stree 2": (["Comedy", "Horror"], 7.2, 149, "KVnhe3B6F7g"),
+    "Deadpool & Wolverine": (["Action", "Comedy", "Science Fiction"], 7.7, 128, "73_1biulkYk"),
+    "Fighter": (["Action", "Drama"], 6.5, 166, "Imwb7YdE1BA"),
+    "Tiger 3": (["Action", "Thriller", "Crime"], 5.9, 154, "vEjTd3lqmZU"),
+    "Animal": (["Action", "Crime", "Drama", "Thriller"], 6.2, 201, "Dydmpfo68DA"),
+    "Leo": (["Action", "Thriller", "Crime"], 7.6, 164, "Po3jStAgaK0"),
+    "Oppenheimer": (["Drama", "History"], 8.1, 181, "uYPbbksJxIg"),
+    "12th Fail": (["Drama"], 8.5, 147, "tKWalD2iEnE"),
+}
+
+
+async def seed_ott_meta() -> None:
+    """Fill the OTT metadata store (what the TMDB worker does in production)."""
+    OTT_META.col.docs.clear()
+    for movie_id, doc in STORE.col.docs.items():
+        entry = SAMPLE_OTT_META.get(doc.get("title"))
+        if not entry:
+            continue  # "No poster yet" keeps exercising the placeholder path
+        genres, rating, runtime, trailer = entry
+        await OTT_META.upsert(
+            movie_id,
+            {
+                "genres": genres,
+                "genre_ids": [],
+                "rating": rating,
+                "runtime": runtime,
+                "trailer_key": trailer,
+                "trailer_name": "Official Trailer",
+                "overview": f"{doc.get('title')} — demo overview for the local preview harness.",
+                "tmdb_id": 1000 + len(OTT_META.col.docs),
+                "source": "demo",
+            },
+        )
+
 
 #: (title, days from now, waiting users) – one row per demo countdown card.
 #: A negative offset exercises the "releases today"/grace-window states.
@@ -1161,6 +1207,10 @@ def build_app(limit: int = DEFAULT_LIMIT) -> web.Application:
     app.router.add_post("/demo/reset", demo_reset)
     app.router.add_get("/demo/reset", demo_reset)
     app.add_routes(static_assets.routes)
+    # JioHotstar OTT storefront (Option A) – the real pages + JSON APIs, fed by
+    # the in-memory collections above.  /home and /search are the interesting
+    # ones; production also answers "/" with the storefront.
+    ott_api.build_routes(app, with_pages=True)
     # Admin dashboard/API, using the same handlers as production.
     from dreamxbotz.server import admin_api
 
@@ -1176,6 +1226,22 @@ def build_app(limit: int = DEFAULT_LIMIT) -> web.Application:
     async def _seed(_app):
         await seed_store()
         await seed_upcoming()
+        # The JioHotstar storefront (/home, /search) reads the same in-memory
+        # collections through the real catalog code (dreamxbotz/util/ott_catalog.py).
+        ott_catalog.override_stores(recent=STORE, meta=OTT_META, upcoming=UPCOMING_STORE)
+        # bot.py does this on startup (``temp.U_NAME = me.username``); the
+        # storefront builds its deep links from it, so mirror it here to see the
+        # real ``https://t.me/<bot>?start=movie_<id>`` links in the preview.
+        try:
+            from utils import temp
+
+            temp.U_NAME = BOT_USERNAME
+        except Exception:  # pragma: no cover - preview nicety
+            pass
+        # No MongoDB in the preview: feed the "Trending now" rail directly.
+        ott_catalog.override_trending(["Jawan", "Kalki 2898 AD", "Stree 2", "Animal", "Leo", "Fighter"])
+        ott_catalog.invalidate_cache()
+        await seed_ott_meta()
 
     app.on_startup.append(_seed)
     return app
@@ -1191,6 +1257,9 @@ def main() -> None:
     print(f"Stream Mode preview + upload simulator → http://{args.host}:{args.port}/")
     print("States: /?state=empty · /?state=error · /?state=loading · /?state=hostile")
     print(f"Download page                        → http://{args.host}:{args.port}/download")
+    print(f"JioHotstar OTT storefront (Option A) → http://{args.host}:{args.port}/home")
+    print(f"OTT search page                      → http://{args.host}:{args.port}/search")
+    print(f"OTT JSON APIs                        → /api/ott/home · /api/ott/search · /api/ott/movie/<id>")
     print("Hero states: /watch/demo?state=error · ?state=noart · ?state=hostile")
     print('Simulate: curl -X POST -H "Content-Type: application/json" '
           f'-d \'{{"file_name": "Hmm (2024) 1080p.mkv"}}\' http://127.0.0.1:{args.port}/demo/upload')

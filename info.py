@@ -389,6 +389,71 @@ COMING_SOON_META_COLLECTION = environ.get('COMING_SOON_META_COLLECTION', 'upcomi
 COMING_SOON_API_PATH = env_str('COMING_SOON_API_PATH', default='/api/movies/upcoming')  # API_URL + this path
 
 
+# ============================================================
+# Stream Mode · JioHotstar OTT homepage (Option A)
+# ============================================================
+# A full OTT storefront served by the bot's own web server: trailer hero,
+# genre rails, /search with filters, My List and Continue Watching.
+#   /home   (and "/" as well)  -> dreamxbotz/template/ott_home.html
+#   /search                    -> dreamxbotz/template/ott_search.html
+#   /api/ott/home · /api/ott/search · /api/ott/genres · /api/ott/movie/<id>
+# Everything is read from the *same* data the bot already has (recent_movies,
+# upcoming_movies, the search-trend table) plus TMDB genre/trailer metadata
+# cached in OTT_META_COLLECTION.  No file id, download link or bot token ever
+# reaches the browser.  See docs/OTT_HOMEPAGE.md.
+OTT_HOME = is_enabled(environ.get('OTT_HOME', "True"), True)  # Master switch: pages + APIs
+OTT_HOME_AT_ROOT = is_enabled(environ.get('OTT_HOME_AT_ROOT', "True"), True)  # Also answer "/" with the homepage (the old JSON probe stays on /health)
+OTT_HOME_PATH = env_str('OTT_HOME_PATH', default='/home')  # Storefront path ("" = only "/")
+OTT_SEARCH_PATH = env_str('OTT_SEARCH_PATH', default='/search')  # Search page path
+OTT_HOME_API_PATH = env_str('OTT_HOME_API_PATH', default='/api/ott/home')  # Hero + rails JSON
+OTT_SEARCH_API_PATH = env_str('OTT_SEARCH_API_PATH', default='/api/ott/search')  # Search/filter JSON
+OTT_GENRES_API_PATH = env_str('OTT_GENRES_API_PATH', default='/api/ott/genres')  # Genre list + counts
+OTT_MOVIE_API_PATH = env_str('OTT_MOVIE_API_PATH', default='/api/ott/movie')  # One movie (detail sheet)
+OTT_SUGGEST_API_PATH = env_str('OTT_SUGGEST_API_PATH', default='/api/ott/suggest')  # Type-ahead suggestions
+OTT_RAIL_LIMIT = min(max(env_int('OTT_RAIL_LIMIT', 18), 4), 40)  # Cards per rail (hard cap: 40)
+OTT_RAILS_MAX = min(max(env_int('OTT_RAILS_MAX', 12), 1), 20)  # Genre/topic rails rendered on the home page
+OTT_RAIL_MIN_ITEMS = min(max(env_int('OTT_RAIL_MIN_ITEMS', 4), 2), 12)  # Hide a rail with fewer cards than this
+OTT_SERVER_RAILS = min(max(env_int('OTT_SERVER_RAILS', 4), 1), 20)  # Rails rendered into the HTML (the rest arrive via the JSON bootstrap)
+OTT_HERO_LIMIT = min(max(env_int('OTT_HERO_LIMIT', 6), 1), 12)  # Trailer-hero rotation size
+OTT_GENRES = environ.get('OTT_GENRES', '')  # Preferred rail order, comma separated (e.g. "Action,Thriller,Comedy")
+OTT_CACHE_TTL = min(max(env_int('OTT_CACHE_TTL', 120), 0), 3600)  # Server-side page/API cache (seconds, 0 = off)
+OTT_BROWSER_CACHE_TTL = min(max(env_int('OTT_BROWSER_CACHE_TTL', 60), 0), 3600)  # Browser cache for the JSON APIs (seconds)
+OTT_POLL = min(max(env_int('OTT_POLL', 90), 0), 3600)  # Live refresh of the rails while the tab is visible (0 = off)
+OTT_SEARCH_LIMIT = min(max(env_int('OTT_SEARCH_LIMIT', 24), 6), 48)  # Search results per page (default page size)
+OTT_SEARCH_MAX_LIMIT = min(max(env_int('OTT_SEARCH_MAX_LIMIT', 60), 6), 120)  # Hard cap for ?limit= on /api/ott/search
+OTT_SUGGEST_LIMIT = min(max(env_int('OTT_SUGGEST_LIMIT', 8), 2), 20)  # Type-ahead suggestions per keystroke
+# ----- Genre/trailer metadata (TMDB → cached in Mongo) ---------------------- #
+OTT_META_FETCH = is_enabled(environ.get('OTT_META_FETCH', "True"), True)  # Look genres/trailers up automatically
+OTT_TRAILER_FETCH = is_enabled(environ.get('OTT_TRAILER_FETCH', "True"), True)  # Trailer hero (YouTube key via TMDB)
+OTT_META_LOOKUPS = min(max(env_int('OTT_META_LOOKUPS', 40), 1), 200)  # Max movies enriched per background pass
+OTT_META_RETRY_HOURS = max(env_int('OTT_META_RETRY_HOURS', 72), 1)  # Re-try a failed lookup after N hours
+try:
+    OTT_META_TIMEOUT = float(environ.get('OTT_META_TIMEOUT') or 8)  # Per-lookup timeout (seconds)
+except (TypeError, ValueError):
+    OTT_META_TIMEOUT = 8.0
+OTT_META_COLLECTION = environ.get('OTT_META_COLLECTION', 'ott_meta')  # Mongo collection caching genre/trailer metadata
+OTT_TRAILER_VOLUME = is_enabled(environ.get('OTT_TRAILER_VOLUME', "True"), True)  # Hero trailers start muted+autoplay (browser rules)
+# Live search analytics ("Trending on MinatoVerse" rail) – read from the same
+# table the bot's /top command uses, then matched against the movie DB.
+OTT_TRENDING_RAIL = is_enabled(environ.get('OTT_TRENDING_RAIL', "True"), True)  # Build the trending rail
+OTT_TRENDING_LIMIT = min(max(env_int('OTT_TRENDING_LIMIT', 12), 2), 24)  # Trending queries considered for the rail
+
+# ============================================================
+# Inline Mode (@bot search) — Option B
+# ============================================================
+# Type "@YourBot <movie>" in any chat: the bot answers with poster cards built
+# from its own file index; a tap opens that exact movie in the bot
+# (https://t.me/BOT_USERNAME?start=movie_MOVIE_ID).  See docs/INLINE_SEARCH.md.
+INLINE_SEARCH = is_enabled(environ.get('INLINE_SEARCH', "True"), True)  # Master switch for inline mode
+INLINE_SEARCH_LIMIT = min(max(env_int('INLINE_SEARCH_LIMIT', 20), 1), 50)  # Results per inline query (hard cap: 50)
+INLINE_SEARCH_CACHE_TTL = min(max(env_int('INLINE_SEARCH_CACHE_TTL', 60), 0), 600)  # Telegram-side result cache (seconds)
+INLINE_SEARCH_POSTERS = is_enabled(environ.get('INLINE_SEARCH_POSTERS', "True"), True)  # Poster cards (falls back to text cards)
+INLINE_SEARCH_GROUPS = is_enabled(environ.get('INLINE_SEARCH_GROUPS', "True"), True)  # Allow inline search outside PM
+INLINE_SEARCH_TOP = min(max(env_int('INLINE_SEARCH_TOP', 6), 0), 20)  # Results shown for an empty query (top searches)
+INLINE_SEARCH_MAX_QUERY = min(max(env_int('INLINE_SEARCH_MAX_QUERY', 64), 8), 128)  # Longest inline query accepted
+INLINE_SEARCH_MAX_REQUESTS = min(max(env_int('INLINE_SEARCH_MAX_REQUESTS', 240), 10), 2000)  # Per-user queries/hour (0 = unlimited)
+
+
 # ============================
 # Bot Configuration
 # ============================
