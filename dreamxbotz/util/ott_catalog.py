@@ -775,6 +775,10 @@ def override_stores(*, recent=None, meta=None, upcoming=None, reset: bool = Fals
         _STORE_OVERRIDES["upcoming"] = upcoming
 
 
+#: The ``upcoming_movies`` store, built once per process (see ``_upcoming_store``).
+_UPCOMING_STORE = None
+
+
 def _recent_store():
     if _STORE_OVERRIDES.get("recent") is not None:
         return _STORE_OVERRIDES["recent"]
@@ -792,11 +796,29 @@ def _meta_store():
 
 
 def _upcoming_store():
+    """The ``upcoming_movies`` store (memoised per process)."""
+    global _UPCOMING_STORE
     if _STORE_OVERRIDES.get("upcoming") is not None:
         return _STORE_OVERRIDES["upcoming"]
-    from database.upcoming_db import upcoming_movies
+    if _UPCOMING_STORE is None:
+        from database.upcoming_db import UpcomingMoviesStore
 
-    return upcoming_movies
+        _UPCOMING_STORE = UpcomingMoviesStore()
+    return _UPCOMING_STORE
+
+
+def _store_or_none(getter, label: str):
+    """Call ``getter()`` but return ``None`` (with a log line) when it fails.
+
+    A store may be impossible to import or construct (broken install, missing
+    configuration).  That must degrade to an empty storefront – never to an
+    "unavailable" error page – so every getter call is funnelled through here.
+    """
+    try:
+        return getter()
+    except Exception as exc:
+        logger.warning("OTT catalog: %s store unavailable: %s", label, exc)
+        return None
 
 
 async def _safe(coro, default):
@@ -810,7 +832,9 @@ async def _safe(coro, default):
 
 async def load_movies(limit: int = 500) -> List[Dict[str, Any]]:
     """Every tracked movie, newest first (the source of the whole storefront)."""
-    store = _recent_store()
+    store = _store_or_none(_recent_store, "recent movies")
+    if store is None:
+        return []
     movies = await _safe(store.list_recent(limit, hard_limit=max(limit, 500)), [])
     if not movies:
         # `list_recent` caps its own result; ask again without the web cap.
@@ -827,7 +851,10 @@ async def _list_all(store, limit: int) -> List[Dict[str, Any]]:
 
 async def load_metas(movie_ids: Sequence[str]) -> Dict[str, Dict[str, Any]]:
     """Genre/trailer metadata of a page of movies (one query)."""
-    metas = await _safe(_meta_store().get_many(list(movie_ids)), {})
+    store = _store_or_none(_meta_store, "OTT meta")
+    if store is None:
+        return {}
+    metas = await _safe(store.get_many(list(movie_ids)), {})
     return metas or {}
 
 
@@ -835,7 +862,10 @@ async def load_upcoming(limit: int = 12) -> List[Dict[str, Any]]:
     """Coming Soon entries rendered inside the storefront's own rail."""
     if not _bool_cfg("COMING_SOON", True):
         return []
-    rows = await _safe(_upcoming_store().list_upcoming(limit), [])
+    store = _store_or_none(_upcoming_store, "upcoming movies")
+    if store is None:
+        return []
+    rows = await _safe(store.list_upcoming(limit), [])
     out = []
     for row in rows or []:
         movie_id = sanitize_movie_id(row.get("_id") or "")
@@ -1060,7 +1090,9 @@ async def enrich_movie(movie: Dict[str, Any], *, timeout: Optional[float] = None
     key = api_key()
     if not key:
         return False
-    store = _meta_store()
+    store = _store_or_none(_meta_store, "OTT meta")
+    if store is None:
+        return False
     movie_id = sanitize_movie_id(movie.get("_id") or "")
     if not movie_id:
         return False
@@ -1098,7 +1130,9 @@ async def enrich_movie(movie: Dict[str, Any], *, timeout: Optional[float] = None
     }
     # A hand-set poster must win over the TMDB one.
     if not movie.get("poster_url") and details.get("poster"):
-        await _safe(_recent_store().set_poster(movie_id, details["poster"], "tmdb"), False)
+        recent = _store_or_none(_recent_store, "recent movies")
+        if recent is not None:
+            await _safe(recent.set_poster(movie_id, details["poster"], "tmdb"), False)
     return bool(await store.upsert(movie_id, fields))
 
 
@@ -1116,7 +1150,9 @@ async def enrich_pending(limit: Optional[int] = None, *, retry_hours: Optional[i
         movies = await load_movies(500)
         if not movies:
             return 0
-        store = _meta_store()
+        store = _store_or_none(_meta_store, "OTT meta")
+        if store is None:
+            return 0
         metas = await _safe(store.get_many([movie.get("_id") for movie in movies]), {})
         hours = int(retry_hours if retry_hours is not None else _cfg("OTT_META_RETRY_HOURS", 72) or 72)
         budget = int(limit if limit is not None else _int_cfg("OTT_META_LOOKUPS", 40, 1, 200))
@@ -1324,8 +1360,8 @@ def site_context() -> Dict[str, Any]:
 # --------------------------------------------------------------------------- #
 async def diagnostics() -> Dict[str, Any]:
     """Counts shown by the admin dashboard / owner diagnostics."""
-    store = _meta_store()
-    stats = await _safe(store.stats(), {})
+    store = _store_or_none(_meta_store, "OTT meta")
+    stats = await _safe(store.stats(), {}) if store is not None else {}
     key = api_key()
     return {
         "enabled": _bool_cfg("OTT_HOME", True),
