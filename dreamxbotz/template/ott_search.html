@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en" data-ott="search">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#07070f">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="Search the MinatoVerse library — filter movies and web series by genre, year and quality, then open them in @{{ bot_username | e }}.">
+    <title>{% if query %}{{ query | e }} · {% endif %}Search · MinatoVerse</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap">
+    <link rel="stylesheet" href="/static/ott_home.css?v={{ asset_version | e }}">
+    <link rel="stylesheet" href="/static/ott_search.css?v={{ asset_version | e }}">
+</head>
+<body class="ot-body ot-body-search" data-bot="{{ bot_username | e }}">
+<a class="ot-skip" href="#otResults">Skip to results</a>
+<noscript>
+    <div class="ot-js-hint">
+        JavaScript is off. Filters and results are rendered on the server — refine the list with the genre and quality
+        links on each card, or open the bot for the full Telegram experience.
+    </div>
+</noscript>
+
+<header class="ot-nav" id="otNav" data-scrolled="0">
+    <div class="ot-nav-inner">
+        <a class="ot-brand" href="{{ home_path | e }}" aria-label="MinatoVerse home">
+            <span class="ot-brand-mark" aria-hidden="true">MV</span>
+            <span class="ot-brand-text">MinatoVerse<small>search</small></span>
+        </a>
+        <nav class="ot-nav-links" aria-label="Sections">
+            {% for link in nav %}
+            <a class="ot-nav-link" data-nav="{{ link.key | e }}" href="{{ link.href | e }}"><span aria-hidden="true">{{ link.icon }}</span>{{ link.label | e }}</a>
+            {% endfor %}
+        </nav>
+        <form class="ot-nav-search" role="search" id="otSearchForm" action="{{ search_path | e }}" method="get">
+            <span class="ot-search-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.6-3.6"></path></svg>
+            </span>
+            <input id="otSearchInput" name="q" type="search" autocomplete="off" enterkeyhint="search"
+                   value="{{ query | e }}" placeholder="Search movies, web series…"
+                   aria-label="Search the catalogue" aria-expanded="false" aria-controls="otSuggest" autofocus>
+            <button class="ot-search-clear" id="otSearchClear" type="button" aria-label="Clear search" {% if not query %}hidden{% endif %}>✕</button>
+            <div class="ot-suggest" id="otSuggest" role="listbox" aria-label="Suggestions" hidden></div>
+        </form>
+        <div class="ot-nav-actions">
+            <a class="ot-cta" href="{{ open_url | e }}" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M21.9 4.6c-.3-1-1-1.6-2-1.8C18 2.4 12 2.4 12 2.4s-6 0-7.9.4c-1 .2-1.7.8-2 1.8C1.7 6.5 1.7 12 1.7 12s0 5.5.4 7.4c.3 1 1 1.6 2 1.8 1.9.4 7.9.4 7.9.4s6 0 7.9-.4c1-.2 1.7-.8 2-1.8.4-1.9.4-7.4.4-7.4s0-5.5-.4-7.4ZM9.9 15.6V8.4l5.9 3.6-5.9 3.6Z"></path></svg>
+                <span>Open in Telegram</span>
+            </a>
+        </div>
+    </div>
+</header>
+
+<main class="ot-main ot-search-main">
+    <section class="ot-search-hero">
+        <h1 class="ot-search-h1">
+            {% if query %}Results for <span>“{{ query | e }}”</span>{% else %}Explore the whole library{% endif %}
+        </h1>
+        <p class="ot-search-sub">
+            <span id="otSearchCount">{{ total }}</span> title{{ '' if total == 1 else 's' }}
+            {% if genre %} · genre <strong>{{ genre | e }}</strong>{% endif %}
+            {% if year %} · {{ year | e }}{% endif %}
+            {% if quality %} · {{ quality | e }}{% endif %}
+            · every card opens the exact movie in <strong>@{{ bot_username | e }}</strong>
+        </p>
+
+        <div class="ot-filterbar" id="otFilters">
+            <div class="ot-filter-group" role="group" aria-label="Sort">
+                <span class="ot-filter-label">Sort</span>
+                <button class="ot-filter{% if not sort or sort == 'relevance' %} is-active{% endif %}" type="button" data-sort="relevance">Relevance</button>
+                <button class="ot-filter{% if sort == 'newest' %} is-active{% endif %}" type="button" data-sort="newest">Newest</button>
+                <button class="ot-filter{% if sort == 'rating' %} is-active{% endif %}" type="button" data-sort="rating">Top rated</button>
+                <button class="ot-filter{% if sort == 'year' %} is-active{% endif %}" type="button" data-sort="year">Latest</button>
+            </div>
+            <div class="ot-filter-group" role="group" aria-label="Quality">
+                <span class="ot-filter-label">Quality</span>
+                <button class="ot-filter{% if not quality %} is-active{% endif %}" type="button" data-quality="">All</button>
+                {% for bucket in facets.qualities %}
+                <button class="ot-filter{% if quality == bucket.name %} is-active{% endif %}" type="button" data-quality="{{ bucket.name | e }}">{{ bucket.name | e }} <em>{{ bucket.count }}</em></button>
+                {% endfor %}
+            </div>
+            <div class="ot-filter-group" role="group" aria-label="Genre">
+                <span class="ot-filter-label">Genre</span>
+                <button class="ot-filter{% if not genre %} is-active{% endif %}" type="button" data-genre="">All</button>
+                {% for facet in facets.genres %}
+                <button class="ot-filter{% if genre == facet.name %} is-active{% endif %}" type="button" data-genre="{{ facet.name | e }}">{{ facet.name | e }} <em>{{ facet.count }}</em></button>
+                {% endfor %}
+            </div>
+            <div class="ot-filter-group" role="group" aria-label="Year">
+                <span class="ot-filter-label">Year</span>
+                <button class="ot-filter{% if not year %} is-active{% endif %}" type="button" data-year="">All</button>
+                {% for y in facets.years %}
+                <button class="ot-filter{% if year and (year | string) == (y | string) %} is-active{% endif %}" type="button" data-year="{{ y }}">{{ y }}</button>
+                {% endfor %}
+            </div>
+            <button class="ot-text-btn" id="otFilterReset" type="button">Reset</button>
+        </div>
+    </section>
+
+    <aside class="ot-inline-hint">
+        <div>
+            <strong>Search from any Telegram chat</strong>
+            <p class="ot-muted small">Type <code>@{{ bot_username | e }} jawan</code> in any chat or group — the bot answers
+                inline with posters, quality tags and a play button, without leaving the conversation.</p>
+        </div>
+        <a class="ot-btn ot-btn-ghost ot-cta" href="{{ open_url | e }}" target="_blank" rel="noopener">Open @{{ bot_username | e }}</a>
+    </aside>
+
+    {% if error %}<div class="ot-alert" role="alert">{{ error | e }}</div>{% endif %}
+
+    <section class="ot-results" id="otResults" aria-label="Search results">
+        <div class="ot-grid" id="otGrid">
+            {% for c in results %}
+            <article class="ot-card" data-id="{{ c.id | e }}" data-title="{{ c.title | e }}"
+                     data-year="{{ c.year or '' }}" data-quality="{{ c.quality | e }}"
+                     data-bucket="{{ c.bucket or '' }}" data-trailer="{{ c.trailer | e }}"
+                     data-rating="{{ c.rating or '' }}" data-genres="{{ (c.genres or []) | join(', ') | e }}"
+                     data-link="{{ c.link | e }}" data-poster="{{ c.poster | e }}" data-backdrop="{{ c.backdrop | e }}"
+                     data-search="{{ c.search_url | e }}" data-added="{{ c.added | e }}"
+                     data-series="{{ '1' if c.is_series else '0' }}">
+                <a class="ot-card-art" href="{{ c.link | e }}" aria-label="{{ c.title | e }}">
+                    {% if c.poster %}
+                    <img src="{{ c.poster | e }}?w=320" srcset="{{ c.poster | e }}?w=320 1x, {{ c.poster | e }}?w=480 2x"
+                         alt="{{ c.title | e }} poster" loading="lazy" decoding="async" width="320" height="480">
+                    {% else %}
+                    <span class="ot-card-ph" aria-hidden="true"><i>MV</i></span>
+                    {% endif %}
+                    <span class="ot-card-shade"></span>
+                    {% if c.quality %}<span class="ot-badge">{{ c.quality | upper | e }}</span>{% endif %}
+                    <button class="ot-fav" type="button" data-role="mylist" aria-pressed="false" aria-label="Add {{ c.title | e }} to My List" title="My List">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20s-7-4.3-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.7-7 9-7 9Z"></path></svg>
+                    </button>
+                    <span class="ot-card-hover">
+                        <span class="ot-card-play" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.9l11-6.8a1 1 0 0 0 0-1.8l-11-6.8A1 1 0 0 0 8 5.2Z"></path></svg>
+                        </span>
+                        <span class="ot-card-actions">
+                            <button class="ot-mini" type="button" data-role="info">ⓘ Details</button>
+                            {% if c.trailer %}<button class="ot-mini" type="button" data-role="trailer">▶ Trailer</button>{% endif %}
+                        </span>
+                    </span>
+                </a>
+                <div class="ot-card-body">
+                    <h3 class="ot-card-title">{{ c.title | e }}</h3>
+                    <p class="ot-card-sub">{{ c.year or '' }}{% if c.quality_label %} · {{ c.quality_label | e }}{% endif %}{% if c.rating %} · ★ {{ c.rating }}{% endif %}</p>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+
+        <div class="ot-empty" id="otEmpty" {% if results %}hidden{% endif %}>
+            <span class="ot-empty-mark" aria-hidden="true">🔍</span>
+            <h2 id="otEmptyTitle">{% if query %}Nothing matched “{{ query | e }}”{% else %}No titles here yet{% endif %}</h2>
+            <p id="otEmptyText">Try a shorter title, drop the year, or ask the bot to fetch it — you can also request the movie in the group.</p>
+            <div class="ot-empty-actions">
+                <a class="ot-btn ot-btn-primary" href="{{ open_url | e }}" target="_blank" rel="noopener">Search in the bot</a>
+                <button class="ot-btn ot-btn-ghost" id="otEmptyReset" type="button">Clear filters</button>
+            </div>
+        </div>
+
+        <div class="ot-loadmore">
+            <button class="ot-btn ot-btn-ghost" id="otLoadMore" type="button" {% if not results %}hidden{% endif %}>Load more</button>
+            <p class="ot-muted small" id="otLoadHint">Showing <span id="otShown">{{ results | length }}</span> of <span id="otTotal">{{ total }}</span></p>
+        </div>
+    </section>
+</main>
+
+<footer class="ot-footer">
+    <div class="ot-footer-inner">
+        <p class="ot-muted small">MinatoVerse · search runs on the bot's own index · posters served from this origin</p>
+        <div class="ot-footer-links">
+            <a href="{{ home_path | e }}">Home</a>
+            <a href="{{ search_path | e }}">Search</a>
+            <a href="{{ update_channel_url | e }}" target="_blank" rel="noopener">Updates</a>
+        </div>
+    </div>
+</footer>
+
+<div class="ot-sheet" id="otSheet" hidden>
+    <div class="ot-sheet-backdrop" data-role="close"></div>
+    <div class="ot-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="otSheetTitle">
+        <button class="ot-sheet-close" type="button" data-role="close" aria-label="Close details">✕</button>
+        <div class="ot-sheet-art"><img id="otSheetArt" alt="" decoding="async"></div>
+        <div class="ot-sheet-body">
+            <h2 id="otSheetTitle">—</h2>
+            <div class="ot-sheet-facts" id="otSheetFacts"></div>
+            <p class="ot-sheet-overview" id="otSheetOverview"></p>
+            <div class="ot-sheet-actions">
+                <a class="ot-btn ot-btn-primary" id="otSheetPlay" href="#" target="_blank" rel="noopener">Play in Telegram</a>
+                <button class="ot-btn ot-btn-ghost" id="otSheetList" type="button" aria-pressed="false">Add to My List</button>
+                <button class="ot-btn ot-btn-ghost" id="otSheetTrailer" type="button" hidden>Play trailer</button>
+                <a class="ot-btn ot-btn-ghost" id="otSheetSearch" href="#">More like this</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="ot-toast" id="otToast" role="status" aria-live="polite"></div>
+
+<script type="application/json" id="ott-config">{{ config | safe }}</script>
+<script type="application/json" id="ott-boot">{{ boot | safe }}</script>
+<script src="/static/ott_home.js?v={{ asset_version | e }}" defer></script>
+<script src="/static/ott_search.js?v={{ asset_version | e }}" defer></script>
+</body>
+</html>

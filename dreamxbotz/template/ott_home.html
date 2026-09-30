@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en" data-ott="home" data-view="{{ (view or '') | e }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#07070f">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="MinatoVerse — the JioHotstar-style movie universe of {{ bot_username | e }}. Trailer hero, genre rails, search, My List and Continue Watching.">
+    <title>MinatoVerse · Movies &amp; Shows</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap">
+    <link rel="stylesheet" href="/static/ott_home.css?v={{ asset_version | e }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%23822ce7'/><text x='32' y='44' font-size='34' font-family='sans-serif' font-weight='700' text-anchor='middle' fill='white'>M</text></svg>">
+</head>
+<body class="ot-body" data-bot="{{ bot_username | e }}">
+<a class="ot-skip" href="#otRails">Skip to the catalogue</a>
+<noscript>
+    <div class="ot-js-hint">
+        JavaScript is off. The hero, rails and every card are rendered on the server, so browsing and playing still work —
+        live filters, My List, Continue Watching and trailer playback need JavaScript.
+    </div>
+</noscript>
+
+<!-- ======================== top navigation ======================== -->
+<header class="ot-nav" id="otNav" data-scrolled="0">
+    <div class="ot-nav-inner">
+        <a class="ot-brand" href="{{ home_path | e }}" aria-label="MinatoVerse home">
+            <span class="ot-brand-mark" aria-hidden="true">MV</span>
+            <span class="ot-brand-text">MinatoVerse<small>ott · {{ counts.get('movies', 0) }} titles</small></span>
+        </a>
+
+        <nav class="ot-nav-links" aria-label="Sections">
+            {% for link in nav %}
+            <a class="ot-nav-link" data-nav="{{ link.key | e }}" href="{{ link.href | e }}"><span aria-hidden="true">{{ link.icon }}</span>{{ link.label | e }}</a>
+            {% endfor %}
+        </nav>
+
+        <form class="ot-nav-search" role="search" action="{{ search_path | e }}" method="get">
+            <span class="ot-search-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.6-3.6"></path></svg>
+            </span>
+            <input id="otSearchInput" name="q" type="search" autocomplete="off" enterkeyhint="search"
+                   placeholder="Search movies, web series…" aria-label="Search the catalogue"
+                   aria-expanded="false" aria-controls="otSuggest">
+            <kbd class="ot-kbd" aria-hidden="true">/</kbd>
+            <div class="ot-suggest" id="otSuggest" role="listbox" aria-label="Suggestions" hidden></div>
+        </form>
+
+        <div class="ot-nav-actions">
+            <button class="ot-icon-btn" id="otGenreBtn" type="button" aria-expanded="false" aria-controls="otGenreMenu" title="Browse genres">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"></path></svg>
+                <span>Genres</span>
+            </button>
+            <a class="ot-cta" href="{{ open_url | e }}" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M21.9 4.6c-.3-1-1-1.6-2-1.8C18 2.4 12 2.4 12 2.4s-6 0-7.9.4c-1 .2-1.7.8-2 1.8C1.7 6.5 1.7 12 1.7 12s0 5.5.4 7.4c.3 1 1 1.6 2 1.8 1.9.4 7.9.4 7.9.4s6 0 7.9-.4c1-.2 1.7-.8 2-1.8.4-1.9.4-7.4.4-7.4s0-5.5-.4-7.4ZM9.9 15.6V8.4l5.9 3.6-5.9 3.6Z"></path></svg>
+                <span>Open in Telegram</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="ot-genre-menu" id="otGenreMenu" hidden>
+        <div class="ot-genre-menu-head">
+            <strong>Browse by genre</strong>
+            <a href="{{ search_path | e }}" class="ot-link">Everything →</a>
+        </div>
+        <div class="ot-genre-chips">
+            {% for g in genres %}
+            <a class="ot-chip" href="{{ search_path | e }}?genre={{ g.name | urlencode }}">{{ g.label | e }}<span>{{ g.count }}</span></a>
+            {% endfor %}
+            {% if not genres %}<span class="ot-muted">Genres appear as soon as posters/ratings are resolved from TMDB.</span>{% endif %}
+        </div>
+    </div>
+</header>
+
+<main class="ot-main">
+    <!-- ======================== trailer hero ======================== -->
+    <section class="ot-hero" id="otHero" aria-roledescription="carousel" aria-label="Featured titles"
+             data-count="{{ hero_count }}" {% if not hero %}data-empty="1"{% endif %}>
+        {% if hero %}
+        <div class="ot-hero-slides" id="otHeroSlides">
+            {% for c in hero %}
+            <article class="ot-slide{% if loop.first %} is-active{% endif %}" data-index="{{ loop.index0 }}"
+                     data-id="{{ c.id | e }}" data-title="{{ c.title | e }}" data-trailer="{{ c.trailer | e }}"
+                     data-year="{{ c.year or '' }}" data-quality="{{ c.quality | e }}"
+                     data-rating="{{ c.rating or '' }}" data-runtime="{{ c.runtime or '' }}"
+                     data-genres="{{ (c.genres or []) | join(' • ') | e }}"
+                     data-overview="{{ c.overview or '' | e }}"
+                     data-files="{{ c.files or 0 }}" data-added="{{ c.added | e }}"
+                     data-link="{{ c.link | e }}" data-poster="{{ c.poster | e }}"
+                     data-search="{{ c.search_url | e }}" {% if loop.first %}data-active="1"{% endif %}>
+                <div class="ot-slide-art">
+                    {% if c.backdrop %}<img src="{{ c.backdrop | e }}?w=1280" alt="{{ c.title | e }} backdrop" fetchpriority="{% if loop.first %}high{% else %}low{% endif %}" decoding="async" {% if not loop.first %}loading="lazy"{% endif %}>{% endif %}
+                </div>
+                <div class="ot-slide-scrim"></div>
+                <div class="ot-slide-inner">
+                    <div class="ot-slide-meta">
+                        {% if c.trailer %}<span class="ot-tag ot-tag-live"><i></i>Trailer</span>{% endif %}
+                        <span class="ot-tag">MinatoVerse Original</span>
+                        {% if c.rating %}<span class="ot-tag ot-tag-rating">★ {{ c.rating }}</span>{% endif %}
+                    </div>
+                    <h1 class="ot-slide-title">{{ c.title | e }}</h1>
+                    <div class="ot-slide-facts">
+                        {% if c.year %}<span>{{ c.year }}</span>{% endif %}
+                        {% if c.quality %}<span class="ot-fact-quality">{{ c.quality | upper | e }}</span>{% endif %}
+                        {% if c.genres %}<span>{{ (c.genres or []) | join(' · ') | e }}</span>{% endif %}
+                        {% if c.runtime %}<span>{{ c.runtime }} min</span>{% endif %}
+                        {% if c.files %}<span>{{ c.files }} file{{ '' if c.files == 1 else 's' }}</span>{% endif %}
+                        {% if c.added %}<span class="ot-fact-added">added {{ c.added | e }}</span>{% endif %}
+                    </div>
+                    {% if c.overview %}<p class="ot-slide-overview">{{ c.overview | e }}</p>{% endif %}
+                    <div class="ot-slide-actions">
+                        {% if c.deeplink %}
+                        <a class="ot-btn ot-btn-primary" href="{{ c.deeplink | e }}" data-role="play">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.9l11-6.8a1 1 0 0 0 0-1.8l-11-6.8A1 1 0 0 0 8 5.2Z"></path></svg>
+                            Play in Telegram
+                        </a>
+                        {% else %}
+                        <a class="ot-btn ot-btn-primary" href="{{ c.search_url | e }}">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.6-3.6"></path></svg>
+                            Browse the catalogue
+                        </a>
+                        {% endif %}
+                        {% if c.trailer %}
+                        <button class="ot-btn ot-btn-ghost" type="button" data-role="trailer-toggle" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 9v6h3l5 4V5L7 9H4Z"></path><path d="M16.5 8.5a5 5 0 0 1 0 7"></path><path d="M19 6a8.5 8.5 0 0 1 0 12"></path></svg>
+                            <span>Trailer</span>
+                        </button>
+                        {% endif %}
+                        <button class="ot-btn ot-btn-ghost" type="button" data-role="mylist" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 20s-7-4.3-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.7-7 9-7 9Z"></path></svg>
+                            <span>My List</span>
+                        </button>
+                        <button class="ot-btn ot-btn-ghost" type="button" data-role="info">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><circle cx="12" cy="8" r="1" fill="currentColor"></circle></svg>
+                            <span>More info</span>
+                        </button>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        <div class="ot-trailer-layer" id="otTrailerLayer" hidden></div>
+        <div class="ot-hero-controls">
+            <button class="ot-round" id="otHeroPrev" type="button" aria-label="Previous featured title">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"></path></svg>
+            </button>
+            <div class="ot-dots" id="otHeroDots" role="tablist" aria-label="Featured titles">
+                {% for c in hero %}
+                <button class="ot-dot{% if loop.first %} is-active{% endif %}" type="button" role="tab" data-index="{{ loop.index0 }}"
+                        aria-label="{{ c.title | e }}" aria-selected="{{ 'true' if loop.first else 'false' }}"></button>
+                {% endfor %}
+            </div>
+            <button class="ot-round" id="otHeroNext" type="button" aria-label="Next featured title">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"></path></svg>
+            </button>
+        </div>
+        {% else %}
+        <div class="ot-hero-empty">
+            <span class="ot-hero-empty-mark" aria-hidden="true">MV</span>
+            <h1>Your storefront is warming up</h1>
+            <p id="otHeroEmptyMsg">{{ error or "No movies are indexed yet. Upload one to the bot's channel and it appears here (with its poster and trailer) within seconds." }}</p>
+            <a class="ot-btn ot-btn-primary" href="{{ open_url | e }}" target="_blank" rel="noopener">Open the bot</a>
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- ======================== rails ======================== -->
+    <section class="ot-rails" id="otRails" aria-label="Catalogue">
+        <div class="ot-rails-status" id="otRailsStatus" role="status" aria-live="polite">
+            <span class="ot-status-dot"></span>
+            <span id="otRailsStatusText">{{ counts.get('movies', 0) }} titles · {{ counts.get('rails', 0) }} rails{% if updated_at %} · updated {{ updated_at | e }}{% endif %}</span>
+            <button class="ot-text-btn" id="otRefreshBtn" type="button">Refresh</button>
+        </div>
+
+        {% if error %}<div class="ot-alert" role="alert">{{ error | e }}</div>{% endif %}
+
+        <div id="otRailList">
+            {% for rail in rails %}
+            <section class="ot-rail" data-rail="{{ rail.id | e }}" data-kind="{{ rail.kind | e }}">
+                <header class="ot-rail-head">
+                    <div class="ot-rail-title-wrap">
+                        <h2 class="ot-rail-title">{% if rail.icon %}<span aria-hidden="true">{{ rail.icon }}</span>{% endif %}{{ rail.title | e }}</h2>
+                        {% if rail.subtitle %}<p class="ot-rail-sub">{{ rail.subtitle | e }}</p>{% endif %}
+                    </div>
+                    <div class="ot-rail-tools">
+                        <a class="ot-text-btn" href="{{ search_path | e }}{% if rail.genre %}?genre={{ rail.genre | urlencode }}{% endif %}">See all</a>
+                        <button class="ot-scroll-btn" type="button" data-dir="-1" aria-label="Scroll left">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 5l-7 7 7 7"></path></svg>
+                        </button>
+                        <button class="ot-scroll-btn" type="button" data-dir="1" aria-label="Scroll right">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"></path></svg>
+                        </button>
+                    </div>
+                </header>
+                <div class="ot-row" role="list" tabindex="0" aria-label="{{ rail.title | e }}">
+                    {% for c in rail.cards %}
+                    <article class="ot-card{% if rail.kind == 'trending' %} ot-card-rank{% endif %}{% if c.upcoming %} ot-card-upcoming{% endif %}"
+                             role="listitem" data-id="{{ c.id | e }}" data-title="{{ c.title | e }}"
+                             data-year="{{ c.year or '' }}" data-quality="{{ c.quality | e }}"
+                             data-bucket="{{ c.bucket or '' }}" data-trailer="{{ c.trailer | e }}"
+                             data-rating="{{ c.rating or '' }}" data-genres="{{ (c.genres or []) | join(', ') | e }}"
+                             data-link="{{ c.link | e }}" data-poster="{{ c.poster | e }}" data-backdrop="{{ c.backdrop | e }}"
+                             data-search="{{ c.search_url | e }}" data-added="{{ c.added | e }}"
+                             data-series="{{ '1' if c.is_series else '0' }}"
+                             {% if c.release_date %}data-release="{{ c.release_date | e }}"{% endif %}
+                             {% if c.waiting %}data-waiting="{{ c.waiting }}"{% endif %}>
+                        {% if rail.kind == 'trending' %}<span class="ot-rank" aria-hidden="true">{{ loop.index }}</span>{% endif %}
+                        <a class="ot-card-art" href="{{ c.link | e }}" aria-label="{{ c.title | e }}{% if c.year %} ({{ c.year }}){% endif %}">
+                            {% if c.poster %}
+                            <img src="{{ c.poster | e }}?w=320" srcset="{{ c.poster | e }}?w=320 1x, {{ c.poster | e }}?w=480 2x"
+                                 alt="{{ c.title | e }} poster" loading="lazy" decoding="async" width="320" height="480">
+                            {% else %}
+                            <span class="ot-card-ph" aria-hidden="true"><i>MV</i></span>
+                            {% endif %}
+                            <span class="ot-card-shade"></span>
+                            {% if c.upcoming and c.release_label %}<span class="ot-badge ot-badge-soon">{{ c.release_label | e }}</span>
+                            {% elif c.quality %}<span class="ot-badge">{{ c.quality | upper | e }}</span>{% endif %}
+                            <button class="ot-fav" type="button" data-role="mylist" aria-pressed="false" aria-label="Add {{ c.title | e }} to My List" title="My List">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20s-7-4.3-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.7-7 9-7 9Z"></path></svg>
+                            </button>
+                            <span class="ot-card-hover">
+                                <span class="ot-card-play" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.9l11-6.8a1 1 0 0 0 0-1.8l-11-6.8A1 1 0 0 0 8 5.2Z"></path></svg>
+                                </span>
+                                <span class="ot-card-actions">
+                                    <button class="ot-mini" type="button" data-role="info">ⓘ Details</button>
+                                    {% if c.trailer %}<button class="ot-mini" type="button" data-role="trailer">▶ Trailer</button>{% endif %}
+                                </span>
+                            </span>
+                            <span class="ot-progress" hidden><i style="width:0%"></i></span>
+                        </a>
+                        <div class="ot-card-body">
+                            <h3 class="ot-card-title">{{ c.title | e }}</h3>
+                            <p class="ot-card-sub">
+                                {% if c.upcoming %}Coming{% if c.release_label %} · {{ c.release_label | e }}{% endif %}
+                                {% else %}{{ c.year or '' }}{% if c.quality_label %} · {{ c.quality_label | e }}{% elif c.quality %} · {{ c.quality | upper | e }}{% endif %}{% if c.rating %} · ★ {{ c.rating }}{% endif %}{% endif %}
+                            </p>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endfor %}
+        </div>
+
+        {% if not rails %}
+        <div class="ot-rail-skeleton" aria-hidden="true">
+            {% for _ in range(3) %}
+            <div class="ot-skel-rail">
+                <span class="ot-skel ot-skel-title"></span>
+                <div class="ot-skel-row">
+                    {% for _ in range(6) %}<span class="ot-skel ot-skel-card"></span>{% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </section>
+</main>
+
+<footer class="ot-footer">
+    <div class="ot-footer-inner">
+        <span class="ot-brand-mark small" aria-hidden="true">MV</span>
+        <p>MinatoVerse OTT · search, stream and save movies from <strong>@{{ bot_username | e }}</strong>.</p>
+        <div class="ot-footer-links">
+            <a href="{{ home_path | e }}">Home</a>
+            <a href="{{ search_path | e }}">Search</a>
+            <a href="{{ open_url | e }}" target="_blank" rel="noopener">Telegram</a>
+            <a href="{{ update_channel_url | e }}" target="_blank" rel="noopener">Updates</a>
+        </div>
+        <p class="ot-muted small">© {{ site_year }} MinatoVerse · educational project · no files are hosted on this page</p>
+    </div>
+</footer>
+
+<!-- ======================== mobile tab bar ======================== -->
+<nav class="ot-tabbar" aria-label="Quick navigation">
+    <a href="{{ home_path | e }}" class="is-active"><span aria-hidden="true">🏠</span>Home</a>
+    <a href="{{ search_path | e }}"><span aria-hidden="true">🔍</span>Search</a>
+    <button type="button" data-role="scroll-mylist"><span aria-hidden="true">❤️</span>My List</button>
+    <a href="{{ open_url | e }}" target="_blank" rel="noopener"><span aria-hidden="true">✈️</span>Bot</a>
+</nav>
+
+<!-- ======================== detail sheet ======================== -->
+<div class="ot-sheet" id="otSheet" hidden>
+    <div class="ot-sheet-backdrop" data-role="close"></div>
+    <div class="ot-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="otSheetTitle">
+        <button class="ot-sheet-close" type="button" data-role="close" aria-label="Close details">✕</button>
+        <div class="ot-sheet-art"><img id="otSheetArt" alt="" decoding="async"></div>
+        <div class="ot-sheet-body">
+            <h2 id="otSheetTitle">—</h2>
+            <div class="ot-sheet-facts" id="otSheetFacts"></div>
+            <p class="ot-sheet-overview" id="otSheetOverview"></p>
+            <div class="ot-sheet-actions">
+                <a class="ot-btn ot-btn-primary" id="otSheetPlay" href="#" target="_blank" rel="noopener">Play in Telegram</a>
+                <button class="ot-btn ot-btn-ghost" id="otSheetList" type="button" aria-pressed="false">Add to My List</button>
+                <button class="ot-btn ot-btn-ghost" id="otSheetTrailer" type="button" hidden>Play trailer</button>
+                <a class="ot-btn ot-btn-ghost" id="otSheetSearch" href="#">More like this</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="ot-toast" id="otToast" role="status" aria-live="polite"></div>
+
+<script type="application/json" id="ott-config">{{ config | safe }}</script>
+<script type="application/json" id="ott-boot">{{ boot | safe }}</script>
+<script src="/static/ott_home.js?v={{ asset_version | e }}" defer></script>
+</body>
+</html>
