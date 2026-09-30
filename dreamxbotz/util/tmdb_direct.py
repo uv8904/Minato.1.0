@@ -27,9 +27,13 @@ logger = logging.getLogger(__name__)
 SEARCH_URL = "https://api.themoviedb.org/3/search/movie"
 #: "Validate key" endpoint – answers 200 for a good credential and 401 for a bad one.
 AUTH_URL = "https://api.themoviedb.org/3/authentication"
+#: One movie with its videos (trailers) attached – used by the OTT homepage.
+DETAILS_URL = "https://api.themoviedb.org/3/movie/{tmdb_id}"
 IMAGE_BASE = "https://image.tmdb.org/t/p/"
 POSTER_SIZE = "w780"
 BACKDROP_SIZE = "w1280"
+#: Videos are a few hundred KB; the trailer itself is streamed from YouTube.
+STILL_SIZE = "w300"
 DEFAULT_TIMEOUT = 8.0
 USER_AGENT = "MinatoVerse-Poster-Worker/1.0 (+https://t.me)"
 
@@ -181,13 +185,15 @@ async def search_movie(
     session: Optional[ClientSession] = None,
     language: str = "en-US",
 ) -> Dict[str, Any]:
-    """Poster + backdrop for one movie straight from TMDB.
+    """Poster + backdrop + ``tmdb_id`` for one movie straight from TMDB.
 
     Returns ``{"poster", "backdrop", "title", "year", "tmdb_id", "source"}``
     (values ``None`` when unknown) or ``{}`` when nothing was found / no key.
     A query that contains a year (``"Jawan 2023"``) is split automatically;
     when the year-filtered search has no hits, the search is repeated without
     the year (release years in file names are often off by one).
+
+    ``tmdb_id`` is what :func:`movie_details` needs for genres and trailers.
     """
     params, headers = auth_for(api_key)
     if not params and not headers:
@@ -237,6 +243,191 @@ async def search_movie(
                 "source": "tmdb",
             }
         return {}
+    finally:
+        if own_session:
+            await session.close()
+
+
+# --------------------------------------------------------------------------- #
+# Genres + trailers (JioHotstar OTT homepage)
+# --------------------------------------------------------------------------- #
+#: Trailers we accept: a real trailer beats a teaser, an official one beats a
+#: fan upload, and anything that is not hosted on YouTube is ignored.
+_VIDEO_RANK = {"trailer": 0, "teaser": 1, "clip": 2, "featurette": 3, "behind the scenes": 4}
+
+
+def pick_trailer(videos: Any, *, language: str = "en") -> Optional[Dict[str, Any]]:
+    """Best trailer of a TMDB ``videos.results`` list (``None`` when there is none).
+
+    Pure function – no network, no Telegram – so the ranking rules are easy to
+    test: only ``site == "YouTube"`` entries with a key are considered, then
+    ``Trailer`` before ``Teaser`` before anything else, official before
+    unofficial, and the requested language before any other.
+    """
+    if not isinstance(videos, list):
+        return None
+    wanted = str(language or "").lower()[:2]
+
+    def sort_key(video: Dict[str, Any]):
+        kind = str(video.get("type") or "").strip().lower()
+        video_lang = str(video.get("iso_639_1") or "").strip().lower()
+        return (
+            0 if video_lang == wanted else 1,          # language
+            _VIDEO_RANK.get(kind, 9),                  # trailer > teaser > …
+            0 if video.get("official") else 1,         # official first
+            str(video.get("published_at") or ""),      # newest first (ISO strings sort)
+        )
+
+    candidates = [
+        video
+        for video in videos
+        if isinstance(video, dict)
+        and str(video.get("site") or "").strip().lower() == "youtube"
+        and str(video.get("key") or "").strip()
+    ]
+    if not candidates:
+        return None
+    best = sorted(candidates, key=sort_key)[0]
+    key = str(best.get("key") or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{6,20}", key):
+        return None
+    return {
+        "key": key,
+        "name": str(best.get("name") or "Official Trailer")[:120],
+        "type": str(best.get("type") or "Trailer")[:24],
+        "official": bool(best.get("official")),
+        "language": str(best.get("iso_639_1") or "")[:8],
+        "published_at": str(best.get("published_at") or "")[:32],
+    }
+
+
+def _artist_list(value: Any, limit: int = 6) -> list:
+    if not isinstance(value, list):
+        return []
+    names = []
+    for row in value:
+        if isinstance(row, dict) and row.get("name"):
+            names.append(str(row["name"])[:60])
+        if len(names) >= limit:
+            break
+    return names
+
+
+async def movie_details(
+    tmdb_id: Optional[int] = None,
+    *,
+    query: str = "",
+    api_key: str,
+    year: Optional[int] = None,
+    timeout: float = DEFAULT_TIMEOUT,
+    session: Optional[ClientSession] = None,
+    language: str = "en-US",
+    with_videos: bool = True,
+) -> Dict[str, Any]:
+    """Genres, trailer, rating and artwork of one movie.
+
+    Give it either a ``tmdb_id`` (fastest – :func:`search_movie` returns one) or
+    a ``query`` string, in which case the search is performed first.  The
+    result is a flat dict ready to be stored:
+
+    ``{"tmdb_id", "title", "year", "genres": [...], "genre_ids": [...],
+    "trailer": {...} | None, "trailer_key", "overview", "rating", "runtime",
+    "backdrop", "poster", "source"}``
+
+    Like the rest of this module it never raises: on any problem it returns
+    ``{}`` and logs the reason, so a homepage render can never fail because
+    TMDB is slow.
+    """
+    params, headers = auth_for(api_key)
+    if not params and not headers:
+        return {}
+
+    headers = dict(headers)
+    headers.setdefault("Accept", "application/json")
+    headers.setdefault("User-Agent", USER_AGENT)
+
+    own_session = session is None
+    if own_session:
+        session = ClientSession(timeout=ClientTimeout(total=max(2.0, float(timeout))))
+    try:
+        resolved_id = int(tmdb_id) if str(tmdb_id or "").strip().isdigit() else None
+        if not resolved_id:
+            found = await search_movie(
+                query or "", api_key=api_key, year=year, timeout=timeout,
+                session=session, language=language,
+            )
+            if not found:
+                return {}
+            resolved_id = found.get("tmdb_id")
+            if not str(resolved_id or "").strip().isdigit():
+                return {}
+        resolved_id = int(resolved_id)
+
+        query_params = dict(params)
+        query_params["language"] = language
+        if with_videos:
+            query_params["append_to_response"] = "videos"
+        try:
+            async with session.get(
+                DETAILS_URL.format(tmdb_id=resolved_id), params=query_params, headers=headers
+            ) as response:
+                if response.status == 401:
+                    logger.warning("TMDB rejected the API key (401) – check TMDB_API_KEY.")
+                    return {}
+                if response.status != 200:
+                    logger.info("TMDB details failed with HTTP %s for id %s.", response.status, resolved_id)
+                    return {}
+                payload = await response.json(content_type=None)
+        except Exception as exc:
+            logger.info("TMDB details error for id %s: %s", resolved_id, exc)
+            return {}
+        if not isinstance(payload, dict) or payload.get("success") is False:
+            return {}
+
+        genres = [
+            str(row.get("name"))[:40]
+            for row in (payload.get("genres") or [])
+            if isinstance(row, dict) and row.get("name")
+        ]
+        genre_ids = [
+            int(row.get("id"))
+            for row in (payload.get("genres") or [])
+            if isinstance(row, dict) and str(row.get("id") or "").strip().isdigit()
+        ]
+        release = str(payload.get("release_date") or "")
+        found_year = int(release[:4]) if release[:4].isdigit() else None
+        trailer = pick_trailer((payload.get("videos") or {}).get("results"), language=language[:2])
+
+        def _num(value):
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                return None
+            return number if number > 0 else None
+
+        return {
+            "tmdb_id": resolved_id,
+            "title": str(payload.get("title") or payload.get("original_title") or "")[:120] or None,
+            "year": found_year,
+            "genres": genres,
+            "genre_ids": genre_ids,
+            "trailer": trailer,
+            "trailer_key": (trailer or {}).get("key"),
+            "overview": str(payload.get("overview") or "")[:600],
+            "rating": _num(payload.get("vote_average")),
+            "votes": int(_num(payload.get("vote_count")) or 0),
+            "runtime": int(_num(payload.get("runtime")) or 0),
+            "popularity": _num(payload.get("popularity")),
+            "languages": [
+                str(row.get("english_name") or row.get("name") or "")[:40]
+                for row in (payload.get("spoken_languages") or [])
+                if isinstance(row, dict)
+            ][:4],
+            "cast": _artist_list((payload.get("credits") or {}).get("cast"), limit=5),
+            "backdrop": _image(payload.get("backdrop_path"), BACKDROP_SIZE),
+            "poster": _image(payload.get("poster_path"), POSTER_SIZE),
+            "source": "tmdb",
+        }
     finally:
         if own_session:
             await session.close()

@@ -35,6 +35,16 @@ async def web_server():
         web_app.add_routes(admin_api.routes)
     except Exception as e:
         logging.warning(f"Admin dashboard routes not registered: {e}")
+    # JioHotstar OTT homepage - Option A: trailer hero, genre rails, /search,
+    # My List, Continue Watching (+ the /api/ott/* JSON).  Registered before the
+    # catch-all stream route for the same reason as the movie API above.
+    # Docs: docs/OTT_HOMEPAGE.md
+    try:
+        from dreamxbotz.server import ott_api
+
+        ott_api.register(web_app)
+    except Exception as e:
+        logging.warning(f"OTT homepage routes not registered: {e}")
     # FamPay · FamGateway webhook receiver (docs/FAMPAY_SETUP.md) — also before
     # the catch-all, so POSTs to /fampay/webhook always reach it.
     try:

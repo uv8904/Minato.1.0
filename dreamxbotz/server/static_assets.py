@@ -26,6 +26,12 @@ ASSETS = {
     # Netflix Pack · Enhanced Player + Continue Watching + My List + Trailers
     "netflix_pack.css": "text/css; charset=utf-8",
     "netflix_pack.js": "text/javascript; charset=utf-8",
+    # JioHotstar OTT homepage · trailer hero + genre rails + My List (Option A)
+    "ott_home.css": "text/css; charset=utf-8",
+    "ott_home.js": "text/javascript; charset=utf-8",
+    # … its /search page (filters, facets, infinite scroll)
+    "ott_search.css": "text/css; charset=utf-8",
+    "ott_search.js": "text/javascript; charset=utf-8",
 }
 
 routes = web.RouteTableDef()
