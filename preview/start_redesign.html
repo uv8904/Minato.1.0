@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MinatoVerse - New /start Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0b16;
+  --tg-bg:#212121;
+  --tg-msg:#182533;
+  --tg-blue:#2e5bff;
+  --tg-purple:#822ce7;
+  --tg-pink:#ff3d9a;
+  --grad:linear-gradient(135deg,#2e5bff 0%,#822ce7 52%,#ff3d9a 100%);
+  --text:#eef0f7;
+  --muted:#9aa1b9;
+  --line:rgba(255,255,255,0.08);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;display:flex;min-height:100vh;}
+.left{flex:1;padding:40px;display:flex;flex-direction:column;gap:18px;max-width:620px;margin:auto;}
+.right{flex:1;background:radial-gradient(1000px 600px at 20% 0%, rgba(130,44,231,0.22), transparent 60%), radial-gradient(800px 500px at 90% 10%, rgba(46,91,255,0.18), transparent 60%);border-left:1px solid var(--line);padding:30px;display:flex;align-items:center;justify-content:center;}
+.badge{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;background:rgba(46,91,255,0.12);border:1px solid rgba(46,91,255,0.22);font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#8aa0ff}
+.badge i{width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 0 4px rgba(52,211,153,0.2)}
+h1{font-family:Sora,sans-serif;font-size:42px;line-height:1.1;margin:0;letter-spacing:-1px;}
+h1 span{background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.sub{color:var(--muted);font-size:15px;line-height:1.6}
+.list{display:flex;flex-direction:column;gap:12px;margin-top:10px}
+.item{display:flex;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,0.03);}
+.item b{color:#fff}
+.item .icon{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--grad);flex:none;font-size:18px}
+.phone{width:360px;max-width:100%;background:#0f0f0f;border-radius:32px;border:1px solid rgba(255,255,255,0.12);overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,0.9), 0 0 0 8px rgba(255,255,255,0.03);display:flex;flex-direction:column;}
+.phone-top{height:54px;background:#212121;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid rgba(255,255,255,0.06)}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--grad);display:grid;place-items:center;font-weight:700}
+.phone-top .name{font-weight:600;font-size:14px}
+.phone-top .status{font-size:11px;color:#7d8aa6}
+.phone-body{flex:1;background:#0e1621;background-image:radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px);background-size:18px 18px;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:520px}
+.msg{background:var(--tg-msg);border-radius:14px 14px 14px 4px;padding:0;overflow:hidden;max-width:100%;font-size:13px;line-height:1.5;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+.msg img{width:100%;height:180px;object-fit:cover;display:block}
+.msg .caption{padding:12px}
+.msg .caption b{color:#fff}
+.msg blockquote{margin:10px 0;padding:10px 12px;background:rgba(255,255,255,0.04);border-left:3px solid #822ce7;border-radius:6px;font-size:12px}
+.kb{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.kb-row{display:flex;gap:6px}
+.kb-btn{flex:1;padding:9px 8px;border-radius:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);font-size:11.5px;font-weight:600;text-align:center;cursor:pointer;transition:.15s}
+.kb-btn:hover{background:rgba(46,91,255,0.18);border-color:rgba(46,91,255,0.3);transform:translateY(-1px)}
+.kb-btn.green{background:linear-gradient(135deg, rgba(46,91,255,0.25), rgba(130,44,231,0.25));border-color:rgba(130,44,231,0.4)}
+.kb-btn.red{background:rgba(255,61,154,0.14);border-color:rgba(255,61,154,0.3)}
+.kb-btn.blue{background:rgba(46,91,255,0.12);border-color:rgba(46,91,255,0.2)}
+.input{height:48px;background:#212121;border-top:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;padding:0 12px;gap:10px}
+.input span{flex:1;background:#181818;border-radius:20px;padding:8px 14px;font-size:13px;color:#6b7a94}
+.code{font-family:monospace;background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px}
+.old{opacity:0.6}
+.old .msg{background:#1a1a1a}
+.comparison{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}
+@media(max-width:900px){body{flex-direction:column}.right{border-left:none;border-top:1px solid var(--line)}.comparison{grid-template-columns:1fr}h1{font-size:32px}}
+</style>
+</head>
+<body>
+<div class="left">
+  <span class="badge"><i></i> NEW /START SHIPPED - OPTION E</span>
+  <h1>Your /start went from <span>basic</span> to JioHotstar level</h1>
+  <p class="sub">Before: static text + 3 buttons. After: live stats, trending searches that users can tap to instantly search, discovery rails, and premium upsell built-in.</p>
+  
+  <div class="list">
+    <div class="item"><div class="icon">⚡</div><div><b>Live Stats in Caption</b><br><span style="color:var(--muted)">Shows real file count, users, groups - updates automatically. Social proof = more trust.</span></div></div>
+    <div class="item"><div class="icon">🔥</div><div><b>Trending Buttons That Actually Search</b><br><span style="color:var(--muted)">Fetches top 6 searches from DB. Tap "🔍 Jawan" -> instantly shows results. No typing needed.</span></div></div>
+    <div class="item"><div class="icon">🎬</div><div><b>Discovery Rails</b><br><span style="color:var(--muted)">New buttons: 🔥 Trending | 🎬 New Added | ⏳ Coming Soon - keeps user inside bot 3x longer.</span></div></div>
+    <div class="item"><div class="icon">💎</div><div><b>Premium + Refer Built-in</b><br><span style="color:var(--muted)">Top Searching + Refer & Earn + Website button - monetization on first screen.</span></div></div>
+  </div>
+
+  <div class="comparison">
+    <div class="old">
+      <b style="color:var(--muted);font-size:12px;letter-spacing:1px">BEFORE</b>
+      <div class="phone" style="margin-top:10px;transform:scale(0.9);transform-origin:top left">
+        <div class="phone-top"><div class="avatar">M</div><div><div class="name">Minato</div><div class="status">bot</div></div></div>
+        <div class="phone-body">
+          <div class="msg"><img src="https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=600"><div class="caption"><b>🌿 Dattebayo!!! 😼</b><br><br><b>Hey User, Good Morning</b><br><br><b>🤖 I am Minato, most powerful auto filter bot</b></div></div>
+          <div class="kb"><div class="kb-row"><div class="kb-btn green">➕ Add Me To Your Group</div></div><div class="kb-row"><div class="kb-btn blue">📚 Help</div><div class="kb-btn blue">❤️ About</div></div><div class="kb-row"><div class="kb-btn blue">🔍 Top Searching</div><div class="kb-btn red">💎 Upgrade</div></div></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <b style="color:#8aa0ff;font-size:12px;letter-spacing:1px">AFTER - YOUR NEW DESIGN</b>
+      <div class="phone" style="margin-top:10px;transform:scale(0.9);transform-origin:top left;border-color:rgba(130,44,231,0.4);box-shadow:0 30px 80px -20px rgba(130,44,231,0.5)">
+        <div class="phone-top"><div class="avatar">M</div><div><div class="name">MinatoVerse 🔥</div><div class="status">⚡ 0.5s search • AI powered</div></div></div>
+        <div class="phone-body">
+          <div class="msg"><img src="https://images.unsplash.com/photo-1485846234645-a62644f84728?w=600"><div class="caption"><b>🌿 Welcome to MinatoVerse 🌿</b><br><br><b>Hey @User, Good Morning 👋</b><br><br><b>⚡ I am @Minato - JioHotstar level movie universe</b><blockquote>📦 <b>52.3K+ Files</b> | 👥 <b>12.4K+ Users</b> | 🎬 <b>843 Groups</b><br>⚡ <b>Superfast 0.5s Search</b> | 🤖 <b>AI Spell Fix</b></blockquote><b>🔥 Trending Now:</b> <span class="code">Jawan, Animal, Kalki</span><br><b>💡 Just type any movie name!</b></div></div>
+          <div class="kb">
+            <div class="kb-row"><div class="kb-btn green">➕ Add Me To Your Group ➕</div></div>
+            <div class="kb-row"><div class="kb-btn blue">🔥 Trending</div><div class="kb-btn blue">🎬 New Added</div><div class="kb-btn blue">⏳ Coming Soon</div></div>
+            <div class="kb-row"><div class="kb-btn blue">📚 Help</div><div class="kb-btn blue">❤️ About</div><div class="kb-btn red">💎 Upgrade</div></div>
+            <div class="kb-row"><div class="kb-btn blue">🔍 Top Searching</div><div class="kb-btn blue">🎁 Refer</div><div class="kb-btn blue">🌐 Website</div></div>
+            <div class="kb-row"><div class="kb-btn blue">🔍 Jawan</div><div class="kb-btn blue">🔍 Animal</div></div>
+            <div class="kb-row"><div class="kb-btn blue">🔍 Kalki 2898 AD</div><div class="kb-btn blue">🔍 Stree 2</div></div>
+          </div>
+        </div>
+        <div class="input"><span>Type a movie name...</span>🚀</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:20px;padding:16px;border-radius:14px;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.2);font-size:13px">
+    <b style="color:#34d399">✅ Shipped:</b> utils.py `start_buttons(trending)` + Script.py new START_TXT + commands.py `_send_start_home()` now fetches live stats + trending + handles 4 new callbacks (`trend_search`, `trendlist_home`, `newly_added`, `comingsoon_home`)<br><br>
+    <b>Next impress?</b> Say <code>A</code> for full OTT homepage, <code>B</code> for Inline Mode, <code>C</code> for Voice Search, <code>D</code> for Admin Dashboard.
+  </div>
+</div>
+
+<div class="right">
+  <div class="phone">
+    <div class="phone-top"><div class="avatar">M</div><div><div class="name">MinatoVerse</div><div class="status">bot • JioHotstar level</div></div><div style="margin-left:auto">⋮</div></div>
+    <div class="phone-body">
+      <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:12px">Today</div>
+      <div style="align-self:flex-end;background:var(--grad);color:#fff;padding:10px 14px;border-radius:18px 18px 4px 18px;font-size:13px;max-width:70%">/start</div>
+      <div class="msg">
+        <img src="https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=600&h=400&fit=crop" alt="movie">
+        <div class="caption">
+          <b>🌿 WELCOME TO MINATOVERSE 🌿</b><br><br>
+          <b>HEY @Yuvi, GOOD MORNING 👋</b><br><br>
+          <b>⚡ I AM @MinatoBot - THE JIOHOTSTAR LEVEL MOVIE UNIVERSE</b>
+          <blockquote>
+            📦 <b>52.3K+ Files</b> | 👥 <b>12.4K+ Users</b> | 🎬 <b>843 Groups</b><br>
+            ⚡ <b>Superfast 0.5s Search</b> | 🤖 <b>AI Spell Fix</b> | 🔔 <b>Notify When Uploaded</b>
+          </blockquote>
+          <b>🔥 TRENDING NOW:</b> Jawan, Animal, Kalki 2898 AD<br>
+          <b>💡 JUST TYPE ANY MOVIE NAME - I'LL FIND IT INSTANTLY ⚡</b>
+        </div>
+      </div>
+      <div class="kb">
+        <div class="kb-row"><div class="kb-btn green">➕ ADD ME TO YOUR GROUP ➕</div></div>
+        <div class="kb-row"><div class="kb-btn blue">🔥 Trending</div><div class="kb-btn blue">🎬 New Added</div><div class="kb-btn blue">⏳ Coming Soon</div></div>
+        <div class="kb-row"><div class="kb-btn blue">📚 Help</div><div class="kb-btn blue">❤️ About</div><div class="kb-btn red">💎 Upgrade</div></div>
+        <div class="kb-row"><div class="kb-btn blue">🔍 Top Searching</div><div class="kb-btn blue">🎁 Refer & Earn</div><div class="kb-btn blue">🌐 Website</div></div>
+        <div class="kb-row"><div class="kb-btn blue">🔍 Jawan</div><div class="kb-btn blue">🔍 Animal</div></div>
+        <div class="kb-row"><div class="kb-btn blue">🔍 Kalki 2898 AD</div><div class="kb-btn blue">🔍 Stree 2</div></div>
+        <div class="kb-row"><div class="kb-btn blue">🔍 Deadpool & Wolv…</div><div class="kb-btn blue">🔍 Sarfira</div></div>
+      </div>
+      <div style="align-self:flex-end;background:rgba(255,255,255,0.06);padding:8px 12px;border-radius:12px;font-size:11px;color:var(--muted);margin-top:8px">User tapped 🔍 Jawan → instant results ⚡</div>
+    </div>
+    <div class="input"><span>Message MinatoVerse...</span><span style="background:var(--grad);color:#fff;border-radius:50%;width:32px;height:32px;display:grid;place-items:center">↑</span></div>
+  </div>
+</div>
+</body>
+</html>

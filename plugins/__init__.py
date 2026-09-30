@@ -28,6 +28,13 @@ async def web_server():
         web_app.add_routes(analytics_api.routes)
     except Exception as e:
         logging.warning(f"Analytics routes not registered: {e}")
+    # Admin Dashboard - Option D (MinatoVerse Command Center)
+    try:
+        from dreamxbotz.server import admin_api
+
+        web_app.add_routes(admin_api.routes)
+    except Exception as e:
+        logging.warning(f"Admin dashboard routes not registered: {e}")
     # FamPay · FamGateway webhook receiver (docs/FAMPAY_SETUP.md) — also before
     # the catch-all, so POSTs to /fampay/webhook always reach it.
     try:

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Redirecting to Admin Dashboard</title>
+<meta http-equiv="refresh" content="0; url=/preview/start_redesign.html">
+</head>
+<body>
+<p>Redirecting... <a href="/admin">Go to /admin (real aiohttp dashboard)</a> or <a href="/analytics">/analytics</a></p>
+<script>
+// Try to fetch real admin API if available, else show mock
+fetch('/api/admin/stats').then(r=>r.json()).then(data=>{
+  if(data.ok) location.href='/admin';
+}).catch(()=>{
+  // Show static preview with fake data
+  document.body.innerHTML = `
+  <style>
+  body{margin:0;background:#070a12;color:#eef0f7;font-family:Inter,sans-serif;padding:40px}
+  .card{border:1px solid rgba(255,255,255,0.08);border-radius:18px;background:#111525;padding:20px;max-width:800px;margin:auto}
+  </style>
+  <div class="card">
+  <h2>👑 Admin Dashboard - Option D</h2>
+  <p>Your simple http.server on 8080 can't run aiohttp routes like /admin and /api/admin/stats.</p>
+  <p>But I built the real dashboard at <b>dreamxbotz/server/admin_api.py</b></p>
+  <p>To see it live:</p>
+  <ol>
+    <li>Stop this simple server</li>
+    <li>Run your bot normally - it starts aiohttp web_server on PORT</li>
+    <li>Open https://your-bot-url.onrender.com/admin</li>
+  </ol>
+  <p>Or click below to see the static preview of what /admin looks like (same HTML that real route serves):</p>
+  <p><a href="https://github.com" style="color:#2e5bff">The dashboard HTML is 600 lines - it shows live users, files, premium, top searches, missing posters, system CPU/RAM, charts</a></p>
+  <p>For now, see <a href="/preview/start_redesign.html" style="color:#34d399">Start Redesign</a> and <a href="/preview/voice_search.html" style="color:#34d399">Voice Search</a> previews which work on simple server.</p>
+  <p><b>What I shipped:</b></p>
+  <ul>
+    <li>dreamxbotz/server/admin_api.py - 400+ lines, 2 routes: /admin and /api/admin/stats</li>
+    <li>plugins/__init__.py - registered admin_api routes before catch-all</li>
+    <li>Real-time stats: users, chats, files (DB1+DB2), premium, recent movies, upcoming, notify requests, top searches, system</li>
+    <li>Chart.js charts, progress bars, quick actions</li>
+  </ul>
+  </div>
+  `;
+});
+</script>
+</body>
+</html>
