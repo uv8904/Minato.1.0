@@ -94,6 +94,8 @@ Join our support group for assistance:
 - ✅ Admin Commands  
 - ✅ Group Broadcast  
 - ✅ Full File Indexing Support  
+- ✅ **JioHotstar-style OTT homepage** — trailer hero (muted auto-play on hover/scroll), genre rails, full `/search` page with genre · quality · year · sort filters, detail sheet, **My List & Continue Watching** shared with the watch page, and a quiet live refresh (`OTT_HOME`, default True — [docs/OTT_HOMEPAGE.md](docs/OTT_HOMEPAGE.md))  
+- ✅ **Inline Mode** — type `@YourBot jawan` in *any* chat and pick a poster card (quality, files, size); its ▶️ button opens that exact movie in the bot (`INLINE_SEARCH`, default True — [docs/INLINE_SEARCH.md](docs/INLINE_SEARCH.md))  
 - ✅ **Auto-Import Userbot** — doosre bots se mangwai files manual channel me daalne ka jhanjhat khatam: `USER_SESSION` set karo, watched bot ki files tumhare PM me aate hi automatic file-channel me copy + index ho jayengi (`/watch`, `/autoimport`, `/target`, `/grab` — guide: docs/AUTO_IMPORT.md)  
 - ✅ ID & User Info  
 - ✅ Stats & Analytics  
@@ -191,6 +193,57 @@ python tools/preview_section.py   # http://127.0.0.1:8080
 #   ?cs=empty · ?cs=error · ?cs=loading · ?cs=hostile   push just this rail
 ```
 
+### 🎬 JioHotstar-style OTT homepage (Option A)
+
+A real storefront on top of the same file index — served by the bot's own web
+app, so there is no second service to deploy:
+
+- **Trailer hero** — up to `OTT_HERO_LIMIT` featured titles with a Ken-Burns
+  backdrop and the official trailer auto-playing (muted) after a short hover or
+  scroll pause; dots, arrows, `←`/`→` keys, `prefers-reduced-motion` respected
+- **Genre rails** — *New on MinatoVerse*, one rail per TMDB genre, *Top rated*,
+  *4K premium*, *Web Series*, *Trending now* (built from your own `/topsearch`
+  counters) and the **Coming Soon** rail the bot already keeps
+- **`/search`** — instant suggestions, filter chips for genre/quality/year/sort,
+  live result count, "Load more", and an empty state that hands the query to the
+  bot with one tap
+- **Detail sheet** — backdrop, facts, genres, overview, *Play in Telegram*,
+  *My List*, *Play trailer*, *More like this*
+- **My List & Continue Watching** — stored in the browser and **shared with the
+  watch page's Netflix Pack** (`dx:mylist`, `dx:cw:list`, `dx:resume:<user>`),
+  so the same list follows the visitor across every page
+- **Nothing private ever leaves the server** — a card carries a title, year,
+  quality, our own poster-proxy URL and the public deep link
+  `https://t.me/BOT_USERNAME?start=movie_MOVIE_ID`; file ids, download links and
+  the token are impossible by construction
+
+The page is **server-rendered first** (hero + the first `OTT_SERVER_RAILS` rails
+are in the HTML) and the browser only adds the interactive layer; the rest of
+the rails arrive in the `#ott-boot` JSON and the rails quietly refresh every
+`OTT_POLL` seconds while the tab is visible. Everything is optional: set
+`OTT_HOME=False` and the bot behaves exactly as before
+(`/home`, `/search` and `/api/ott/*` disappear, `/` goes back to the JSON probe).
+Details: [`docs/OTT_HOMEPAGE.md`](docs/OTT_HOMEPAGE.md).
+
+### ⚡ Inline Mode — `@YourBot <movie>` in any chat (Option B)
+
+Type the bot's username in **any** chat, keep typing a movie name, and Telegram
+asks the bot for results:
+
+- **poster cards** with title + year, quality (`1080p, 720p`), file count and
+  total size, `Series` when it is one — qualities of the same movie are merged
+  into a single card
+- **▶️ Play / Download** → `?start=movie_MOVIE_ID` (premium / FSub / verification
+  rules still apply, because the tap opens the bot), **🌐 website**, **🔗 share**
+- an **empty query** answers with your top searches, *no result* offers
+  `?start=msrch_<query>` (the bot opens **and** searches), and a per-user hourly
+  budget (`INLINE_SEARCH_MAX_REQUESTS`) stops abuse
+- inline mode must be enabled once in [@BotFather](https://t.me/BotFather)
+  (`/setinline`); `/inline` inside the bot explains the feature
+- **no file id, download URL or token is ever part of an inline result**
+
+Details: [`docs/INLINE_SEARCH.md`](docs/INLINE_SEARCH.md).
+
 ### 🎬 Movie hero on the watch page
 
 Every `/watch/…` page now opens with a **movie hero** strip above the player:
@@ -218,6 +271,9 @@ spotlight and the rail with its poster):
 ```bash
 python tools/preview_section.py   # http://127.0.0.1:8080
 #   /               Stream Mode page: player + movie hero + spotlight + rail + simulator
+#   /home           JioHotstar storefront: trailer hero + genre rails (Option A)
+#   /search         OTT search page with genre · quality · year · sort filters
+#   /api/ott/*      the storefront's JSON (home, search, suggest, genres, movie)
 #   /download       the download page (same rail, same simulator)
 #   POST /demo/upload {"file_name": "Hmm (2024) 1080p WEB-DL.mkv"}
 ```
