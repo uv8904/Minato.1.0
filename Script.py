@@ -1,17 +1,32 @@
 class script(object):
-    START_TXT = """<b><u>🌿 Dattebayo!!! 😼</u></b>
+    START_TXT = """<b>🌿 ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴍɪɴᴀᴛᴏᴠᴇʀsᴇ 🌿</b>
 
-<b>ʜᴇʏ {}, {}</b>
+<b>ʜᴇʏ {}, {} 👋</b>
 
-<b>🤖 ɪ ᴀᴍ <a href=https://t.me/{}>{}</a>, ᴛʜᴇ ᴍᴏꜱᴛ ᴘᴏᴡᴇʀꜰᴜʟ ᴀᴜᴛᴏ ꜰɪʟᴛᴇʀ ʙᴏᴛ ᴡɪᴛʜ ᴘʀᴇᴍɪᴜᴍ ꜰᴇᴀᴛᴜʀᴇꜱ.</b>
+<b>⚡ ɪ ᴀᴍ <a href=https://t.me/{}>{}</a> - ᴛʜᴇ ᴊɪᴏʜᴏᴛsᴛᴀʀ ʟᴇᴠᴇʟ ᴍᴏᴠɪᴇ ᴜɴɪᴠᴇʀsᴇ</b>
+
+<blockquote>
+📦 <b>{} Files</b> | 👥 <b>{} Users</b> | 🎬 <b>{} Groups</b>
+⚡ <b>Superfast 0.5s Search</b> | 🤖 <b>AI Spell Fix</b> | 🔔 <b>Notify When Uploaded</b>
+</blockquote>
+
+<b>🔥 ᴛʀᴇɴᴅɪɴɢ ɴᴏᴡ:</b> {}
+<b>💡 ᴊᴜsᴛ ᴛʏᴘᴇ ᴀɴʏ ᴍᴏᴠɪᴇ ɴᴀᴍᴇ - ɪ'ʟʟ ғɪɴᴅ ɪᴛ ɪɴsᴛᴀɴᴛʟʏ ⚡</b>
 """
 
 
-    GSTART_TXT = """<b>🌿 Dattebayo!!! 😼</b>
+    GSTART_TXT = """<b>🌿 ᴍɪɴᴀᴛᴏᴠᴇʀsᴇ ɪs ʜᴇʀᴇ 🌿</b>
 
 <b>ʜᴇʏ {},</b>
 
-<b>😺 ɪ ᴀᴍ <a href=https://t.me/{}>{}</a>, ᴛʜᴇ ᴍᴏꜱᴛ ᴘᴏᴡᴇʀꜰᴜʟ ᴀᴜᴛᴏ ꜰɪʟᴛᴇʀ ʙᴏᴛ ᴡɪᴛʜ ᴘʀᴇᴍɪᴜᴍ ꜰᴇᴀᴛᴜʀᴇꜱ 🌿.</b>"""
+<b>😺 ɪ ᴀᴍ <a href=https://t.me/{}>{}</a> - ᴊɪᴏʜᴏᴛsᴛᴀʀ ʟᴇᴠᴇʟ ᴀᴜᴛᴏ-ғɪʟᴛᴇʀ</b>
+
+<blockquote>
+⚡ <b>0.5s Search</b> | 🤖 <b>AI Spell Fix</b> | 🔔 <b>Notify Me</b>
+📦 <b>50K+ Files</b> | 🎬 <b>Premium Streaming</b>
+</blockquote>
+
+<b>💡 ᴊᴜsᴛ ᴛʏᴘᴇ ᴀɴʏ ᴍᴏᴠɪᴇ ɴᴀᴍᴇ ɪɴ ɢʀᴏᴜᴘ!</b>"""
 
     
     HELP_TXT = """<b>

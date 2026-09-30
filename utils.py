@@ -62,24 +62,88 @@ class temp(object):
     FLASH = {}       # runtime cache for the start-flash / alive-sticker values
 
 
-def start_buttons():
-    """Coloured keyboard for the /start message (PM) and the 'back to home' callback.
+def start_buttons(trending=None):
+    """JioHotstar-level start keyboard with trending searches.
 
-    Green  -> main action (add bot to group)
-    Blue   -> navigation (help / about / top searching)
-    Red    -> upgrade / premium
+    Green  -> main action
+    Blue   -> navigation / discovery
+    Red    -> premium / upgrade
+    trending: optional list of top search strings to show as quick-search buttons.
     """
-    return InlineKeyboardMarkup([
+    buttons = [
         [
             green('➕ ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ➕', url=f'http://telegram.me/{temp.U_NAME}?startgroup=true')
-        ], [
+        ],
+        [
+            blue('🔥 Trending', callback_data='trendlist_home'),
+            blue('🎬 New Added', callback_data='newly_added'),
+            blue('⏳ Coming Soon', callback_data='comingsoon_home')
+        ],
+        [
             blue('📚 ʜᴇʟᴘ', callback_data='help'),
-            blue('❤️ ᴀʙᴏᴜᴛ', callback_data='about')
-        ], [
-            blue('🔍 ᴛᴏᴘ sᴇᴀʀᴄʜɪɴɢ', callback_data='topsearch'),
+            blue('❤️ ᴀʙᴏᴜᴛ', callback_data='about'),
             red('💎 ᴜᴘɢʀᴀᴅᴇ', callback_data='premium_info')
+        ],
+        [
+            blue('🔍 ᴛᴏᴘ sᴇᴀʀᴄʜɪɴɢ', callback_data='topsearch'),
+            blue('🎁 Refer & Earn', callback_data='reffff'),
+            blue('🌐 Website', url='https://t.me/{}'.format(temp.U_NAME) if temp.U_NAME else 'https://telegram.me/')
         ]
-    ])
+    ]
+
+    # Add trending searches as quick buttons (2 per row) - max 6
+    if trending:
+        clean = []
+        for t in trending[:6]:
+            if not t:
+                continue
+            s = str(t).strip()
+            if len(s) < 2 or len(s) > 25:
+                continue
+            # skip non-alphanumeric junk
+            if not re.match(r'^[a-zA-Z0-9 :\-]+$', s):
+                continue
+            clean.append(s)
+        # dedup preserving order
+        seen = set()
+        uniq = []
+        for x in clean:
+            lx = x.lower()
+            if lx not in seen:
+                seen.add(lx)
+                uniq.append(x)
+        clean = uniq[:6]
+        if clean:
+            for i in range(0, len(clean), 2):
+                row = []
+                for j in range(2):
+                    if i + j < len(clean):
+                        title = clean[i + j]
+                        short = title if len(title) <= 18 else title[:17] + '…'
+                        # callback to directly search this title
+                        row.append(blue(f'🔍 {short}', callback_data=f'trend_search#{title[:30]}'))
+                if row:
+                    buttons.append(row)
+
+    return InlineKeyboardMarkup(buttons)
+
+
+def build_trending_keyboard(trending, prefix='trend_search'):
+    """Helper to build trending buttons for other screens."""
+    if not trending:
+        return []
+    rows = []
+    for i in range(0, min(len(trending), 6), 2):
+        row = []
+        for j in range(2):
+            idx = i + j
+            if idx < len(trending):
+                t = trending[idx]
+                short = t if len(t) <= 18 else t[:17] + '…'
+                row.append(blue(f'🔍 {short}', callback_data=f'{prefix}#{t[:30]}'))
+        if row:
+            rows.append(row)
+    return rows
 
 
 async def wait_for_reply(chat_id: int, user_id: int, timeout: int = 60) -> Message:

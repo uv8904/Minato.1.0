@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MinatoVerse - Voice Search</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#070a12;--panel:#111525;--line:rgba(255,255,255,0.08);--text:#eef0f7;--muted:#8b95b0;--brand:#2e5bff;--purple:#822ce7;--pink:#ff3d9a;--grad:linear-gradient(135deg,#2e5bff,#822ce7,#ff3d9a);--ok:#34d399}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,sans-serif;display:flex;min-height:100vh}
+.left{flex:1;padding:40px;max-width:600px;margin:auto}
+.right{flex:1;display:flex;align-items:center;justify-content:center;padding:30px;border-left:1px solid var(--line);background:radial-gradient(800px 500px at 20% 0%,rgba(130,44,231,0.2),transparent 60%)}
+.badge{display:inline-flex;gap:8px;padding:6px 14px;border-radius:999px;background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.2);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6ee7b7}
+h1{font-family:Sora,sans-serif;font-size:38px;line-height:1.1;letter-spacing:-1px;margin:16px 0}
+h1 span{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--muted);line-height:1.6}
+.steps{display:flex;flex-direction:column;gap:14px;margin-top:20px}
+.step{display:flex;gap:14px;padding:16px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,0.03)}
+.step i{width:40px;height:40px;border-radius:12px;background:var(--grad);display:grid;place-items:center;flex:none;font-style:normal}
+.phone{width:360px;background:#0f0f0f;border-radius:28px;border:1px solid rgba(255,255,255,0.12);overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,0.9);display:flex;flex-direction:column}
+.p-top{height:52px;background:#212121;display:flex;align-items:center;gap:10px;padding:0 14px}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--grad);display:grid;place-items:center;font-weight:700;font-size:13px}
+.p-body{padding:14px;display:flex;flex-direction:column;gap:12px;min-height:480px;background:#0e1621}
+.bubble{max-width:75%;padding:10px 14px;border-radius:18px;font-size:13px;line-height:1.4}
+.bubble.me{align-self:flex-end;background:var(--grad);color:#fff;border-radius:18px 18px 4px 18px}
+.bubble.bot{align-self:flex-start;background:#182533;color:#fff;border-radius:18px 18px 18px 4px}
+.voice{display:flex;align-items:center;gap:12px;background:var(--grad);color:#fff;padding:12px 16px;border-radius:24px;align-self:flex-end;max-width:85%}
+.wave{display:flex;gap:3px;align-items:center}
+.wave i{width:3px;background:#fff;border-radius:999px;display:block;animation:wave 1s infinite}
+.wave i:nth-child(1){height:12px;animation-delay:0s}
+.wave i:nth-child(2){height:20px;animation-delay:.1s}
+.wave i:nth-child(3){height:16px;animation-delay:.2s}
+.wave i:nth-child(4){height:24px;animation-delay:.3s}
+.wave i:nth-child(5){height:14px;animation-delay:.4s}
+@keyframes wave{0%,100%{transform:scaleY(0.5)}50%{transform:scaleY(1)}}
+.transcript{background:#182533;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px;font-size:12px}
+.transcript b{color:#8aa0ff}
+.results{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.res{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(255,255,255,0.05);border-radius:10px;font-size:12px;border:1px solid var(--line)}
+.code{font-family:monospace;background:rgba(255,255,255,0.08);padding:2px 6px;border-radius:4px;font-size:12px}
+@media(max-width:900px){body{flex-direction:column}.right{border-left:none;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<div class="left">
+  <span class="badge">✅ OPTION C SHIPPED - VOICE SEARCH</span>
+  <h1>Say it, <span>don't type it</span></h1>
+  <p class="sub">Users send voice note "Jawan 2023" → Groq Whisper-large-v3 transcribes in 0.8s → bot searches instantly. Works in PM + Groups. No typing needed - perfect for Hindi users.</p>
+  
+  <div class="steps">
+    <div class="step"><i>🎙️</i><div><b>User sends voice note</b><br><small style="color:var(--muted)">In PM or Group: hold mic, say "Kalki 2898 AD Hindi" (2-5 sec)</small></div></div>
+    <div class="step"><i>🧠</i><div><b>Groq Whisper transcribes</b><br><small style="color:var(--muted)">Model: whisper-large-v3-turbo, 0.8s, supports English + Hindi auto-detect. Cleans filler words.</small></div></div>
+    <div class="step"><i>⚡</i><div><b>Instant search</b><br><small style="color:var(--muted)">Transcription → cleaned query → auto_filter() → results with posters. Same as typing.</small></div></div>
+    <div class="step"><i>🔧</i><div><b>Code: plugins/voice_search.py</b><br><small style="color:var(--muted)">Handles voice, audio, video_note. Temp file auto-deleted. Shows "🎙️ transcribing..." status. Fallback to text if fails.</small></div></div>
+  </div>
+
+  <div style="margin-top:20px;padding:14px;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.2);border-radius:12px;font-size:13px">
+    <b style="color:var(--ok)">How to test:</b><br>
+    1. Set <span class="code">GROQ_API_KEY</span> (you already have one in info.py)<br>
+    2. In bot PM, send voice note: "Animal Hindi 2023"<br>
+    3. Bot replies: 🎙️ You said: Animal Hindi 2023 → 🔍 Searching → results<br><br>
+    <b>Group mode:</b> Ignores >30s voices, respects auto_ffilter setting. Shows who asked: "🎙️ @User said: Jawan"
+  </div>
+</div>
+
+<div class="right">
+  <div class="phone">
+    <div class="p-top"><div class="avatar">M</div><div><div style="font-weight:600;font-size:14px">MinatoVerse</div><div style="font-size:11px;color:#8b95b0">⚡ voice search enabled</div></div></div>
+    <div class="p-body">
+      <div class="bubble me">/start</div>
+      <div class="bubble bot">🌿 Welcome to MinatoVerse...<br>Just type any movie name!</div>
+      <div class="bubble me">How to search without typing?</div>
+      <div class="bubble bot">🎙️ Just send a voice note!<br>Say "Jawan 2023" and I'll find it ⚡</div>
+      
+      <div class="voice"><div class="wave"><i></i><i></i><i></i><i></i><i></i></div><span style="font-size:13px;font-weight:600">0:03</span><span style="margin-left:auto">🎙️</span></div>
+      
+      <div class="transcript"><b>🎙️ You said:</b> Jawan 2023<br><b>🔍 Searching for:</b> Jawan 2023<br><small style="color:var(--muted)">🧠 Groq Whisper-large-v3 • 0.8s</small></div>
+      
+      <div class="bubble bot" style="padding:0;overflow:hidden">
+        <div style="padding:10px 12px"><b>Results for 🔍 Jawan 2023</b></div>
+        <div class="results" style="padding:0 8px 8px">
+          <div class="res"><span>📦 1.2GB • Jawan 2023 1080p Hindi</span><span>🔥</span></div>
+          <div class="res"><span>📦 800MB • Jawan 2023 720p Hindi</span><span>🔥</span></div>
+          <div class="res"><span>📦 450MB • Jawan 2023 480p Hindi</span><span></span></div>
+        </div>
+      </div>
+    </div>
+    <div style="height:48px;background:#212121;display:flex;align-items:center;padding:0 12px;gap:10px"><span style="flex:1;background:#181818;border-radius:20px;padding:8px 14px;font-size:13px;color:#6b7a94">🎙️ Hold to speak, release to search...</span><span style="width:36px;height:36px;border-radius:50%;background:var(--grad);display:grid;place-items:center">🎙️</span></div>
+  </div>
+</div>
+</body>
+</html>

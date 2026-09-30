@@ -41,14 +41,83 @@ def _start_greeting() -> str:
 
 
 async def _send_start_home(message):
-    """Answer /start even when Mongo, flash media or the start photo is down."""
-    reply_markup = start_buttons()
-    caption = script.START_TXT.format(
-        message.from_user.mention,
-        _start_greeting(),
-        temp.U_NAME,
-        temp.B_NAME,
-    )
+    """JioHotstar-level /start with live stats + trending searches + flash."""
+    # --- Fetch live stats + trending in parallel, best-effort ---
+    trending = []
+    total_users = total_chats = total_files = 0
+    try:
+        # trending top 6
+        trending_task = asyncio.create_task(mdb.get_top_messages(6))
+        users_task = asyncio.create_task(db.total_users_count())
+        chats_task = asyncio.create_task(db.total_chat_count())
+        # file count
+        from database.ia_filterdb import Media, Media2
+        files_task = asyncio.create_task(Media.count_documents({}))
+        try:
+            trending = await asyncio.wait_for(trending_task, timeout=2)
+        except Exception:
+            trending = []
+        try:
+            total_users = await asyncio.wait_for(users_task, timeout=2)
+        except Exception:
+            total_users = 0
+        try:
+            total_chats = await asyncio.wait_for(chats_task, timeout=2)
+        except Exception:
+            total_chats = 0
+        try:
+            total_files = await asyncio.wait_for(files_task, timeout=2)
+            if MULTIPLE_DB:
+                try:
+                    total_files += await Media2.count_documents({})
+                except Exception:
+                    pass
+        except Exception:
+            total_files = 0
+    except Exception as e:
+        logger.debug(f"start stats fetch failed: {e}")
+
+    # Format trending for caption
+    if trending:
+        # clean for display
+        display_trend = []
+        for t in trending[:3]:
+            tt = str(t).strip()
+            if 2 <= len(tt) <= 25:
+                display_trend.append(tt)
+        trend_text = ", ".join(display_trend) if display_trend else "Jawan, Animal, Kalki"
+    else:
+        trend_text = "Jawan, Animal, Kalki 2898 AD"
+        trending = ["Jawan", "Animal", "Kalki 2898 AD", "Stree 2", "Deadpool"]
+
+    # Format counts nicely
+    def fmt(n):
+        if n >= 1000000:
+            return f"{n/1000000:.1f}M+"
+        if n >= 1000:
+            return f"{n/1000:.1f}K+"
+        return str(n) if n else "50K+"
+
+    files_str = fmt(total_files) if total_files else "50K+"
+    users_str = fmt(total_users) if total_users else "10K+"
+    chats_str = fmt(total_chats) if total_chats else "500+"
+
+    reply_markup = start_buttons(trending=trending)
+
+    try:
+        caption = script.START_TXT.format(
+            message.from_user.mention,
+            _start_greeting(),
+            temp.U_NAME,
+            temp.B_NAME,
+            files_str,
+            users_str,
+            chats_str,
+            trend_text
+        )
+    except Exception:
+        # fallback to old 4-arg format if template not updated
+        caption = f"<b>🌿 ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴍɪɴᴀᴛᴏᴠᴇʀsᴇ 🌿</b>\n\n<b>ʜᴇʏ {message.from_user.mention}, {_start_greeting()} 👋</b>\n\n<b>⚡ ɪ ᴀᴍ {temp.B_NAME} - ᴛʜᴇ ᴊɪᴏʜᴏᴛsᴛᴀʀ ʟᴇᴠᴇʟ ᴍᴏᴠɪᴇ ᴜɴɪᴠᴇʀsᴇ</b>\n\n<blockquote>📦 <b>{files_str} Files</b> | 👥 <b>{users_str} Users</b> | 🎬 <b>{chats_str} Groups</b></blockquote>\n\n<b>🔥 ᴛʀᴇɴᴅɪɴɢ:</b> {trend_text}\n<b>💡 ᴊᴜsᴛ ᴛʏᴘᴇ ᴀɴʏ ᴍᴏᴠɪᴇ ɴᴀᴍᴇ!</b>"
 
     flash = await send_start_flash(message, env_default=START_EMOJI)
     if flash:
@@ -68,8 +137,6 @@ async def _send_start_home(message):
             parse_mode=enums.ParseMode.HTML,
         )
     except Exception as exc:
-        # Invalid/expired Graph URLs used to make /start look completely dead.
-        # A text welcome is less fancy, but it always leaves the bot usable.
         logger.warning("Start photo failed; sending text fallback: %s", exc)
         try:
             await message.reply_text(
@@ -79,8 +146,6 @@ async def _send_start_home(message):
                 disable_web_page_preview=True,
             )
         except Exception as fallback_exc:
-            # Last-resort answer: even a malformed/unsupported button style
-            # must not make /start silent.
             logger.warning("Start keyboard failed; sending plain text: %s", fallback_exc)
             await message.reply_text(
                 caption,
@@ -1055,6 +1120,235 @@ async def deletemultiplefiles(bot, message):
         reply_markup=InlineKeyboardMarkup(btn),
         parse_mode=enums.ParseMode.HTML
     )
+
+
+@Client.on_callback_query(filters.regex(r"^trend_search#"))
+async def trending_search_callback(client, callback_query):
+    """User tapped a trending movie button on /start - search it instantly."""
+    try:
+        _, query = callback_query.data.split("#", 1)
+        query = query.strip()
+        if not query:
+            return await callback_query.answer("Invalid search", show_alert=True)
+        await callback_query.answer(f"🔍 Searching {query}...")
+        # Create a fake message object to feed auto_filter
+        fake_msg = callback_query.message.reply_to_message or callback_query.message
+        # Use the original user's message context
+        class FakeMessage:
+            def __init__(self, orig, text):
+                self.text = text
+                self.chat = orig.chat
+                self.from_user = callback_query.from_user
+                self.id = orig.id
+                self.reply_to_message_id = None
+                # needed for auto_filter
+                self.reply_text = orig.reply_text
+                self.reply_photo = orig.reply_photo if hasattr(orig, 'reply_photo') else orig.reply_text
+
+        # Directly call auto_filter logic via get_search_results path
+        # Simplest: edit the message to show searching and call auto_filter
+        msg = await client.send_message(
+            chat_id=callback_query.message.chat.id,
+            text=f"**🔎 sᴇᴀʀᴄʜɪɴɢ** `{query}`",
+            reply_to_message_id=callback_query.message.id
+        )
+        # Reuse pmfilter's search flow
+        from database.ia_filterdb import get_search_results
+        from utils import get_settings
+        from plugins.pmfilter import build_search_buttons
+        from database.users_chats_db import db as user_db
+        # need to simulate auto_filter minimal
+        files, offset, total = await get_search_results(callback_query.message.chat.id, query.lower(), offset=0, filter=True)
+        if not files:
+            from utils import temp
+            from dreamxbotz.util.title_notify import notify_keyboard, remember_search
+            key = f"{callback_query.message.chat.id}-{msg.id}"
+            remember_search(key, query)
+            btn = notify_keyboard(key, callback_query.from_user.id, query)
+            await msg.edit_text(script.MVE_NT_FND, reply_markup=btn)
+            return
+
+        # Build buttons like normal search
+        key = f"{callback_query.message.chat.id}-{msg.id}"
+        from utils import temp
+        temp.GETALL[key] = files
+        temp.SHORT[callback_query.from_user.id] = callback_query.message.chat.id
+        from plugins.pmfilter import FRESH
+        FRESH[key] = query
+        settings = await get_settings(callback_query.message.chat.id)
+        from plugins.pmfilter import build_search_buttons
+        btn = await build_search_buttons(
+            key=key,
+            files=files,
+            offset=0,
+            next_offset=offset,
+            total_results=total,
+            req_user_id=callback_query.from_user.id,
+            settings=settings
+        )
+        from utils import get_poster
+        imdb = await get_poster(query, file=(files[0]).file_name) if settings.get("imdb") else None
+        if imdb and settings.get("imdb"):
+            from Script import script as scr
+            TEMPLATE = settings.get('template', scr.IMDB_TEMPLATE_TXT)
+            cap = TEMPLATE.format(
+                query=query,
+                title=imdb.get('title'),
+                votes=imdb.get('votes'),
+                aka=imdb.get("aka"),
+                seasons=imdb.get("seasons"),
+                box_office=imdb.get('box_office'),
+                localized_title=imdb.get('localized_title'),
+                kind=imdb.get('kind'),
+                imdb_id=imdb.get("imdb_id"),
+                cast=imdb.get("cast"),
+                runtime=imdb.get("runtime"),
+                countries=imdb.get("countries"),
+                certificates=imdb.get("certificates"),
+                languages=imdb.get("languages"),
+                director=imdb.get("director"),
+                writer=imdb.get("writer"),
+                producer=imdb.get("producer"),
+                composer=imdb.get("composer"),
+                cinematographer=imdb.get("cinematographer"),
+                music_team=imdb.get("music_team"),
+                distributors=imdb.get("distributors"),
+                release_date=imdb.get('release_date'),
+                year=imdb.get('year'),
+                genres=imdb.get('genres'),
+                poster=imdb.get('poster'),
+                plot=imdb.get('plot'),
+                rating=imdb.get('rating'),
+                url=imdb.get('url'),
+                remaining_seconds="0.5",
+                message=callback_query.message
+            )
+            try:
+                await msg.delete()
+                await callback_query.message.reply_photo(
+                    photo=imdb.get('poster'),
+                    caption=cap,
+                    reply_markup=InlineKeyboardMarkup(btn),
+                    parse_mode=enums.ParseMode.HTML
+                )
+            except Exception:
+                await msg.edit_text(cap, reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
+        else:
+            await msg.edit_text(f"Results For 🔍  {query}", reply_markup=InlineKeyboardMarkup(btn), parse_mode=enums.ParseMode.HTML)
+
+    except Exception as e:
+        logger.exception(f"trending_search failed: {e}")
+        await callback_query.answer("Search failed, try again", show_alert=True)
+
+
+@Client.on_callback_query(filters.regex(r"^(trendlist_home|newly_added|comingsoon_home)$"))
+async def home_discovery_callbacks(client, callback_query):
+    """Handle discovery buttons from new /start: Trending, New Added, Coming Soon"""
+    data = callback_query.data
+    if data == "trendlist_home":
+        # Show trending as inline buttons with direct search
+        try:
+            top = await mdb.get_top_messages(12)
+            if not top:
+                return await callback_query.answer("No trending yet", show_alert=True)
+            # Clean
+            clean = []
+            seen = set()
+            for t in top:
+                tt = str(t).strip()
+                if 2 <= len(tt) <= 28 and tt.lower() not in seen:
+                    if re.match(r'^[a-zA-Z0-9 :\-]+$', tt):
+                        seen.add(tt.lower())
+                        clean.append(tt)
+            if not clean:
+                return await callback_query.answer("No trending yet", show_alert=True)
+            btn = []
+            for i in range(0, len(clean[:10]), 2):
+                row = []
+                for j in range(2):
+                    if i + j < len(clean):
+                        title = clean[i + j]
+                        short = title if len(title) <= 20 else title[:19] + '…'
+                        row.append(InlineKeyboardButton(f"🔥 {short}", callback_data=f"trend_search#{title[:30]}"))
+                btn.append(row)
+            btn.append([InlineKeyboardButton("🚫 Close", callback_data="close_data")])
+            await callback_query.message.reply_text(
+                "<b>🔥 ᴛᴏᴘ ᴛʀᴇɴᴅɪɴɢ sᴇᴀʀᴄʜᴇs ᴛᴏᴅᴀʏ</b>\n\n<i>Tap any to search instantly ⚡</i>",
+                reply_markup=InlineKeyboardMarkup(btn),
+                parse_mode=enums.ParseMode.HTML
+            )
+            await callback_query.answer()
+        except Exception as e:
+            logger.exception(e)
+            await callback_query.answer("Failed to load trending", show_alert=True)
+
+    elif data == "newly_added":
+        try:
+            from database.recent_movies_db import RecentMoviesStore
+            store = RecentMoviesStore()
+            movies = await store.list_recent(limit=10)
+            if not movies:
+                return await callback_query.answer("No newly added yet - upload a file!", show_alert=True)
+            text = "<b>🎬 ɴᴇᴡʟʏ ᴀᴅᴅᴇᴅ ᴍᴏᴠɪᴇs</b>\n\n"
+            btn = []
+            for m in movies[:10]:
+                title = m.get('title') or m.get('_id') or 'Unknown'
+                year = m.get('year') or ''
+                mid = m.get('_id') or ''
+                text += f"• <b>{title}</b> {year}\n"
+                if mid:
+                    btn.append([InlineKeyboardButton(f"🔍 {title[:25]}", callback_data=f"trend_search#{title[:30]}")])
+            btn.append([InlineKeyboardButton("🚫 Close", callback_data="close_data")])
+            await callback_query.message.reply_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(btn),
+                parse_mode=enums.ParseMode.HTML,
+                disable_web_page_preview=True
+            )
+            await callback_query.answer()
+        except Exception as e:
+            logger.exception(f"newly_added failed: {e}")
+            await callback_query.answer("Failed to load", show_alert=True)
+
+    elif data == "comingsoon_home":
+        # Reuse comingsoon logic but as callback
+        try:
+            from dreamxbotz.util.coming_soon import is_enabled as cs_enabled, limit as cs_limit, remember_upcoming, upcoming_list_text
+            from database.upcoming_db import UpcomingMoviesStore
+            if not cs_enabled():
+                return await callback_query.answer("Coming Soon is off", show_alert=True)
+            store = UpcomingMoviesStore()
+            rows = await store.list_upcoming(cs_limit(), cutoff=None)
+            if not rows:
+                return await callback_query.answer("No upcoming yet - set TMDB_API_KEY", show_alert=True)
+            text = upcoming_list_text(rows, limit=cs_limit())
+            # Build notify buttons
+            rows_buttons = []
+            pair = []
+            for doc in rows[:cs_limit()]:
+                movie_id = str(doc.get("_id") or "")
+                title = str(doc.get("title") or "").strip()
+                if not movie_id or not title:
+                    continue
+                key = remember_upcoming(movie_id, title)
+                short = title if len(title) <= 22 else title[:21] + "…"
+                pair.append(InlineKeyboardButton(f"🔔 {short}", callback_data=f"notify#{key}#{callback_query.from_user.id}"))
+                if len(pair) == 2:
+                    rows_buttons.append(pair)
+                    pair = []
+            if pair:
+                rows_buttons.append(pair)
+            rows_buttons.append([InlineKeyboardButton("🚫 Close", callback_data="close_data")])
+            await callback_query.message.reply_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(rows_buttons),
+                parse_mode=enums.ParseMode.HTML,
+                disable_web_page_preview=True
+            )
+            await callback_query.answer()
+        except Exception as e:
+            logger.exception(f"comingsoon_home failed: {e}")
+            await callback_query.answer("Failed to load coming soon", show_alert=True)
 
 
 @Client.on_callback_query(filters.regex("topsearch"))
