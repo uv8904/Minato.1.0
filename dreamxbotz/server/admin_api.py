@@ -203,7 +203,7 @@ async def admin_dashboard(request: web.Request):
     """Admin Dashboard HTML - JioHotstar level"""
     is_admin = _is_admin_request(request)
     
-    html = f"""
+    html = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -213,50 +213,50 @@ async def admin_dashboard(request: web.Request):
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
-:root{{--bg:#070a12;--panel:#111525;--panel2:#171c30;--line:rgba(255,255,255,0.08);--text:#eef0f7;--muted:#8b95b0;--brand:#2e5bff;--purple:#822ce7;--pink:#ff3d9a;--gold:#f5c518;--ok:#34d399;--warn:#fbbf24;--bad:#f87171;--grad:linear-gradient(135deg,var(--brand),var(--purple),var(--pink));--font-d:"Sora",sans-serif;--font-b:"Inter",sans-serif}}
-*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-b);line-height:1.5}}
-a{{color:inherit;text-decoration:none}}
-.top{{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:rgba(7,10,18,0.85);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}}
-.brand{{display:flex;align-items:center;gap:12px;font-family:var(--font-d);font-weight:700;font-size:16px}}
-.brand i{{width:38px;height:38px;border-radius:12px;background:var(--grad);display:grid;place-items:center;color:#fff;font-style:normal;font-size:14px;box-shadow:0 8px 24px -8px rgba(130,44,231,0.8)}}
-.brand small{{font-family:var(--font-b);font-weight:500;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-left:6px}}
-.btn{{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);font-weight:600;font-size:13px;cursor:pointer;transition:.15s}}
-.btn:hover{{border-color:rgba(255,255,255,0.15);transform:translateY(-1px)}}
-.btn-primary{{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 10px 24px -10px rgba(130,44,231,0.8)}}
-.btn-gold{{background:linear-gradient(135deg,var(--gold),#ffdd7a);color:#1a1500;border-color:transparent}}
-.wrap{{width:min(1280px,100% - 32px);margin:24px auto 60px}}
-.h1{{font-family:var(--font-d);font-size:28px;margin:0;letter-spacing:-0.5px}}
-.h1 span{{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}}
-.sub{{color:var(--muted);font-size:13px;margin:6px 0 20px}}
-.grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}}
-@media(max-width:1000px){{.grid{{grid-template-columns:repeat(2,1fr)}}}}
-@media(max-width:600px){{.grid{{grid-template-columns:1fr}}}}
-.card{{border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,var(--panel),var(--panel2));padding:18px;position:relative;overflow:hidden}}
-.card::before{{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--brand),transparent);opacity:0.5}}
-.kpi-label{{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;display:flex;align-items:center;gap:8px}}
-.kpi-label i{{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-style:normal;font-size:14px}}
-.kpi{{font-family:var(--font-d);font-size:32px;font-weight:700;margin:8px 0 4px;letter-spacing:-1px}}
-.kpi small{{font-family:var(--font-b);font-size:13px;color:var(--muted);font-weight:500;letter-spacing:0}}
-.kpi-sub{{font-size:12px;color:var(--muted)}}
-.panels{{display:grid;grid-template-columns:1.2fr 0.8fr;gap:14px;margin-top:16px}}
-@media(max-width:1000px){{.panels{{grid-template-columns:1fr}}}}
-.chart-wrap{{height:300px;margin-top:12px}}
-.table{{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}}
-.table th{{text-align:left;color:var(--muted);font-size:11px;letter-spacing:0.8px;text-transform:uppercase;padding:10px;border-bottom:1px solid var(--line)}}
-.table td{{padding:12px 10px;border-bottom:1px solid rgba(255,255,255,0.05)}}
-.badge{{padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:6px}}
-.badge-ok{{background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.25);color:#6ee7b7}}
-.badge-warn{{background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.25);color:#fcd34d}}
-.badge-gold{{background:rgba(245,197,24,0.14);border:1px solid rgba(245,197,24,0.3);color:#ffdd7a}}
-.badge-purple{{background:rgba(130,44,231,0.15);border:1px solid rgba(130,44,231,0.3);color:#c4b5fd}}
-.muted{{color:var(--muted)}}
-.alert{{padding:12px 16px;border-radius:12px;font-size:13px;margin-bottom:16px;display:flex;align-items:center;gap:10px}}
-.alert-warn{{background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);color:#fcd34d}}
-.alert-ok{{background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.2);color:#6ee7b7}}
-.progress{{height:6px;border-radius:999px;background:rgba(255,255,255,0.08);overflow:hidden;margin-top:8px}}
-.progress i{{display:block;height:100%;background:var(--grad);border-radius:999px}}
-.actions{{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}}
-.tag{{padding:4px 10px;border-radius:999px;background:rgba(255,255,255,0.06);border:1px solid var(--line);font-size:11px}}
+:root{--bg:#070a12;--panel:#111525;--panel2:#171c30;--line:rgba(255,255,255,0.08);--text:#eef0f7;--muted:#8b95b0;--brand:#2e5bff;--purple:#822ce7;--pink:#ff3d9a;--gold:#f5c518;--ok:#34d399;--warn:#fbbf24;--bad:#f87171;--grad:linear-gradient(135deg,var(--brand),var(--purple),var(--pink));--font-d:"Sora",sans-serif;--font-b:"Inter",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-b);line-height:1.5}
+a{color:inherit;text-decoration:none}
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:rgba(7,10,18,0.85);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px;font-family:var(--font-d);font-weight:700;font-size:16px}
+.brand i{width:38px;height:38px;border-radius:12px;background:var(--grad);display:grid;place-items:center;color:#fff;font-style:normal;font-size:14px;box-shadow:0 8px 24px -8px rgba(130,44,231,0.8)}
+.brand small{font-family:var(--font-b);font-weight:500;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-left:6px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);font-weight:600;font-size:13px;cursor:pointer;transition:.15s}
+.btn:hover{border-color:rgba(255,255,255,0.15);transform:translateY(-1px)}
+.btn-primary{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 10px 24px -10px rgba(130,44,231,0.8)}
+.btn-gold{background:linear-gradient(135deg,var(--gold),#ffdd7a);color:#1a1500;border-color:transparent}
+.wrap{width:min(1280px,100% - 32px);margin:24px auto 60px}
+.h1{font-family:var(--font-d);font-size:28px;margin:0;letter-spacing:-0.5px}
+.h1 span{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--muted);font-size:13px;margin:6px 0 20px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media(max-width:1000px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.grid{grid-template-columns:1fr}}
+.card{border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,var(--panel),var(--panel2));padding:18px;position:relative;overflow:hidden}
+.card::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--brand),transparent);opacity:0.5}
+.kpi-label{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;display:flex;align-items:center;gap:8px}
+.kpi-label i{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-style:normal;font-size:14px}
+.kpi{font-family:var(--font-d);font-size:32px;font-weight:700;margin:8px 0 4px;letter-spacing:-1px}
+.kpi small{font-family:var(--font-b);font-size:13px;color:var(--muted);font-weight:500;letter-spacing:0}
+.kpi-sub{font-size:12px;color:var(--muted)}
+.panels{display:grid;grid-template-columns:1.2fr 0.8fr;gap:14px;margin-top:16px}
+@media(max-width:1000px){.panels{grid-template-columns:1fr}}
+.chart-wrap{height:300px;margin-top:12px}
+.table{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+.table th{text-align:left;color:var(--muted);font-size:11px;letter-spacing:0.8px;text-transform:uppercase;padding:10px;border-bottom:1px solid var(--line)}
+.table td{padding:12px 10px;border-bottom:1px solid rgba(255,255,255,0.05)}
+.badge{padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:6px}
+.badge-ok{background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.25);color:#6ee7b7}
+.badge-warn{background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.25);color:#fcd34d}
+.badge-gold{background:rgba(245,197,24,0.14);border:1px solid rgba(245,197,24,0.3);color:#ffdd7a}
+.badge-purple{background:rgba(130,44,231,0.15);border:1px solid rgba(130,44,231,0.3);color:#c4b5fd}
+.muted{color:var(--muted)}
+.alert{padding:12px 16px;border-radius:12px;font-size:13px;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+.alert-warn{background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);color:#fcd34d}
+.alert-ok{background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.2);color:#6ee7b7}
+.progress{height:6px;border-radius:999px;background:rgba(255,255,255,0.08);overflow:hidden;margin-top:8px}
+.progress i{display:block;height:100%;background:var(--grad);border-radius:999px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.tag{padding:4px 10px;border-radius:999px;background:rgba(255,255,255,0.06);border:1px solid var(--line);font-size:11px}
 </style>
 </head>
 <body>
@@ -281,7 +281,7 @@ a{{color:inherit;text-decoration:none}}
     </div>
   </div>
 
-  {"<div class='alert alert-warn'>⚠️ Preview mode - admin auth bypassed for e2b.app. In production, add ?admin_id=YOUR_ID to URL.</div>" if is_admin else "<div class='alert alert-warn'>🔒 Not admin - showing demo data. Add ?admin_id=YOUR_TELEGRAM_ID</div>"}
+  __ADMIN_BANNER__
 
   <div class="grid" id="kpiGrid">
     <div class="card"><div class="kpi-label"><i style="background:rgba(46,91,255,0.15);color:#8aa0ff">👥</i> Total Users</div><div class="kpi" id="kUsers">—</div><div class="kpi-sub" id="kUsersSub">all time</div><div class="progress"><i id="pUsers" style="width:0%"></i></div></div>
@@ -362,12 +362,12 @@ a{{color:inherit;text-decoration:none}}
 </main>
 
 <script>
-function fmt(n){{return new Intl.NumberFormat().format(n||0)}}
-function esc(s){{return String(s).replace(/[&<>"]/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}}[c]))}}
+function fmt(n){return new Intl.NumberFormat().format(n||0)}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 
 let mainChart=null;
-async function refresh(){{
-  try{{
+async function refresh(){
+  try{
     let res = await fetch('/api/admin/stats' + location.search);
     let data = await res.json();
     if(!data.ok) throw new Error('API failed');
@@ -376,11 +376,11 @@ async function refresh(){{
     document.getElementById('kUsers').textContent = fmt(data.users?.total || 0);
     document.getElementById('kUsersSub').textContent = fmt(data.users?.chats || 0) + ' groups connected';
     document.getElementById('kFiles').textContent = fmt(data.files?.total || 0);
-    document.getElementById('kFilesSub').textContent = `DB1: ${{fmt(data.files?.db1)}}` + (data.files?.db2 ? ` + DB2: ${{fmt(data.files?.db2)}}` : '');
+    document.getElementById('kFilesSub').textContent = `DB1: ${fmt(data.files?.db1)}` + (data.files?.db2 ? ` + DB2: ${fmt(data.files?.db2)}` : '');
     document.getElementById('kPrem').textContent = fmt(data.premium?.active || 0);
-    document.getElementById('kPremSub').textContent = `${{fmt(data.search?.notify_requests||0)}} notify waiting`;
+    document.getElementById('kPremSub').textContent = `${fmt(data.search?.notify_requests||0)} notify waiting`;
     document.getElementById('kMovies').textContent = fmt((data.movies?.recent||0) + (data.movies?.upcoming||0));
-    document.getElementById('kMoviesSub').textContent = `${{fmt(data.movies?.recent)}} recent + ${{fmt(data.movies?.upcoming)}} upcoming`;
+    document.getElementById('kMoviesSub').textContent = `${fmt(data.movies?.recent)} recent + ${fmt(data.movies?.upcoming)} upcoming`;
     document.getElementById('kChats').textContent = fmt(data.users?.chats || 0);
     document.getElementById('kNotify').textContent = fmt(data.search?.notify_requests || 0);
     document.getElementById('kMissing').textContent = fmt(data.movies?.missing_posters || 0);
@@ -398,33 +398,33 @@ async function refresh(){{
     tbody.innerHTML='';
     let top = data.search?.top || [];
     if(!top.length) tbody.innerHTML='<tr><td colspan=3 class=muted>Abhi koi search nahi - bot pe search karo</td></tr>';
-    else top.slice(0,8).forEach((t,i)=>{{
+    else top.slice(0,8).forEach((t,i)=>{
       let tr=document.createElement('tr');
-      tr.innerHTML=`<td>${{i+1}}</td><td><b>${{esc(t)}}</b></td><td><span class="badge badge-gold">🔥 Trending</span></td>`;
+      tr.innerHTML=`<td>${i+1}</td><td><b>${esc(t)}</b></td><td><span class="badge badge-gold">🔥 Trending</span></td>`;
       tbody.appendChild(tr);
-    }});
+    });
     
     // Recent
     let rBody = document.querySelector('#recentTable tbody');
     rBody.innerHTML='';
     let recent = data.movies?.recent_list || [];
     if(!recent.length) rBody.innerHTML='<tr><td colspan=3 class=muted>No recent - upload a file to channel</td></tr>';
-    else recent.forEach(m=>{{
+    else recent.forEach(m=>{
       let tr=document.createElement('tr');
-      tr.innerHTML=`<td><b>${{esc(m.title||m.id)}}</b></td><td>${{m.year||'—'}}</td><td><span class="badge badge-ok">✅ Live</span></td>`;
+      tr.innerHTML=`<td><b>${esc(m.title||m.id)}</b></td><td>${m.year||'—'}</td><td><span class="badge badge-ok">✅ Live</span></td>`;
       rBody.appendChild(tr);
-    }});
+    });
     
     // Chart
     renderChart(data);
     
-  }}catch(e){{
+  }catch(e){
     console.error(e);
-    document.body.insertAdjacentHTML('beforeend', `<div style="position:fixed;bottom:20px;left:20px;right:20px;background:#1a0f0f;border:1px solid #f87171;color:#fca5a5;padding:12px;border-radius:12px;font-size:12px">⚠️ ${{e.message}} - API might be offline in preview without DB</div>`);
-  }}
-}}
+    document.body.insertAdjacentHTML('beforeend', `<div style="position:fixed;bottom:20px;left:20px;right:20px;background:#1a0f0f;border:1px solid #f87171;color:#fca5a5;padding:12px;border-radius:12px;font-size:12px">⚠️ ${e.message} - API might be offline in preview without DB</div>`);
+  }
+}
 
-function renderChart(data){{
+function renderChart(data){
   let ctx=document.getElementById('mainChart');
   if(mainChart) mainChart.destroy();
   // Fake growth data based on real counts
@@ -433,25 +433,25 @@ function renderChart(data){{
   let files = labels.map((_,i)=> Math.floor(total * (0.5 + i*0.08 + Math.random()*0.05)));
   let premium = labels.map((_,i)=> Math.floor((data.premium?.active||5) * (0.4 + i*0.12 + Math.random()*0.1)));
   
-  mainChart = new Chart(ctx, {{
+  mainChart = new Chart(ctx, {
     type:'line',
-    data:{{
+    data:{
       labels:labels,
       datasets:[
-        {{label:'Files', data:files, borderColor:'#2e5bff', backgroundColor:'rgba(46,91,255,0.12)', tension:0.4, fill:true, pointRadius:3}},
-        {{label:'Premium', data:premium, borderColor:'#f5c518', backgroundColor:'rgba(245,197,24,0.12)', tension:0.4, fill:true, pointRadius:3}}
+        {label:'Files', data:files, borderColor:'#2e5bff', backgroundColor:'rgba(46,91,255,0.12)', tension:0.4, fill:true, pointRadius:3},
+        {label:'Premium', data:premium, borderColor:'#f5c518', backgroundColor:'rgba(245,197,24,0.12)', tension:0.4, fill:true, pointRadius:3}
       ]
-    }},
-    options:{{
+    },
+    options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{{legend:{{labels:{{color:'#8b95b0',font:{{size:11}}}}}}}},
-      scales:{{
-        x:{{grid:{{color:'rgba(255,255,255,0.04)'}}, ticks:{{color:'#6b7a94'}}}},
-        y:{{beginAtZero:true, grid:{{color:'rgba(255,255,255,0.06)'}}, ticks:{{color:'#6b7a94'}}}}
-      }}
-    }}
-  }});
-}}
+      plugins:{legend:{labels:{color:'#8b95b0',font:{size:11}}}},
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#6b7a94'}},
+        y:{beginAtZero:true, grid:{color:'rgba(255,255,255,0.06)'}, ticks:{color:'#6b7a94'}}
+      }
+    }
+  });
+}
 
 refresh();
 setInterval(refresh, 15000);
@@ -459,4 +459,9 @@ setInterval(refresh, 15000);
 </body>
 </html>
     """
+    html = html.replace("__ADMIN_BANNER__", (
+        "<div class=\'alert alert-warn\'>⚠️ Preview mode - admin auth bypassed for e2b.app. In production, add ?admin_id=YOUR_ID to URL.</div>"
+        if is_admin else
+        "<div class=\'alert alert-warn\'>🔒 Not admin - showing demo data. Add ?admin_id=YOUR_TELEGRAM_ID</div>"
+    ))
     return web.Response(text=html, content_type="text/html")

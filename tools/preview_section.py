@@ -1161,6 +1161,10 @@ def build_app(limit: int = DEFAULT_LIMIT) -> web.Application:
     app.router.add_post("/demo/reset", demo_reset)
     app.router.add_get("/demo/reset", demo_reset)
     app.add_routes(static_assets.routes)
+    # Admin dashboard/API, using the same handlers as production.
+    from dreamxbotz.server import admin_api
+
+    app.add_routes(admin_api.routes)
     # Analytics + AI (demo memory store, same API as prod)
     try:
         from dreamxbotz.server import analytics_api
