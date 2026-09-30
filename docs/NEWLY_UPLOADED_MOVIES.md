@@ -171,6 +171,22 @@ poster comes from TMDB/IMDb, and the data lives in your `DATABASE_URI`.
    curl -s "https://YOUR-WEB-URL/api/movies/new?limit=3" | head -c 800
    ```
 
+6. **Already have a library?** The rail fills itself only for files indexed
+   *after* the feature was installed.  Backfill the older ones from the
+   auto-filter database (`ia_filterdb`) into `recent_movies`:
+
+   ```bash
+   python tools/backfill_recent_movies.py --dry-run   # preview what would be added
+   python tools/backfill_recent_movies.py             # whole library (safe to re-run)
+   python tools/backfill_recent_movies.py --limit 500 # or just the newest 500 files
+   ```
+
+   The tool reuses the bot’s own name parsing and `register_upload()` write
+   path, so titles/qualities/file ids de-duplicate exactly like live indexing
+   and re-running is harmless. Series (`S01E02`) are skipped unless you pass
+   `--include-series`. Posters are filled afterwards by the regular poster
+   worker (section 9b).
+
 ---
 
 ## 4. The section (frontend)
