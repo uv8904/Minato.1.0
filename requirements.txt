@@ -19,7 +19,8 @@ python-dotenv==0.21.1
 # ---------- Features used by the code ----------
 Pillow                      # poster editing (bot.py, Imdbposter.py, movie_api.py)
 qrcode[pil]                 # FamPay UPI QR images (plugins/FamPay.py)
-psutil                      # /status RAM-CPU stats (p_ttishow.py)
+psutil                      # /status RAM-CPU stats (p_ttishow.py) + clone RAM guard
+cryptography>=42.0.0        # Fernet encryption for user-provided clone bot tokens
 shortzy                     # shortlink generation (utils.py)
 fuzzywuzzy                  # title spelling/suggest (ai_spell.py, title_suggest.py)
 Levenshtein==0.24.0         # fast C backend for fuzzywuzzy

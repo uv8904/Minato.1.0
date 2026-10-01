@@ -1,4 +1,5 @@
 import sys
+import os
 import importlib
 import types
 from pathlib import Path
@@ -25,7 +26,10 @@ Image.MAX_IMAGE_PIXELS = 500_000_000
 import logging
 import logging.config
 
-logging.config.fileConfig('logging.conf')
+if os.environ.get("MINATO_CLONE_CHILD") == "1":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+else:
+    logging.config.fileConfig('logging.conf')
 logging.getLogger().setLevel(logging.INFO)
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
 logging.getLogger("imdbpy").setLevel(logging.ERROR)
@@ -150,29 +154,31 @@ async def dreamxbotz_start():
     bot_info = await dreamxbotz.get_me()
     dreamxbotz.username = bot_info.username
     # --- everything below is best effort -----------------------------------
-    try:
-        await initialize_clients()
-    except Exception as e:
-        logging.exception("Multi-client init failed – continuing with the main bot only: %s", e)
+    if not CLONE_CHILD_MODE:
+        try:
+            await initialize_clients()
+        except Exception as e:
+            logging.exception("Multi-client init failed – continuing with the main bot only: %s", e)
     # Auto-Import userbot (docs/AUTO_IMPORT.md): optional USER_SESSION se chalne
     # wala personal-account client jo watched chats ki files ko file-channel me
     # auto-copy karta hai. Best effort – failure here never blocks the bot.
-    try:
-        from plugins.auto_import import start_userbot
+    if not CLONE_CHILD_MODE:
+        try:
+            from plugins.auto_import import start_userbot
 
-        await start_userbot()
-    except Exception as e:
-        logging.warning(f"Auto-Import userbot not started: {e}")
-    # FamPay auto-approval: start the IMAP scanner + status poller now that the
-    # plugins have registered their handlers (docs/FAMPAY_SETUP.md).
-    try:
-        from plugins.FamPay import start_fampay_workers
+            await start_userbot()
+        except Exception as e:
+            logging.warning(f"Auto-Import userbot not started: {e}")
+        # FamPay auto-approval: start the IMAP scanner + status poller now that
+        # the plugins have registered their handlers (docs/FAMPAY_SETUP.md).
+        try:
+            from plugins.FamPay import start_fampay_workers
 
-        start_fampay_workers()
-    except Exception as e:
-        logging.warning(f"FamPay workers not started: {e}")
-    if ON_HEROKU:
-        asyncio.create_task(ping_server()) 
+            start_fampay_workers()
+        except Exception as e:
+            logging.warning(f"FamPay workers not started: {e}")
+        if ON_HEROKU:
+            asyncio.create_task(ping_server())
     # Banned users/chats: a Mongo hiccup at boot means "nobody banned" for this
     # run instead of a dead bot.
     try:
@@ -206,19 +212,36 @@ async def dreamxbotz_start():
     # Stream Mode · "Newly Uploaded Movies" (docs/NEWLY_UPLOADED_MOVIES.md):
     # prepare the section's collection (indexes + poster backfill for the newest
     # movies).  Best effort – a failure here never blocks the bot from starting.
-    try:
-        from dreamxbotz.util.new_uploaded import start_worker as start_new_uploaded
+    if not CLONE_CHILD_MODE:
+        try:
+            from dreamxbotz.util.new_uploaded import start_worker as start_new_uploaded
 
-        await start_new_uploaded()
-    except Exception as e:
-        logging.warning("Newly-uploaded movies worker not started: %s", e)
+            await start_new_uploaded()
+        except Exception as e:
+            logging.warning("Newly-uploaded movies worker not started: %s", e)
+    # Public user-created clones run as separate, resource-capped processes.
+    # Clone workers never start another supervisor (MINATO_CLONE_CHILD=1).
+    if not CLONE_CHILD_MODE:
+        try:
+            from dreamxbotz.util.clone_service import start_clone_service
+
+            restored = await start_clone_service(bot_info.id)
+            if restored:
+                logging.info("Restored %s user-created clone(s).", restored)
+        except Exception as e:
+            logging.exception("Clone supervisor did not start; main bot keeps running: %s", e)
     me = bot_info
     temp.ME = me.id
     temp.U_NAME = me.username
     temp.B_NAME = me.first_name
     temp.B_LINK = me.mention
     dreamxbotz.username = '@' + me.username
-    dreamxbotz.loop.create_task(check_expired_premium(dreamxbotz))
+    if CLONE_CHILD_MODE:
+        # The clone has its own DB; a slower expiry poll avoids multiplying
+        # the main bot's per-second Mongo reads for every clone process.
+        dreamxbotz.loop.create_task(check_expired_premium(dreamxbotz, interval=60))
+    else:
+        dreamxbotz.loop.create_task(check_expired_premium(dreamxbotz))
     logging.info(f"{me.first_name} with Pyrogram v{__version__} (Layer {layer}) started on {me.username}.")
     logging.info(LOG_STR)
     logging.info(script.LOGO)
@@ -238,17 +261,23 @@ async def dreamxbotz_start():
             await dreamxbotz.send_message(chat_id=int(admin_id), text=f"🤖 {temp.B_NAME} Restarted Successfully ✅")
         except Exception as e:
             logging.warning(f"Couldn't send restart message to admin {admin_id}: {e}")
-    # Web server (stream links, health checks on Koyeb/Heroku).  If the port is
-    # taken or the app fails to build, the Telegram side keeps working.
-    try:
-        app = web.AppRunner(await web_server())
-        await app.setup()
-        bind_address = "0.0.0.0"
-        await web.TCPSite(app, bind_address, PORT).start()
-        logging.info(f"Web server listening on {bind_address}:{PORT}")
-    except Exception as e:
-        logging.exception(f"Web server failed to start on port {PORT} – bot keeps running without it: {e}")
-    dreamxbotz.loop.create_task(keep_alive())
+    if CLONE_CHILD_MODE:
+        # A clone shares the host's one public port and deliberately skips web,
+        # keep-alive, payments and userbot workers to keep its footprint small.
+        # The parent reads this non-secret sentinel before reporting success.
+        print(f"MINATO_CLONE_READY:{CLONE_CHILD_ID}", flush=True)
+    else:
+        # Web server (stream links, health checks on Koyeb/Heroku). If the port
+        # is taken or the app fails to build, the Telegram side keeps working.
+        try:
+            app = web.AppRunner(await web_server())
+            await app.setup()
+            bind_address = "0.0.0.0"
+            await web.TCPSite(app, bind_address, PORT).start()
+            logging.info(f"Web server listening on {bind_address}:{PORT}")
+        except Exception as e:
+            logging.exception(f"Web server failed to start on port {PORT} – bot keeps running without it: {e}")
+        dreamxbotz.loop.create_task(keep_alive())
     await idle()
     
 if __name__ == '__main__':
@@ -272,3 +301,14 @@ if __name__ == '__main__':
             logging.exception(f"Startup failed (attempt {attempt}): {e!r} – retrying in {delay}s")
             loop.run_until_complete(stop_client_quietly())
             time.sleep(delay)
+    if not CLONE_CHILD_MODE:
+        try:
+            from dreamxbotz.util.clone_service import stop_clone_service
+
+            loop.run_until_complete(stop_clone_service())
+        except Exception:
+            logging.warning("Clone workers did not shut down cleanly", exc_info=True)
+        try:
+            loop.run_until_complete(stop_client_quietly())
+        except Exception:
+            pass

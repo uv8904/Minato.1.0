@@ -38,6 +38,40 @@
             "description": "Username or ID of Admin. Separate multiple Admins by space.",
             "required": true
         },
+        "CLONE_ENABLED": {
+            "description": "Enable private /clone bot creation (requires a persistent CLONE_ENCRYPTION_KEY).",
+            "value": "True",
+            "required": false
+        },
+        "CLONE_ENCRYPTION_KEY": {
+            "description": "Persistent Fernet key for encrypted clone tokens. Generate with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\". Keep the same key across restarts.",
+            "required": false
+        },
+        "CLONE_MAX_BOTS": {
+            "description": "Hard limit on simultaneously running clones (start at 1; increase only after memory load-testing).",
+            "value": "1",
+            "required": false
+        },
+        "CLONE_MAX_RECORDS": {
+            "description": "Maximum saved clone records/tokens (including failed clones), to bound MongoDB growth (default 100).",
+            "value": "100",
+            "required": false
+        },
+        "CLONE_MIN_FREE_RAM_MB": {
+            "description": "Free cgroup/host RAM reserve required before a clone may start (default 256 MB).",
+            "value": "256",
+            "required": false
+        },
+        "CLONE_START_TIMEOUT": {
+            "description": "Seconds to wait for a new clone to become ready (default 60).",
+            "value": "60",
+            "required": false
+        },
+        "CLONE_SESSION_WORKDIR": {
+            "description": "Private directory for clone Telegram auth-session files. Created with mode 0700; keep it on persistent storage if session reuse across restarts is needed.",
+            "value": "/tmp/minato_clone_sessions",
+            "required": false
+        },
         "PICS": {
             "description": "Add some telegraph link of pictures .",
             "required": false

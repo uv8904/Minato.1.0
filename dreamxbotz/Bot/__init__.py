@@ -1,6 +1,11 @@
 import logging
 import logging.config
-logging.config.fileConfig('logging.conf')
+import os
+if os.environ.get("MINATO_CLONE_CHILD") == "1":
+    # Clone subprocesses must not truncate or mix the main bot's shared log file.
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+else:
+    logging.config.fileConfig('logging.conf')
 logging.getLogger().setLevel(logging.INFO)
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
 logging.getLogger("imdbpy").setLevel(logging.ERROR)
@@ -26,15 +31,20 @@ from info import *
 class dreamcinezoneXBot(Client):
 
     def __init__(self):
-        super().__init__(
-            name=SESSION,
-            api_id=API_ID,
-            api_hash=API_HASH,
-            bot_token=BOT_TOKEN,
-            workers=60,
-            plugins={"root": "plugins"},
-            sleep_threshold=5,
-        )
+        options = {
+            "name": SESSION,
+            "api_id": API_ID,
+            "api_hash": API_HASH,
+            "bot_token": BOT_TOKEN,
+            # Preserve the main bot's existing worker pool, but cap clone
+            # subprocesses at two update workers to reduce per-clone overhead.
+            "workers": min(max(1, WORKERS), 2) if CLONE_CHILD_MODE else 60,
+            "plugins": {"root": "plugins"},
+            "sleep_threshold": 5,
+        }
+        if SESSION_WORKDIR:
+            options["workdir"] = SESSION_WORKDIR
+        super().__init__(**options)
     async def iter_messages(
         self,
         chat_id: Union[int, str],

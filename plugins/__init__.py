@@ -56,7 +56,7 @@ async def web_server():
     web_app.add_routes(routes)
     return web_app
 
-async def check_expired_premium(client):
+async def check_expired_premium(client, interval=1):
     while 1:
         # A Mongo blip (very common right after a restart) must not kill this
         # task for good – log it and try again on the next round.
@@ -79,7 +79,7 @@ async def check_expired_premium(client):
             except Exception as e:
                 print(e)
             await sleep(0.5)
-        await sleep(1)
+        await sleep(max(1, float(interval)))
 
 async def keep_alive():
     """Keep bot alive by sending periodic pings."""
