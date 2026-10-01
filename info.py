@@ -3,11 +3,15 @@ import os
 from os import environ, getenv
 from Script import script
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+# Clone workers receive a deliberately allow-listed environment from the
+# supervisor. Do not re-load the deployment's .env file inside those isolated
+# processes, or they would inherit secrets that were not passed to the clone.
+if os.environ.get("MINATO_CLONE_CHILD") != "1":
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
 
 # Utility functions
 id_pattern = re.compile(r'^.\d+$')
@@ -52,6 +56,7 @@ SESSION = environ.get('SESSION', 'dreamxbotz_search')   # Session name for the b
 API_ID = env_int('API_ID', 20803355)  # API ID from my.telegram.org — set via env, do not hardcode
 API_HASH = environ.get('API_HASH', 'caa85d91bcde4e8826ad697de02af771')  # API Hash from my.telegram.org — set via env
 BOT_TOKEN = environ.get('BOT_TOKEN', '')    # Bot token from @BotFather
+SESSION_WORKDIR = env_str('SESSION_WORKDIR', default='')  # Optional main-bot session directory; clones use CLONE_SESSION_WORKDIR
 
 # ============================
 # Bot Settings Configuration
@@ -183,6 +188,24 @@ COLLECTION_NAME = environ.get('COLLECTION_NAME', 'dreamcinezone_files') # Collec
 # If MULTIPLE_DB Is True Then Fill DATABASE_URI2 Value Else You Will Get Error.
 MULTIPLE_DB = is_enabled(os.environ.get('MULTIPLE_DB', "True"), False) # Type True For Turn On MULTIPLE DB FUNTION 
 DATABASE_URI2 = environ.get('DATABASE_URI2', 'mongodb+srv://yuvi123:yuvi123@cluster0.hlyhypg.mongodb.net/?appName=Cluster0')  # Second MongoDB URI (required when MULTIPLE_DB is True)
+
+# ============================
+# User-created bot clones
+# ============================
+# Cloning is fail-closed unless a persistent Fernet key is configured. Each
+# clone gets a separate OS process and database; the hard cap + RAM reserve
+# stop public /clone requests from turning into unbounded workers.
+CLONE_ENABLED = is_enabled(environ.get('CLONE_ENABLED', 'True'), True)
+CLONE_COLLECTION = env_str('CLONE_COLLECTION', default='minato_user_clones')
+CLONE_SESSION_WORKDIR = env_str('CLONE_SESSION_WORKDIR', default='/tmp/minato_clone_sessions')
+CLONE_ENCRYPTION_KEY = env_str('CLONE_ENCRYPTION_KEY', default='')
+CLONE_MAX_BOTS = min(max(env_int('CLONE_MAX_BOTS', 1), 0), 10)
+CLONE_MAX_RECORDS = min(max(env_int('CLONE_MAX_RECORDS', 100), 1), 1000)
+CLONE_MIN_FREE_RAM_MB = min(max(env_int('CLONE_MIN_FREE_RAM_MB', 256), 0), 8192)
+CLONE_START_TIMEOUT = min(max(env_int('CLONE_START_TIMEOUT', 60), 10), 180)
+CLONE_CHILD_MODE = is_enabled(environ.get('MINATO_CLONE_CHILD', 'False'), False)
+CLONE_CHILD_ID = env_int('MINATO_CLONE_ID', 0)
+CLONE_CHILD_OWNER_ID = env_int('MINATO_CLONE_OWNER_ID', 0)
 # ============================
 # Movie Notification & Update Settings
 # ============================

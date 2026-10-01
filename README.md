@@ -96,6 +96,7 @@ Join our support group for assistance:
 - ✅ Full File Indexing Support  
 - ✅ **JioHotstar-style OTT homepage** — trailer hero (muted auto-play on hover/scroll), genre rails, full `/search` page with genre · quality · year · sort filters, detail sheet, **My List & Continue Watching** shared with the watch page, and a quiet live refresh (`OTT_HOME`, default True — [docs/OTT_HOMEPAGE.md](docs/OTT_HOMEPAGE.md))  
 - ✅ **Inline Mode** — type `@YourBot jawan` in *any* chat and pick a poster card (quality, files, size); its ▶️ button opens that exact movie in the bot (`INLINE_SEARCH`, default True — [docs/INLINE_SEARCH.md](docs/INLINE_SEARCH.md))  
+- ✅ **User-created bot clones** — a full-width `/start` button and `/clone` flow let a user run their own BotFather-created bot in an isolated, resource-capped process; token encryption + RAM guard required ([setup and safety](docs/CLONE_BOTS.md))
 - ✅ **Auto-Import Userbot** — doosre bots se mangwai files manual channel me daalne ka jhanjhat khatam: `USER_SESSION` set karo, watched bot ki files tumhare PM me aate hi automatic file-channel me copy + index ho jayengi (`/watch`, `/autoimport`, `/target`, `/grab` — guide: docs/AUTO_IMPORT.md)  
 - ✅ ID & User Info  
 - ✅ Stats & Analytics  
@@ -244,6 +245,21 @@ asks the bot for results:
 
 Details: [`docs/INLINE_SEARCH.md`](docs/INLINE_SEARCH.md).
 
+### 🤖 Create your own bot — `/clone`
+
+The `/start` keyboard has a full-width **Create your own bot — /clone** button.
+A user first makes a bot with `@BotFather` (`/newbot`), then sends the token in a
+warned private-chat flow. The token message is deleted before validation; if
+Telegram won't delete it, the token is not used or stored. Valid tokens are
+stored encrypted; each clone runs in its own process and Mongo database.
+
+Clones have their own admin/owner and file index. To serve files, their owner
+adds the clone as an admin to their file channel and indexes it with `/index`.
+Website streaming, userbot auto-import and payment workers are off in clone
+processes to avoid extra background load. The host needs a Fernet key, a low
+`CLONE_MAX_BOTS` cap and enough free RAM; setup and security details:
+[`docs/CLONE_BOTS.md`](docs/CLONE_BOTS.md).
+
 ### 🎬 Movie hero on the watch page
 
 Every `/watch/…` page now opens with a **movie hero** strip above the player:
@@ -291,6 +307,11 @@ pm_search           – Toggle private message search
 verification        – View total verified users
 top                 – Search top trending items
 start               – Start the bot
+clone               – Create a private, resource-capped bot clone (BotFather token required)
+myclone             – Check your clone status
+restartclone        – Retry a saved clone
+cancelclone         – Cancel a pending clone-token prompt
+deleteclone         – Stop your clone and erase its encrypted token and session file
 settings            – Modify bot settings
 plan                – View available premium plans
 myplan              – Check your active plan

@@ -91,6 +91,11 @@ def start_buttons(trending=None):
         ]
     ]
 
+    # Public cloning is the main action: one full-width row, above the normal
+    # group/search navigation. Clone workers themselves do not expose this again.
+    if not CLONE_CHILD_MODE:
+        buttons.insert(0, [green('🚀 ᴄʀᴇᴀᴛᴇ ʏᴏᴜʀ ᴏᴡɴ ʙᴏᴛ — /clone', callback_data='clone_start')])
+
     # Add trending searches as quick buttons (2 per row) - max 6
     if trending:
         clean = []
