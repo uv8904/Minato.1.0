@@ -278,6 +278,15 @@ async def dreamxbotz_start():
         except Exception as e:
             logging.exception(f"Web server failed to start on port {PORT} – bot keeps running without it: {e}")
         dreamxbotz.loop.create_task(keep_alive())
+        # Daily Index Report (docs/DAILY_INDEX_REPORT.md): every morning the
+        # previous day's indexed files list goes to LOG_CHANNEL.  Main bot
+        # only – clones would otherwise post duplicate reports.
+        try:
+            from dreamxbotz.util.index_report import start_daily_index_report
+
+            start_daily_index_report(dreamxbotz)
+        except Exception as e:
+            logging.warning("Daily index report task not started: %s", e)
     await idle()
     
 if __name__ == '__main__':

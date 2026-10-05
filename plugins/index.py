@@ -203,7 +203,7 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                             continue
                         media.file_type = message.media.value
                         media.caption = message.caption
-                        save_tasks.append(save_file(media))
+                        save_tasks.append(save_file(media, source="manual"))
 
                     except Exception:
                         errors += 1

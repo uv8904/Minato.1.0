@@ -184,6 +184,8 @@ def _wire(monkeypatch, *, client, db, media, media2, web_server, reached):
     # lazy imports inside dreamxbotz_start() – never touch IMAP / Mongo in tests
     _stub_module(monkeypatch, "plugins.FamPay", start_fampay_workers=lambda: reached.__setitem__("fampay", True))
     _stub_module(monkeypatch, "dreamxbotz.util.new_uploaded", start_worker=_noop)
+    # Daily index report background task – never touch the real Mongo in tests
+    _stub_module(monkeypatch, "dreamxbotz.util.index_report", start_daily_index_report=lambda *a, **k: None)
 
 
 def test_start_reaches_idle_when_every_optional_step_fails(monkeypatch):

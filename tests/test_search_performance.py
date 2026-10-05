@@ -262,6 +262,7 @@ def test_save_file_invalidates_after_successful_commit(store, monkeypatch):
     calls = []
     monkeypatch.setattr(mod, "invalidate_search_cache", lambda: calls.append(True))
     monkeypatch.setattr(mod, "notify_new_file", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mod, "record_indexed_file", AsyncMock())
     media = SimpleNamespace(file_id="id", file_name="Movie", file_size=100, file_type="video", mime_type="video/mp4", caption=None)
     assert asyncio.run(mod.save_file(media)) == (True, 1)
     assert calls == [True]
