@@ -98,8 +98,36 @@ async def check_db_size(db):
         return 0
 
 
-async def save_file(media):
-    """Save file in database, with detailed logging."""
+async def record_indexed_file(media, file_name, target_db, source):
+    """Daily Index Report bookkeeping (docs/DAILY_INDEX_REPORT.md).
+
+    Runs after every successful commit so the previous day's indexed files can
+    be listed in LOG_CHANNEL each morning.  Strictly best-effort: it never
+    raises, so real indexing is never slowed down or broken by this feature.
+    """
+    if not DAILY_INDEX_REPORT:
+        return
+    try:
+        from database.index_log_db import index_store
+
+        await index_store.record(
+            file_name=str(getattr(media, "file_name", "") or file_name),
+            file_size=getattr(media, "file_size", 0) or 0,
+            file_type=str(getattr(media, "file_type", "") or "?"),
+            db_name=target_db,
+            source=source,
+        )
+    except Exception:  # pragma: no cover - defensive
+        logger.debug("Index-log record failed for '%s'.", file_name, exc_info=True)
+
+
+async def save_file(media, source="auto"):
+    """Save file in database, with detailed logging.
+
+    ``source`` flags where the index request came from (``manual`` for the
+    ``/index`` flow, ``channel`` for auto-indexing); it is carried into the
+    daily index report's detail list.
+    """
     file_id, file_ref = unpack_new_file_id(media.file_id)
     file_name = re.sub(
         r"[_\-\.#+$%^&*()!~`,;:\"'?/<>\[\]{}=|\\]", " ", str(media.file_name)
@@ -163,6 +191,7 @@ async def save_file(media):
         )
     except Exception:  # pragma: no cover - defensive
         logger.debug("Newly-uploaded hook failed for '%s'.", file_name, exc_info=True)
+    await record_indexed_file(media, file_name, target_db, source)
     return True, 1
 
 
