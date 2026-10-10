@@ -196,7 +196,8 @@ async def save_file(media, source="auto"):
 
 
 async def get_search_results(
-    chat_id, query, file_type=None, max_results=10, offset=0, filter=False
+    chat_id, query, file_type=None, max_results=10, offset=0, filter=False,
+    sort_by="newest",
 ):
     if chat_id is not None:
         settings = await get_settings(int(chat_id))
@@ -208,6 +209,7 @@ async def get_search_results(
             max_results = 10 if settings.get("max_btn") else int(MAX_B_TN)
     offset = max(0, int(offset))
     max_results = max(1, int(max_results))
+    sort_by = sort_by if sort_by in {"newest", "smallest", "largest"} else "newest"
     # Do not lowercase regex queries: escape classes such as \D are case-sensitive.
     query_key = tuple(q.strip() for q in query) if isinstance(query, list) else query.strip()
     cache_key = (query_key, file_type, bool(USE_CAPTION_FILTER), bool(MULTIPLE_DB))
@@ -266,32 +268,61 @@ async def get_search_results(
         return await Media.count_documents(filter_mongo), 0
 
     async def load_page():
-        # Count scans and first-page retrieval no longer wait for each other.
-        counts, files1 = await asyncio.gather(
-            _search_counts.get(cache_key, load_counts),
-            Media.find(filter_mongo).sort("$natural", -1)
-                .skip(offset).limit(max_results).to_list(length=max_results),
-        )
-        primary_count, secondary_count = counts
-        total_results = primary_count + secondary_count
-        files = files1
-        remaining = max_results - len(files1)
-        if MULTIPLE_DB and remaining > 0 and secondary_count:
-            # One logical sequence: primary newest-first, then secondary.
-            # Applying the global offset to both DBs skipped secondary files.
-            secondary_offset = max(0, offset - primary_count)
-            files2 = await (
-                Media2.find(filter_mongo).sort("$natural", -1)
-                .skip(secondary_offset).limit(remaining).to_list(length=remaining)
+        if sort_by == "newest":
+            # Count scans and first-page retrieval no longer wait for each other.
+            counts, files1 = await asyncio.gather(
+                _search_counts.get(cache_key, load_counts),
+                Media.find(filter_mongo).sort("$natural", -1)
+                    .skip(offset).limit(max_results).to_list(length=max_results),
             )
-            files = files1 + files2
+            primary_count, secondary_count = counts
+            total_results = primary_count + secondary_count
+            files = files1
+            remaining = max_results - len(files1)
+            if MULTIPLE_DB and remaining > 0 and secondary_count:
+                # One logical sequence: primary newest-first, then secondary.
+                # Applying the global offset to both DBs skipped secondary files.
+                secondary_offset = max(0, offset - primary_count)
+                files2 = await (
+                    Media2.find(filter_mongo).sort("$natural", -1)
+                    .skip(secondary_offset).limit(remaining).to_list(length=remaining)
+                )
+                files = files1 + files2
+        else:
+            # For size sorting, read the first ``offset + page`` candidates from
+            # each backing DB, merge them, then slice the global page. Fetching
+            # that many from each is sufficient even when the two DBs are used.
+            direction = 1 if sort_by == "smallest" else -1
+            candidate_limit = offset + max_results
+            counts, files1 = await asyncio.gather(
+                _search_counts.get(cache_key, load_counts),
+                Media.find(filter_mongo).sort([("file_size", direction), ("_id", 1)])
+                    .limit(candidate_limit).to_list(length=candidate_limit),
+            )
+            primary_count, secondary_count = counts
+            total_results = primary_count + secondary_count
+            files = files1
+            if MULTIPLE_DB and secondary_count:
+                files2 = await (
+                    Media2.find(filter_mongo).sort([("file_size", direction), ("_id", 1)])
+                    .limit(candidate_limit).to_list(length=candidate_limit)
+                )
+                files = sorted(
+                    files1 + files2,
+                    key=lambda item: (
+                        direction * int(getattr(item, "file_size", 0) or 0),
+                        str(getattr(item, "file_id", "")),
+                    ),
+                )
+            files = files[offset:offset + max_results]
+
         next_offset = offset + len(files)
         if next_offset >= total_results or not files:
             next_offset = ""
         return tuple(files), next_offset, total_results
 
     files, next_offset, total = await _search_pages.get(
-        (cache_key, offset, max_results), load_page
+        (cache_key, sort_by, offset, max_results), load_page
     )
     # Callers keep/reorder their own result lists (Send All, filters, etc.).
     return list(files), next_offset, total
