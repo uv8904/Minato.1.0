@@ -318,6 +318,11 @@ BUTTON_MODE = is_enabled(environ.get('BUTTON_MODE', "True"), True) # Default for
 STREAM_MODE = is_enabled(environ.get('STREAM_MODE', "True"), True) # Set Stream mode True or False
 PREMIUM_STREAM_MODE = is_enabled(environ.get('PREMIUM_STREAM_MODE', "False"), False) # Stream mode only for premium users
 COLOR_BUTTONS = is_enabled(environ.get('COLOR_BUTTONS', "True"), True) # Coloured inline buttons (blue/green/red) On (True) / Off (False)
+# Premium animated emoji on buttons. Format: "<emoji>=<custom_emoji_id>;..."
+# A button whose label starts with a listed emoji shows that Telegram Premium
+# animated emoji as its icon instead (the plain emoji is removed from the text).
+# Get an id with /btnemoji (reply to a message containing the premium emoji).
+BUTTON_PREMIUM_EMOJI = environ.get('BUTTON_PREMIUM_EMOJI', '')
 
 # ============================
 # AI Spell Check (Groq + IMDb fallback)
