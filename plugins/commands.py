@@ -2006,3 +2006,82 @@ async def clean_db_command(client, message):
 
     except Exception as e:
         await message.reply_text(f"❌ <b>Error while cleaning DB:</b>\n<code>{e}</code>")
+
+
+def _utf16_slice(text, offset, length):
+    """Telegram entity offsets/lengths count UTF-16 code units."""
+    return text.encode("utf-16-le")[offset * 2:(offset + length) * 2].decode("utf-16-le", "ignore")
+
+
+@Client.on_message(filters.command(["btnemoji"]) & filters.user(ADMINS))
+async def set_button_premium_emoji(client, message):
+    """Map a normal emoji used at the start of button labels to a Telegram
+    Premium animated emoji (shown as the button icon).
+
+    Usage:
+      /btnemoji                   -> current mapping + help
+      reply to a premium emoji with /btnemoji        -> map that emoji's own
+      reply to a premium emoji with /btnemoji 🎬     -> map 🎬 to that emoji
+      /btnemoji remove 🎬         -> drop one mapping
+      /btnemoji reset             -> back to the BUTTON_PREMIUM_EMOJI env value
+    The change is live immediately; put the printed line in BUTTON_PREMIUM_EMOJI
+    to keep it after a restart.
+    """
+    from dreamxbotz.util.buttons import get_premium_emoji, set_premium_emoji, parse_premium_emoji
+
+    args = message.text.split(None, 1)[1].strip() if len(message.command) > 1 else ""
+    mapping = get_premium_emoji()
+
+    def _format(m):
+        if not m:
+            return "<i>ɴᴏɴᴇ</i>"
+        return "\n".join(f"{k} → <code>{v}</code>" for k, v in m.items())
+
+    if args.lower() == "reset":
+        set_premium_emoji(BUTTON_PREMIUM_EMOJI)
+        mapping = get_premium_emoji()
+        await message.reply(f"<b>✅ Button premium emoji reset to env.</b>\n{_format(mapping)}", parse_mode=enums.ParseMode.HTML, quote=True)
+        return
+
+    if args.lower().startswith("remove"):
+        key = args[6:].strip()
+        mapping.pop(key, None)
+        set_premium_emoji(mapping)
+        await message.reply(f"<b>🗑 Removed {key}</b>\n{_format(mapping)}", parse_mode=enums.ParseMode.HTML, quote=True)
+        return
+
+    r = message.reply_to_message
+    found = []
+    if r and r.entities:
+        for ent in r.entities:
+            if ent.type == enums.MessageEntityType.CUSTOM_EMOJI and ent.custom_emoji_id:
+                found.append((_utf16_slice(r.text or r.caption or "", ent.offset, ent.length), str(ent.custom_emoji_id)))
+
+    if found:
+        for placeholder, custom_id in found:
+            key = args if args else placeholder
+            if not key:
+                continue
+            mapping[key] = int(custom_id)
+        set_premium_emoji(mapping)
+        lines = "; ".join(f"{k}={v}" for k, v in mapping.items())
+        await message.reply(
+            "<b>✅ Premium emoji set for buttons</b>\n"
+            f"{_format(mapping)}\n\n"
+            f"<b>Env line:</b>\n<code>BUTTON_PREMIUM_EMOJI={lines}</code>",
+            parse_mode=enums.ParseMode.HTML,
+            quote=True,
+        )
+        return
+
+    await message.reply(
+        "<b>🎯 Button premium emoji</b>\n\n"
+        f"<b>Current:</b>\n{_format(mapping)}\n\n"
+        "<b>Usage:</b>\n"
+        "• Reply to a <b>premium animated emoji</b> with <code>/btnemoji</code> — it maps that emoji\n"
+        "• Reply with <code>/btnemoji 🎬</code> — maps 🎬 to the premium emoji\n"
+        "• <code>/btnemoji remove 🎬</code> — remove one\n"
+        "• <code>/btnemoji reset</code> — env default",
+        parse_mode=enums.ParseMode.HTML,
+        quote=True,
+    )
