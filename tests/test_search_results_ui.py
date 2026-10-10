@@ -1,14 +1,7 @@
-"""Unit tests for the search results UI and the Send All premium gate.
+"""Unit tests for the search results UI, filters, sorting and Send All gate.
 
-Covers the four rules of the current UI:
-
-1. File lists never appear as links in the message text - every file gets its
-   own inline button ``{size} • {SxxExx/Exx} • {filename}``.
-2. The keyboard's top row always shows both ``⚡ Check Bot PM ⚡`` and
-   ``Sᴇɴᴅ Aʟʟ``, for premium and non-premium users alike.
-3. ``Sᴇɴᴅ Aʟʟ`` is visible for everyone; non-premium users get the premium
-   purchase prompt when they tap it, premium users get every file in PM.
-4. ``BUTTON_MODE`` defaults to True.
+The keyboard keeps files as individual buttons, offers discoverable search
+controls, and asks for confirmation before premium bulk-send actions.
 """
 import asyncio
 import inspect
@@ -110,7 +103,7 @@ def test_top_row_always_has_check_bot_pm_and_send_all(monkeypatch):
     top_row = btn[0]
     assert [b.text for b in top_row] == ["⚡ Check Bot PM ⚡", "Sᴇɴᴅ Aʟʟ"]
     assert top_row[0].url == "https://t.me/TestBot"
-    assert top_row[1].callback_data == "sendfiles#123-456"
+    assert top_row[1].callback_data == "confirmfiles#123-456"
 
 
 def test_file_buttons_use_size_episode_filename_format(monkeypatch):
@@ -135,11 +128,12 @@ def test_file_buttons_use_size_episode_filename_format(monkeypatch):
         )
     )
 
-    # Row 0: shortcuts, row 1: filters, then one row per file
-    assert len(btn) == 5
+    # Row 0: shortcuts, row 1: existing filters, row 2: client help tools.
+    assert len(btn) == 6
     assert [b.text for b in btn[1]] == ["Quality", "Language", "Season"]
+    assert [b.text for b in btn[2]] == ["🎧 Audio/Subs", "↕ Sort: Latest", "📄 Details"]
 
-    first, second, third = (row[0] for row in btn[2:])
+    first, second, third = (row[0] for row in btn[3:])
     assert first.text == f"{get_size(1950000000)} • S01E03 • Flex x Cop S01E03 1080p WEB-DL AAC.mkv"
     assert second.text == f"{get_size(728710000)} • E05 • Show.E05.720p.mkv"
     # Movies have no season/episode part at all
@@ -167,7 +161,7 @@ def test_file_buttons_are_built_even_for_legacy_text_mode(monkeypatch):
     )
 
     assert [b.text for b in btn[0]] == ["⚡ Check Bot PM ⚡", "Sᴇɴᴅ Aʟʟ"]
-    assert btn[2][0].callback_data == "file#f1"
+    assert btn[3][0].callback_data == "file#f1"
 
 
 @pytest.mark.parametrize(
@@ -203,7 +197,7 @@ def test_file_button_label_never_exceeds_telegram_limit(monkeypatch):
         )
     )
 
-    label = btn[2][0].text
+    label = btn[3][0].text
     assert len(label) <= 64
     assert label.startswith(f"{get_size(1950000000)} • E07 • ")
     assert label.endswith("…")
@@ -323,7 +317,7 @@ def test_auto_filter_caption_has_no_file_links(monkeypatch):
 
     markup = message.replies[-1]["kwargs"]["reply_markup"].inline_keyboard
     assert [b.text for b in markup[0]] == ["⚡ Check Bot PM ⚡", "Sᴇɴᴅ Aʟʟ"]
-    assert [row[0].callback_data for row in markup[2:]] == ["file#f1", "file#f2"]
+    assert [row[0].callback_data for row in markup[3:]] == ["file#f1", "file#f2"]
 
 
 def test_next_page_only_swaps_the_keyboard(monkeypatch):
@@ -334,7 +328,8 @@ def test_next_page_only_swaps_the_keyboard(monkeypatch):
     pmf.FRESH[key] = "jawan"
     files = [FakeFile("f1", "Jawan S01E01.mkv", 1024)]
 
-    async def fake_search(chat_id, query, offset=0, filter=True):
+    async def fake_search(chat_id, query, offset=0, filter=True, sort_by="newest"):
+        assert sort_by == "newest"
         return files, 10, 20
 
     async def fake_settings(chat_id):
@@ -351,9 +346,132 @@ def test_next_page_only_swaps_the_keyboard(monkeypatch):
     assert [b.text for b in query.keyboards[0].inline_keyboard[0]] == ["⚡ Check Bot PM ⚡", "Sᴇɴᴅ Aʟʟ"]
 
 
+def test_audio_subtitle_filter_menu_shows_useful_presets(monkeypatch):
+    import plugins.pmfilter as pmf
+
+    key = "123-456"
+    pmf.FRESH[key] = "take charge of my heart"
+    query = FakeCallbackQuery(data=f"audiosubs#{key}")
+    asyncio.run(pmf.audiosubs_cb_handler(None, query))
+
+    labels = [row[0].text for row in query.keyboards[0].inline_keyboard]
+    assert "🌐 Dual/Multi Audio" in labels
+    assert "🇮🇳 Hindi Dub" in labels
+    assert "📝 English Subs" in labels
+    assert "📂 All audio/subtitle types" in labels
+
+
+def test_audio_subtitle_filter_applies_filename_tag_variants(monkeypatch):
+    import plugins.pmfilter as pmf
+
+    key = "123-456"
+    pmf.FRESH[key] = "take charge of my heart"
+    pmf.SORTS[key] = "newest"
+    files = [FakeFile("f1", "Take Charge of My Heart Dual Audio ESub.mkv", 500)]
+    seen = {}
+
+    async def fake_search(chat_id, query, offset=0, filter=True, sort_by="newest"):
+        seen["query"] = query
+        seen["sort_by"] = sort_by
+        return files, "", 1
+
+    async def fake_settings(chat_id):
+        return {"max_btn": True}
+
+    monkeypatch.setattr(pmf, "get_search_results", fake_search)
+    monkeypatch.setattr(pmf, "get_settings", fake_settings)
+    query = FakeCallbackQuery(data=f"faudio#dual#{key}")
+    asyncio.run(pmf.filter_audiosubs_cb_handler(None, query))
+
+    assert seen["query"] == [
+        "take charge of my heart dual audio",
+        "take charge of my heart multi audio",
+    ]
+    assert seen["sort_by"] == "newest"
+    assert pmf.BUTTONS[key] == seen["query"]
+
+
+def test_sort_choice_is_applied_and_shown_on_results(monkeypatch):
+    import plugins.pmfilter as pmf
+
+    key = "123-456"
+    pmf.FRESH[key] = "jawan"
+    pmf.BUTTONS[key] = "jawan 1080p"
+    pmf.SORTS[key] = "newest"
+    files = [FakeFile("f1", "Jawan 1080p.mkv", 500)]
+    seen = {}
+
+    async def fake_search(chat_id, query, offset=0, filter=True, sort_by="newest"):
+        seen.update(query=query, sort_by=sort_by)
+        return files, "", 1
+
+    async def fake_settings(chat_id):
+        return {"max_btn": True}
+
+    monkeypatch.setattr(pmf, "get_search_results", fake_search)
+    monkeypatch.setattr(pmf, "get_settings", fake_settings)
+    query = FakeCallbackQuery(data=f"sortby#smallest#{key}")
+    asyncio.run(pmf.sort_results_cb_handler(None, query))
+
+    assert seen == {"query": "jawan 1080p", "sort_by": "smallest"}
+    assert pmf.SORTS[key] == "smallest"
+    assert query.keyboards[0].inline_keyboard[2][1].text == "↕ Sort: Smallest"
+
+
+def test_search_details_summarize_page_and_explain_file_buttons(monkeypatch):
+    import plugins.pmfilter as pmf
+
+    key = "123-456"
+    temp.GETALL[key] = [FakeFile("f1", "Show S01E03 1080p.mkv", 1024)]
+    pmf.RESULT_META[key] = {
+        "total": 12, "page": 2, "pages": 2, "showing": 1, "sort_by": "smallest"
+    }
+    query = FakeCallbackQuery(data=f"searchdetails#{key}")
+    asyncio.run(pmf.search_details_cb_handler(None, query))
+
+    details = query.answers[0]["text"]
+    assert query.answers[0]["show_alert"] is True
+    assert "12 result(s)" in details
+    assert "page 2/2" in details
+    assert "1080P" in details
+    assert "Tap a file button" in details
+
+
 # --------------------------------------------------------------------------- #
-# 3: Send All - everyone sees it, premium only may use it
+# 3: Send All - confirmation first, premium only may complete it
 # --------------------------------------------------------------------------- #
+
+def test_confirmfiles_prompts_before_bulk_send(monkeypatch):
+    from plugins.pmfilter import cb_handler
+
+    async def mock_has_premium(user_id):
+        return True
+
+    monkeypatch.setattr(db, "has_premium_access", mock_has_premium)
+    query = FakeCallbackQuery(data="confirmfiles#123-456", user_id=999)
+    asyncio.run(cb_handler(None, query))
+
+    assert len(query.message.replies) == 1
+    prompt = query.message.replies[0]
+    assert "This may send several files" in prompt["text"]
+    buttons = prompt["kwargs"]["reply_markup"].inline_keyboard
+    assert buttons[0][0].callback_data == "sendfiles#123-456#999"
+    assert buttons[1][0].callback_data == "cancelsendall#999"
+
+
+def test_send_all_confirmation_cannot_be_approved_by_another_user(monkeypatch):
+    from plugins.pmfilter import cb_handler
+
+    async def should_not_check_premium(user_id):
+        raise AssertionError("a different user must not approve this confirmation")
+
+    monkeypatch.setattr(db, "has_premium_access", should_not_check_premium)
+    query = FakeCallbackQuery(data="sendfiles#123-456#999", user_id=777)
+    asyncio.run(cb_handler(None, query))
+
+    assert query.answers[0]["show_alert"] is True
+    assert query.message.replies == []
+
 
 def test_sendfiles_callback_non_premium_prompts_premium_purchase(monkeypatch):
     """Tapping Send All as a non-premium user: premium alert + buy button."""

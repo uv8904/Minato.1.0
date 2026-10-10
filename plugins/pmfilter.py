@@ -1,5 +1,5 @@
 from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, save_group_settings, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, start_buttons, blue, green, red
-from dreamxbotz.util.file_labels import file_button_label, normalize_file_name
+from dreamxbotz.util.file_labels import file_button_label, normalize_file_name, episode_tag
 from time import perf_counter
 from dreamxbotz.util.message_cleanup import delete_later
 from dreamxbotz.util.ai_spell import correct_title as groq_correct_title
@@ -52,6 +52,23 @@ SPELL_CHECK = {}
 # "chat_id-message_id" -> list of file-DB "did you mean" titles shown as
 # buttons (callback_data is 64-byte capped, so only an index travels).
 SUGG = {}
+# The search keyboard's sort choice is kept per result message so paging and
+# filters continue to show the same ordering.
+SORTS = {}
+RESULT_META = {}
+
+SORT_LABELS = {
+    "newest": "Latest",
+    "smallest": "Smallest",
+    "largest": "Largest",
+}
+
+AUDIO_SUB_FILTERS = {
+    "dual": ("🌐 Dual/Multi Audio", ("dual audio", "multi audio")),
+    "hindub": ("🇮🇳 Hindi Dub", ("hindi dubbed", "hindi dub", "hin dub")),
+    "esub": ("📝 English Subs", ("esub", "e sub", "english sub", "eng sub")),
+    "hsub": ("📝 Hindi Subs", ("hsub", "h sub", "hindi sub", "hin sub")),
+}
 
 
 @Client.on_message(filters.group & filters.text & filters.incoming)
@@ -198,15 +215,13 @@ def search_file_label(file):
     return file_button_label(getattr(file, 'file_name', None), get_size(file.file_size))
 
 
-async def build_search_buttons(key, files, offset, next_offset, total_results, req_user_id, settings):
+async def build_search_buttons(key, files, offset, next_offset, total_results, req_user_id, settings, sort_by="newest"):
     """Keyboard for one page of auto-filter results.
 
-    * Row 1 always carries the two shortcuts - ``⚡ Check Bot PM ⚡`` and
-      ``Sᴇɴᴅ Aʟʟ`` - for every user (who may actually use Send All is decided
-      when the button is tapped, see ``cb_handler``).
-    * Every file gets its own button labelled ``{size} • {SxxExx/Exx} •
-      {filename}``. Files are never listed as links inside the caption, so the
-      message text stays clean for every group / PM.
+    The top rows keep the PM/send shortcuts, existing quality/language/season
+    filters, and the newer audio/subtitle, sort and help actions easy to find.
+    Every file gets its own ``{size} • {SxxExx/Exx} • {filename}`` button; file
+    links are never added to the result caption.
     """
     btn = []
     for file in files:
@@ -228,7 +243,14 @@ async def build_search_buttons(key, files, offset, next_offset, total_results, r
     # the premium purchase prompt when they tap "Sᴇɴᴅ Aʟʟ".
     btn.insert(0, [
         green("⚡ Check Bot PM ⚡", url=f"https://t.me/{temp.U_NAME}"),
-        green("Sᴇɴᴅ Aʟʟ", callback_data=f"sendfiles#{key}")
+        green("Sᴇɴᴅ Aʟʟ", callback_data=f"confirmfiles#{key}")
+    ])
+
+    sort_label = SORT_LABELS.get(sort_by, SORT_LABELS["newest"])
+    btn.insert(2, [
+        blue("🎧 Audio/Subs", callback_data=f"audiosubs#{key}"),
+        blue(f"↕ Sort: {sort_label}", callback_data=f"sort#{key}"),
+        blue("📄 Details", callback_data=f"searchdetails#{key}")
     ])
 
     try:
@@ -239,6 +261,13 @@ async def build_search_buttons(key, files, offset, next_offset, total_results, r
     total = int(total_results)
     total_pages = math.ceil(total / limit) if total > 0 else 1
     curr_page = math.ceil(int(offset) / limit) + 1
+    RESULT_META[key] = {
+        "total": total,
+        "page": curr_page,
+        "pages": total_pages,
+        "showing": len(files),
+        "sort_by": sort_by if sort_by in SORT_LABELS else "newest",
+    }
 
     if total_pages > 1:
         if int(offset) <= 0:
@@ -276,6 +305,64 @@ async def show_search_buttons(query, btn):
         pass
 
 
+async def _can_manage_search_controls(query):
+    """Keep result filters scoped to the user whose request created the result."""
+    reply = getattr(query.message, "reply_to_message", None)
+    owner = getattr(getattr(reply, "from_user", None), "id", None)
+    if owner not in (None, 0, query.from_user.id):
+        await query.answer(
+            script.ALRT_TXT.format(query.from_user.first_name), show_alert=True
+        )
+        return False
+    return True
+
+
+def _active_search_query(key):
+    """Return the current filters for a result message, or its original query."""
+    active = BUTTONS.get(key)
+    return active if active is not None else FRESH.get(key)
+
+
+def _append_search_terms(query, terms):
+    """Add one or more searchable tags while retaining OR-style query variants."""
+    bases = query if isinstance(query, (list, tuple)) else [query]
+    return list(dict.fromkeys(
+        f"{base.strip()} {term}".strip()
+        for base in bases if str(base or "").strip()
+        for term in terms
+    ))
+
+
+async def _display_search_query(query, key, search):
+    """Run a filter/sort query and replace only the result keyboard."""
+    if not search:
+        return await query.answer(
+            script.OLD_ALRT_TXT.format(query.from_user.first_name), show_alert=True
+        )
+    sort_by = SORTS.get(key, "newest")
+    files, next_offset, total = await get_search_results(
+        query.message.chat.id, search, offset=0, filter=True, sort_by=sort_by
+    )
+    if not files:
+        return await query.answer("🚫 ɴᴏ ꜰɪʟᴇꜱ ᴡᴇʀᴇ ꜰᴏᴜɴᴅ 🚫", show_alert=True)
+
+    BUTTONS[key] = search
+    temp.GETALL[key] = files
+    settings = await get_settings(query.message.chat.id)
+    btn = await build_search_buttons(
+        key=key,
+        files=files,
+        offset=0,
+        next_offset=next_offset,
+        total_results=total,
+        req_user_id=query.from_user.id,
+        settings=settings,
+        sort_by=sort_by,
+    )
+    await show_search_buttons(query, btn)
+    await query.answer()
+
+
 @Client.on_callback_query(filters.regex(r"^next"))
 async def next_page(bot, query):
     ident, req, key, offset = query.data.split("_")
@@ -292,7 +379,10 @@ async def next_page(bot, query):
     if not search:
         await query.answer(script.OLD_ALRT_TXT.format(query.from_user.first_name), show_alert=True)
         return
-    files, n_offset, total = await get_search_results(query.message.chat.id, search, offset=offset, filter=True)
+    sort_by = SORTS.get(key, "newest")
+    files, n_offset, total = await get_search_results(
+        query.message.chat.id, search, offset=offset, filter=True, sort_by=sort_by
+    )
     try:
         n_offset = int(n_offset)
     except:
@@ -311,7 +401,8 @@ async def next_page(bot, query):
         next_offset=n_offset,
         total_results=total,
         req_user_id=int(req),
-        settings=settings
+        settings=settings,
+        sort_by=sort_by,
     )
 
     await show_search_buttons(query, btn)
@@ -454,7 +545,9 @@ async def filter_qualities_cb_handler(client: Client, query: CallbackQuery):
     if qual != "homepage":
         search = f"{search} {qual}"
     BUTTONS[key] = search
-    files, offset, total_results = await get_search_results(chat_id, search, offset=0, filter=True)
+    files, offset, total_results = await get_search_results(
+        chat_id, search, offset=0, filter=True, sort_by=SORTS.get(key, "newest")
+    )
     if not files:
         await query.answer("🚫 ɴᴏ ꜰɪʟᴇꜱ ᴡᴇʀᴇ ꜰᴏᴜɴᴅ 🚫", show_alert=1)
         return
@@ -468,7 +561,8 @@ async def filter_qualities_cb_handler(client: Client, query: CallbackQuery):
         next_offset=offset,
         total_results=total_results,
         req_user_id=req,
-        settings=settings
+        settings=settings,
+        sort_by=SORTS.get(key, "newest"),
     )
 
     await show_search_buttons(query, btn)
@@ -531,7 +625,9 @@ async def filter_languages_cb_handler(client: Client, query: CallbackQuery):
     if lang != "homepage":
         search = f"{search} {lang}"
     BUTTONS[key] = search
-    files, offset, total_results = await get_search_results(chat_id, search, offset=0, filter=True)
+    files, offset, total_results = await get_search_results(
+        chat_id, search, offset=0, filter=True, sort_by=SORTS.get(key, "newest")
+    )
     if not files:
         await query.answer("🚫 ɴᴏ ꜰɪʟᴇꜱ ᴡᴇʀᴇ ꜰᴏᴜɴᴅ 🚫", show_alert=1)
         return
@@ -545,7 +641,8 @@ async def filter_languages_cb_handler(client: Client, query: CallbackQuery):
         next_offset=offset,
         total_results=total_results,
         req_user_id=req,
-        settings=settings
+        settings=settings,
+        sort_by=SORTS.get(key, "newest"),
     )
 
     await show_search_buttons(query, btn)
@@ -603,7 +700,9 @@ async def filter_seasons_cb_handler(client: Client, query: CallbackQuery):
 
     chat_id = query.message.chat.id
     req = query.from_user.id
-    files, n_offset, total_results = await get_search_results(chat_id, query_input, offset=0, filter=True)
+    files, n_offset, total_results = await get_search_results(
+        chat_id, query_input, offset=0, filter=True, sort_by=SORTS.get(key, "newest")
+    )
     if not files:
         return await query.answer("🚫 ɴᴏ ꜰɪʟᴇꜱ ꜰᴏᴜɴᴅ 🚫", show_alert=True)
 
@@ -617,11 +716,136 @@ async def filter_seasons_cb_handler(client: Client, query: CallbackQuery):
         next_offset=n_offset,
         total_results=total_results,
         req_user_id=req,
-        settings=settings
+        settings=settings,
+        sort_by=SORTS.get(key, "newest"),
     )
 
     await show_search_buttons(query, btn)
     await query.answer()
+
+
+@Client.on_callback_query(filters.regex(r"^audiosubs#"))
+async def audiosubs_cb_handler(client: Client, query: CallbackQuery):
+    """Show practical filename-based audio and subtitle search presets."""
+    if not await _can_manage_search_controls(query):
+        return
+    _, key = query.data.split("#", 1)
+    if not FRESH.get(key):
+        return await query.answer(
+            script.OLD_ALRT_TXT.format(query.from_user.first_name), show_alert=True
+        )
+
+    btn = []
+    for option_id, (label, _terms) in AUDIO_SUB_FILTERS.items():
+        btn.append([blue(label, callback_data=f"faudio#{option_id}#{key}")])
+    btn.append([blue("📂 All audio/subtitle types", callback_data=f"faudio#all#{key}")])
+    btn.append([red("↶ Back to results", callback_data=f"next_{query.from_user.id}_{key}_0")])
+    await query.edit_message_reply_markup(InlineKeyboardMarkup(btn))
+    await query.answer("Choose an audio or subtitle option")
+
+
+@Client.on_callback_query(filters.regex(r"^faudio#"))
+async def filter_audiosubs_cb_handler(client: Client, query: CallbackQuery):
+    """Filter filenames by common dual-audio, dub and subtitle tags."""
+    if not await _can_manage_search_controls(query):
+        return
+    try:
+        _, option_id, key = query.data.split("#", 2)
+    except ValueError:
+        return await query.answer()
+
+    original_search = FRESH.get(key)
+    if not original_search:
+        return await query.answer(
+            script.OLD_ALRT_TXT.format(query.from_user.first_name), show_alert=True
+        )
+    if option_id == "all":
+        search = original_search
+    else:
+        preset = AUDIO_SUB_FILTERS.get(option_id)
+        if not preset:
+            return await query.answer("Unknown audio/subtitle filter", show_alert=True)
+        search = _append_search_terms(original_search, preset[1])
+    await _display_search_query(query, key, search)
+
+
+@Client.on_callback_query(filters.regex(r"^sort#"))
+async def sort_cb_handler(client: Client, query: CallbackQuery):
+    """Offer global latest/smallest/largest ordering for the current search."""
+    if not await _can_manage_search_controls(query):
+        return
+    _, key = query.data.split("#", 1)
+    if not FRESH.get(key):
+        return await query.answer(
+            script.OLD_ALRT_TXT.format(query.from_user.first_name), show_alert=True
+        )
+
+    current = SORTS.get(key, "newest")
+    choices = [
+        ("newest", "🆕 Latest"),
+        ("smallest", "📦 Smallest first"),
+        ("largest", "📦 Largest first"),
+    ]
+    btn = [[blue(("✓ " if mode == current else "") + label,
+                 callback_data=f"sortby#{mode}#{key}")]
+           for mode, label in choices]
+    btn.append([red("↶ Back to results", callback_data=f"next_{query.from_user.id}_{key}_0")])
+    await query.edit_message_reply_markup(InlineKeyboardMarkup(btn))
+    await query.answer("Choose how to sort the results")
+
+
+@Client.on_callback_query(filters.regex(r"^sortby#"))
+async def sort_results_cb_handler(client: Client, query: CallbackQuery):
+    if not await _can_manage_search_controls(query):
+        return
+    try:
+        _, sort_by, key = query.data.split("#", 2)
+    except ValueError:
+        return await query.answer()
+    if sort_by not in SORT_LABELS:
+        return await query.answer("Unknown sort option", show_alert=True)
+    search = _active_search_query(key)
+    if not search:
+        return await query.answer(
+            script.OLD_ALRT_TXT.format(query.from_user.first_name), show_alert=True
+        )
+    SORTS[key] = sort_by
+    await _display_search_query(query, key, search)
+
+
+@Client.on_callback_query(filters.regex(r"^searchdetails#"))
+async def search_details_cb_handler(client: Client, query: CallbackQuery):
+    """Show a compact summary of the current page and explain file actions."""
+    if not await _can_manage_search_controls(query):
+        return
+    _, key = query.data.split("#", 1)
+    files = temp.GETALL.get(key) or []
+    meta = RESULT_META.get(key) or {}
+    if not files or not meta:
+        return await query.answer("Search details have expired. Please search again.", show_alert=True)
+
+    page_bytes = sum(int(getattr(file, "file_size", 0) or 0) for file in files)
+    quality_pattern = re.compile(r"\b(?:360p|480p|540p|720p|1080p|1440p|2160p|4k)\b", re.IGNORECASE)
+    qualities = sorted({
+        match.group(0).upper()
+        for file in files
+        for match in quality_pattern.finditer(getattr(file, "file_name", "") or "")
+    })
+    episodes = {
+        tag for file in files
+        if (tag := episode_tag(getattr(file, "file_name", "") or "")) and "E" in tag
+    }
+    sort_label = SORT_LABELS.get(meta.get("sort_by"), "Latest")
+    details = [
+        f"📂 {meta.get('total', len(files))} result(s) · page {meta.get('page', 1)}/{meta.get('pages', 1)} ({len(files)} shown)",
+        f"💾 This page: {get_size(page_bytes)} · {sort_label}",
+    ]
+    if qualities:
+        details.append(f"🎞 Quality: {', '.join(qualities[:4])}")
+    if episodes:
+        details.append(f"📺 Episodes on this page: {len(episodes)}")
+    details.append("Tap a file button to open it in Bot PM.")
+    await query.answer("\n".join(details), show_alert=True)
 
 
 @Client.on_callback_query(filters.regex(r"^notify#"))
@@ -696,6 +920,26 @@ async def send_all_premium_offer(query: CallbackQuery):
         logger.warning("send all premium offer failed: %s", e)
 
 
+async def send_all_confirmation_prompt(query, key):
+    """Ask users to confirm the premium bulk-send action before deep-linking."""
+    await query.answer()
+    try:
+        await query.message.reply_text(
+            text=(
+                "<b>⚠️ Send all files on this page to your private chat?\n"
+                "This may send several files.</b>"
+            ),
+            reply_markup=InlineKeyboardMarkup([
+                [green("✅ Confirm Send All", callback_data=f"sendfiles#{key}#{query.from_user.id}")],
+                [red("Cancel", callback_data=f"cancelsendall#{query.from_user.id}")],
+            ]),
+            parse_mode=enums.ParseMode.HTML,
+            quote=True,
+        )
+    except Exception as e:
+        logger.warning("send all confirmation prompt failed: %s", e)
+
+
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
     DreamxData = query.data
@@ -751,11 +995,33 @@ async def cb_handler(client: Client, query: CallbackQuery):
             return await query.answer(script.ALRT_TXT.format(query.from_user.first_name), show_alert=True)
         await query.answer(url=f"https://t.me/{temp.U_NAME}?start=file_{query.message.chat.id}_{file_id}")
 
+    elif query.data.startswith("confirmfiles#"):
+        _, key = query.data.split("#", 1)
+        if not await db.has_premium_access(query.from_user.id):
+            await query.answer(script.SEND_ALL_PREMIUM_ALERT, show_alert=True)
+            await send_all_premium_offer(query)
+            return
+        await send_all_confirmation_prompt(query, key)
+
+    elif query.data.startswith("cancelsendall#"):
+        try:
+            _, owner_id = query.data.split("#", 1)
+            if int(owner_id) != query.from_user.id:
+                return await query.answer(script.ALRT_TXT.format(query.from_user.first_name), show_alert=True)
+            await query.message.delete()
+            await query.answer("Send All cancelled")
+        except Exception:
+            await query.answer("This confirmation has expired", show_alert=True)
+
     elif query.data.startswith("sendfiles"):
         clicked = query.from_user.id
-        ident, key = query.data.split("#", 1)
-        # "Sᴇɴᴅ Aʟʟ" is visible for everyone, but only premium users may use it:
-        # everybody else gets the purchase prompt (alert + tappable button).
+        parts = query.data.split("#")
+        key = parts[1] if len(parts) > 1 else ""
+        # Confirm prompts are personal: another group member cannot approve a
+        # bulk send on somebody else's behalf. Keep legacy ``sendfiles#key``
+        # links valid for compatibility with already-posted result keyboards.
+        if len(parts) > 2 and parts[2].isdigit() and int(parts[2]) != clicked:
+            return await query.answer(script.ALRT_TXT.format(query.from_user.first_name), show_alert=True)
         if not await db.has_premium_access(clicked):
             await query.answer(script.SEND_ALL_PREMIUM_ALERT, show_alert=True)
             await send_all_premium_offer(query)
@@ -1831,6 +2097,7 @@ async def auto_filter(client, msg, spoll=False):
         await msg.message.delete()
     key = f"{message.chat.id}-{message.id}"
     FRESH[key] = search
+    SORTS[key] = "newest"
     temp.GETALL[key] = files
     temp.SHORT[message.from_user.id] = message.chat.id
     req = message.from_user.id if message.from_user else 0

@@ -14,9 +14,15 @@ class Cursor:
     def __init__(self, model, query):
         self.model, self.query = model, query
         self.offset, self.size = 0, 10
+        self.sort_field, self.sort_direction = "$natural", -1
 
-    def sort(self, field, direction):
-        assert (field, direction) == ("$natural", -1)
+    def sort(self, field, direction=None):
+        if isinstance(field, list):
+            self.sort_field, self.sort_direction = field[0]
+            assert field[1] == ("_id", 1)
+        else:
+            assert field == "$natural"
+            self.sort_field, self.sort_direction = field, direction
         return self
 
     def skip(self, offset):
@@ -33,12 +39,24 @@ class Cursor:
         if self.model.read_started:
             self.model.read_started.set()
             await self.model.count_started.wait()
-        return self.model.matches(self.query)[self.offset:self.offset + self.size]
+        rows = self.model.matches(self.query)
+        if self.sort_field == "file_size":
+            rows = sorted(
+                rows,
+                key=lambda row: (
+                    self.sort_direction * getattr(row, "file_size", 0),
+                    str(getattr(row, "file_id", "")),
+                ),
+            )
+        return rows[self.offset:self.offset + self.size]
 
 
 class Model:
     def __init__(self, names):
-        self.rows = [SimpleNamespace(file_name=n, file_type="video", caption="", file_id=n) for n in names]
+        self.rows = [
+            SimpleNamespace(file_name=n, file_type="video", caption="", file_id=n, file_size=i)
+            for i, n in enumerate(names)
+        ]
         self.counts = self.reads = 0
         self.count_started = self.read_started = None
 
@@ -126,6 +144,40 @@ def test_dual_database_pagination_does_not_skip_or_duplicate(store, monkeypatch,
         assert primary.counts == secondary.counts == 1
         # Full primary pages do not query the secondary cursor at all.
         assert secondary.reads == (12 - primary_size + 2) // 3
+    asyncio.run(scenario())
+
+
+def test_size_sort_merges_primary_and_secondary_pages_globally(store, monkeypatch):
+    mod, primary, secondary = store
+    monkeypatch.setattr(mod, "MULTIPLE_DB", True)
+    primary.rows = [
+        SimpleNamespace(file_name="Movie primary 1", file_type="video", caption="", file_id="p1", file_size=30),
+        SimpleNamespace(file_name="Movie primary 2", file_type="video", caption="", file_id="p2", file_size=60),
+    ]
+    secondary.rows = [
+        SimpleNamespace(file_name="Movie secondary 1", file_type="video", caption="", file_id="s1", file_size=10),
+        SimpleNamespace(file_name="Movie secondary 2", file_type="video", caption="", file_id="s2", file_size=20),
+        SimpleNamespace(file_name="Movie secondary 3", file_type="video", caption="", file_id="s3", file_size=50),
+    ]
+
+    async def scenario():
+        ascending = []
+        offset = 0
+        while offset != "":
+            files, offset, total = await mod.get_search_results(
+                None, "Movie", max_results=2, offset=offset, sort_by="smallest"
+            )
+            assert total == 5
+            ascending.extend(file.file_id for file in files)
+        assert ascending == ["s1", "s2", "p1", "s3", "p2"]
+
+        files, next_offset, total = await mod.get_search_results(
+            None, "Movie", max_results=2, sort_by="largest"
+        )
+        assert total == 5
+        assert [file.file_id for file in files] == ["p2", "s3"]
+        assert next_offset == 2
+
     asyncio.run(scenario())
 
 
