@@ -1,6 +1,7 @@
 import re
 import os
 from os import environ, getenv
+from urllib.parse import urlparse
 from Script import script
 
 # Clone workers receive a deliberately allow-listed environment from the
@@ -48,6 +49,52 @@ def env_str(*keys, default=''):
         if value:
             return value
     return default
+
+
+def normalize_shortener_site(site):
+    """Return the bare shortener host (e.g. ``arolinks.com``) Shortzy expects.
+
+    Shortzy builds ``https://{site}/api`` and ``https://{site}/st`` itself, so a
+    value pasted as a full URL (``https://arolinks.com``, ``arolinks.com/api``,
+    ``http://www.arolinks.com/st?x=1`` …) must be reduced to just the domain —
+    otherwise the API URL becomes ``https://https://arolinks.com/api`` and every
+    verify link breaks.
+    """
+    if not site:
+        return ''
+    site = str(site).strip().strip('"').strip("'")
+    if not site:
+        return ''
+    if '://' not in site:
+        site = 'https://' + site
+    parsed = urlparse(site)
+    host = (parsed.netloc or parsed.path.split('/')[0]).strip()
+    if '@' in host:                       # drop any pasted userinfo
+        host = host.rsplit('@', 1)[1]
+    host = host.lower().strip().rstrip('.')
+    # Must look like a real hostname[:port] — reject garbage like "!!!".
+    if not re.fullmatch(r'[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?', host):
+        return ''
+    return host
+
+
+def is_valid_http_url(url):
+    """True for a real absolute http(s) URL with a clean host (no doubled scheme)."""
+    if not isinstance(url, str):
+        return False
+    url = url.strip()
+    if not url or any(ch.isspace() for ch in url):
+        return False
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+        return False
+    # ``https://https://arolinks.com/x`` parses with netloc ``https:`` — the
+    # host must look like a real hostname[:port], never scheme debris. (``://``
+    # inside the query string is legal and allowed.)
+    return bool(re.fullmatch(r'(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)(?::\d+)?', parsed.netloc))
 
 # ============================
 # Bot Information Configuration
@@ -272,14 +319,16 @@ TUTORIAL_2 = environ.get("TUTORIAL_2", "https://t.me/hmmmmw876/785")   # Second 
 TUTORIAL_3 = environ.get("TUTORIAL_3", "https://t.me/hmmmmw876/785")   # Third tutorial link for verification
 
 # Verification (Must Fill All Variables. Else You Got Error)
-SHORTENER_API = environ.get("SHORTENER_API", "ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8") # Shortener API key — set via env
-SHORTENER_WEBSITE = environ.get("SHORTENER_WEBSITE", "https://arolinks.com") # Shortener website
+# NOTE: Shortzy wants the bare domain (arolinks.com) — NOT a full URL. Values
+# are normalized here so `https://arolinks.com` in env/panel also works.
+SHORTENER_API = env_str("SHORTENER_API", default="ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8") # Shortener API key — set via env
+SHORTENER_WEBSITE = normalize_shortener_site(env_str("SHORTENER_WEBSITE", default="arolinks.com")) # Shortener website (bare domain)
 
-SHORTENER_API2 = environ.get("SHORTENER_API2", "ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8")  # Shortener API key for second website
-SHORTENER_WEBSITE2 = environ.get("SHORTENER_WEBSITE2", "https://arolinks.com") # Shortener website for second website
+SHORTENER_API2 = env_str("SHORTENER_API2", default="ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8")  # Shortener API key for second website
+SHORTENER_WEBSITE2 = normalize_shortener_site(env_str("SHORTENER_WEBSITE2", default="arolinks.com")) # Shortener website for second website
 
-SHORTENER_API3 = environ.get("SHORTENER_API3", "ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8")
-SHORTENER_WEBSITE3 = environ.get("SHORTENER_WEBSITE3", "https://arolinks.com") # Shortener website for third website
+SHORTENER_API3 = env_str("SHORTENER_API3", default="ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8")
+SHORTENER_WEBSITE3 = normalize_shortener_site(env_str("SHORTENER_WEBSITE3", default="arolinks.com")) # Shortener website for third website
 
 TWO_VERIFY_GAP = int(environ.get('TWO_VERIFY_GAP', "1200")) # Time gap for two-step verification in seconds (default: 20 minutes)
 THREE_VERIFY_GAP = int(environ.get('THREE_VERIFY_GAP', "54000"))    
