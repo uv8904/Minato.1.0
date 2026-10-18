@@ -330,8 +330,8 @@ SHORTENER_WEBSITE2 = normalize_shortener_site(env_str("SHORTENER_WEBSITE2", defa
 SHORTENER_API3 = env_str("SHORTENER_API3", default="ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8")
 SHORTENER_WEBSITE3 = normalize_shortener_site(env_str("SHORTENER_WEBSITE3", default="arolinks.com")) # Shortener website for third website
 
-TWO_VERIFY_GAP = int(environ.get('TWO_VERIFY_GAP', "1200")) # Time gap for two-step verification in seconds (default: 20 minutes)
-THREE_VERIFY_GAP = int(environ.get('THREE_VERIFY_GAP', "54000"))    
+TWO_VERIFY_GAP = int(environ.get('TWO_VERIFY_GAP', "43200")) # Time gap for two-step verification in seconds (default: 12 hours)
+THREE_VERIFY_GAP = int(environ.get('THREE_VERIFY_GAP', "43200"))    # Time gap for three-step verification in seconds (default: 12 hours)
 
 # ============================
 # Channel & Group Links Configuration

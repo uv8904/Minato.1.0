@@ -492,7 +492,8 @@ async def start(client, message):
                 buttons = [[
                     green("♻️ ᴄʟɪᴄᴋ ʜᴇʀᴇ ᴛᴏ ᴠᴇʀɪꜰʏ ♻️", url=verify)
                 ],[
-                    blue("⁉️ ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ⁉️", url=howtodownload)
+                    blue("⁉️ ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ⁉️", url=howtodownload),
+                    blue("📖 ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ᴍᴇ ?", callback_data="howtoverify")
                 ]]
                 reply_markup=InlineKeyboardMarkup(buttons)
                 if await db.user_verified(user_id): 
@@ -1912,6 +1913,37 @@ async def verify(bot, message):
     except Exception as e:
         print(f"Error: {e}")
         await message.reply_text(f"Error: {e}")
+
+
+@Client.on_callback_query(filters.regex(r"^howtoverify$"))
+async def how_to_verify_callback(client, callback_query):
+    """'📖 ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ᴍᴇ ?' button on the verification screen.
+
+    Pops up the verify steps plus how long the current verification stays
+    valid — i.e. when the user has to verify again (the group's 2nd-verify
+    gap, 12 hours by default).  Registered here (module loads before
+    pmfilter's catch-all callback handler) so it always wins.
+    """
+    try:
+        chat = callback_query.message.chat if callback_query.message else None
+        grp_id = int(chat.id) if chat and chat.id else 0
+        settings = await get_settings(grp_id)
+        try:
+            gap = int(settings.get('verify_time', TWO_VERIFY_GAP))
+        except (TypeError, ValueError):
+            gap = TWO_VERIFY_GAP
+        validity = get_readable_time(gap) if gap > 0 else "ᴇᴠᴇʀʏ ꜰɪʟᴇ"
+        await callback_query.answer(
+            script.HOW_TO_VERIFY_ALERT.format(validity),
+            show_alert=True,
+        )
+    except Exception as e:
+        logger.error(f"howtoverify callback failed: {e}")
+        await callback_query.answer(
+            "⚠️ ᴋᴜᴄʜ ɢᴀᴅʙᴀᴅ ʜᴏ ɢᴀʏᴀ — '⁉️ ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ⁉️' ʙᴜᴛᴛᴏɴ ᴅᴀʙᴀᴏ.",
+            show_alert=True,
+        )
+
 
 @Client.on_message(filters.command('set_fsub'))
 async def set_fsub(client, message):

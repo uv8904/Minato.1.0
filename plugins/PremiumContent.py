@@ -427,7 +427,8 @@ async def premium_unlock_callback(client: Client, query: CallbackQuery):
     text = script.PREMIUM_VERIFY_TXT.format(title=title)
     buttons = InlineKeyboardMarkup([
         [green("✅ ᴠᴇʀɪꜰʏ ɴᴏᴡ", url=short_url)],
-        [blue("📖 ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ?", url=TUTORIAL), green("💎 ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ", callback_data="premium_info")],
+        [blue("📖 ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ?", url=TUTORIAL), blue("📖 ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ᴍᴇ ?", callback_data="howtoverify")],
+        [green("💎 ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ", callback_data="premium_info")],
         [red("🚫 ᴄʟᴏsᴇ", callback_data="close_data")],
     ])
     try:
