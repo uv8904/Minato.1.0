@@ -115,13 +115,21 @@ QR_CODE = environ.get('QR_CODE', '')    # QR code image for payments
 PLAN_IMG = environ.get('PLAN_IMG', 'assets/plan_qr.png')    # Image (UPI QR) sent with /plan command (repo path or direct URL)
 OWNER_UPI_ID = environ.get('OWNER_UPI_ID', 'ɴᴏ ᴀᴠᴀɪʟᴀʙʟᴇ ʀɪɢʜᴛ ɴᴏᴡ')    # Owner UPI ID for payments
 
+# Premium plans — made more expensive (premium exclusive early-access value)
+# Old: 10/20/40/55/75  →  New: ~2x with early-access branding
 STAR_PREMIUM_PLANS = {
-    10: "7day",
-    20: "15day",    
-    40: "1month", 
-    55: "45day",
-    75: "60day",
-}  # Premium plans with their respective durations in days
+    25: "7day",
+    45: "15day",
+    79: "1month",
+    109: "45day",
+    149: "60day",
+}  # Premium plans with their respective durations (Stars = ₹ price for FamPay)
+
+# Premium Exclusive Content (Early Access) — Owner can mark movies/series as
+# premium-only. Premium users get instant results; normal users see a lock
+# screen with direct buy + notify option. Owner releases when ready.
+PREMIUM_CONTENT_ENABLED = is_enabled(environ.get('PREMIUM_CONTENT_ENABLED', 'True'), True)
+PREMIUM_CONTENT_COLLECTION = env_str('PREMIUM_CONTENT_COLLECTION', default='premium_contents')
 
 # ============================
 # FamPay Auto-Approval Configuration
@@ -596,6 +604,12 @@ Bot_cmds = {
     "add_premium": "ᴀᴅᴅ ᴀɴʏ ᴜꜱᴇʀ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ.",
     "remove_premium": "ʀᴇᴍᴏᴠᴇ ᴀɴʏ ᴜꜱᴇʀ ꜰʀᴏᴍ ᴘʀᴇᴍɪᴜᴍ.",
     "premium_users": "ɢᴇᴛ ʟɪꜱᴛ ᴏꜰ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ.",
+    "add_premium_content": "🔒 ᴍᴀʀᴋ ᴍᴏᴠɪᴇ/sᴇʀɪᴇs ᴀꜱ ᴘʀᴇᴍɪᴜᴍ-ᴏɴʟʏ (ᴇᴀʀʟʏ ᴀᴄᴄᴇss).",
+    "del_premium_content": "🗑 ʀᴇᴍᴏᴠᴇ ᴘʀᴇᴍɪᴜᴍ-ᴏɴʟʏ ʟᴏᴄᴋ ꜰʀᴏᴍ ᴀ ᴛɪᴛʟᴇ.",
+    "release_premium": "🔓 ʀᴇʟᴇᴀꜱᴇ ᴘʀᴇᴍɪᴜᴍ-ᴏɴʟʏ ᴛɪᴛʟᴇ ᴛᴏ ᴇᴠᴇʀʏᴏɴᴇ.",
+    "schedule_release": "⏰ ᴀᴜᴛᴏ-ʀᴇʟᴇᴀꜱᴇ ᴀ ᴘʀᴇᴍɪᴜᴍ ᴛɪᴛʟᴇ ᴀꜰᴛᴇʀ ɴ ᴍɪɴᴜᴛᴇs.",
+    "premium_content": "💎 ʟɪꜱᴛ ᴀʟʟ ᴘʀᴇᴍɪᴜᴍ-ᴇxᴄʟᴜꜱɪᴠᴇ ᴛɪᴛʟᴇs.",
+    "premium_content_status": "📊 ᴘʀᴇᴍɪᴜᴍ-ᴇxᴄʟᴜꜱɪᴠᴇ ꜰᴇᴀᴛᴜʀᴇ ꜱᴛᴀᴛᴜꜱ.",
     "restart": "ʀᴇꜱᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ.",
     "group_cmd": "ɢʀᴏᴜᴘ ᴄᴏᴍᴍᴀɴᴅ ʟɪsᴛ",
     "admin_cmd": "ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅs ʟɪsᴛ.",

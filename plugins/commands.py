@@ -635,6 +635,21 @@ async def start(client, message):
         return await message.reply('ɴᴏ ꜱᴜᴄʜ ꜰɪʟᴇ ᴇxɪꜱᴛꜱ !')
     
     files = files_[0]
+
+    # ===== Premium Exclusive gate: locked files only for premium/verified =====
+    # A normal user who opens a file deep-link for a premium-exclusive title
+    # gets the lock screen (buy premium OR free shortlink-verify) instead of
+    # the file. Premium users, admins and verified users get it instantly.
+    if PREMIUM_CONTENT_ENABLED:
+        try:
+            from plugins.pmfilter import is_premium_locked_query, show_premium_lock, can_access_locked
+            locked_doc = await is_premium_locked_query(files.file_name or "")
+            if locked_doc and not await can_access_locked(message.from_user.id, locked_doc):
+                await show_premium_lock(client, message, locked_doc)
+                return
+        except Exception as lock_err:
+            logger.debug(f"premium file gate skipped: {lock_err}")
+
     title = clean_filename(files.file_name)
     size = get_size(files.file_size)
     f_caption = files.caption

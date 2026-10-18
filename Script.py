@@ -308,17 +308,17 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 
     
 
-    PREMIUM_TEXT = """<blockquote>🎖️ <b>ᴀᴠᴀɪʟᴀʙʟᴇ ᴘʟᴀɴs</b></blockquote>
+    PREMIUM_TEXT = """<blockquote>🎖️ <b>ᴀᴠᴀɪʟᴀʙʟᴇ ᴘʟᴀɴs — 💎 ᴇᴀʀʟʏ ᴀᴄᴄᴇss ɪɴᴄʟᴜᴅᴇᴅ</b></blockquote>
 
-
-◉ 07 ᴅᴀʏꜱ - 10 ₹  / 10 ꜱᴛᴀʀ
-◉ 15 ᴅᴀʏꜱ - 20 ₹  / 20 ꜱᴛᴀʀ
-◉ 30 ᴅᴀʏꜱ - 40 ₹  / 40 ꜱᴛᴀʀ
-◉ 45 ᴅᴀʏꜱ - 55 ₹  / 55 ꜱᴛᴀʀ
-◉ 60 ᴅᴀʏꜱ - 75 ₹  / 75 ꜱᴛᴀʀ
+◉ 07 ᴅᴀʏꜱ - 29 ₹  / 25 ꜱᴛᴀʀ  ⚡ ᴇᴀʀʟʏ ᴀᴄᴄᴇss
+◉ 15 ᴅᴀʏꜱ - 49 ₹  / 45 ꜱᴛᴀʀ  🔥 ᴍᴏsᴛ ᴘᴏᴘᴜʟᴀʀ
+◉ 30 ᴅᴀʏꜱ - 79 ₹  / 79 ꜱᴛᴀʀ  💎 ʙᴇsᴛ ᴠᴀʟᴜᴇ
+◉ 45 ᴅᴀʏꜱ - 109 ₹  / 109 ꜱᴛᴀʀ  🚀 ᴘᴏᴡᴇʀ ᴜsᴇʀ
+◉ 60 ᴅᴀʏꜱ - 149 ₹  / 149 ꜱᴛᴀʀ  👑 ᴜʟᴛɪᴍᴀᴛᴇ
 
 •─────•─────────•─────•
 🏷️ <a href='https://t.me/yuviiiii_i'>ꜱᴜʙꜱᴄʀɪᴘᴛɪᴏɴ ᴘʀᴏᴏꜰ</a>
+✨ <b>Premium = Instant Early Access to all exclusive movies & series!</b>
 
 ‼️ ᴍᴜꜱᴛ ꜱᴇɴᴅ ꜱᴄʀᴇᴇɴꜱʜᴏᴛ ᴀꜰᴛᴇʀ ᴘᴀʏᴍᴇɴᴛ.
 ‼️ ᴀꜰᴛᴇʀ ꜱᴇɴᴅɪɴɢ ꜱᴄʀᴇᴇɴꜱʜᴏᴛ ɢɪᴠᴇ ᴜꜱ ꜱᴏᴍᴇᴛɪᴍᴇꜱ ᴛᴏ ᴀᴅᴅ ʏᴏᴜ ɪɴ ᴘʀᴇᴍɪᴜᴍ ʟɪꜱᴛ."""
@@ -355,7 +355,7 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 """
 
     
-    BPREMIUM_TXT = """<blockquote>🎁 <b>ᴘʀᴇᴍɪᴜᴍ ꜰᴇᴀᴛᴜʀᴇꜱ</b> :</blockquote>
+    BPREMIUM_TXT = """<blockquote>🎁 <b>ᴘʀᴇᴍɪᴜᴍ ꜰᴇᴀᴛᴜʀᴇꜱ — 💎 ᴇxᴄʟᴜsɪᴠᴇ ᴇᴀʀʟʏ ᴀᴄᴄᴇss</b> :</blockquote>
 
 ○ ɴᴏ ɴᴇᴇᴅ ᴛᴏ ᴠᴇʀɪꜰʏ
 ○ ɴᴏ ɴᴇᴇᴅ ᴛᴏ ᴏᴘᴇɴ ʟɪɴᴋꜱ
@@ -363,9 +363,10 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 ○ ᴀᴅ-ꜰʀᴇᴇ ᴇxᴘᴇʀɪᴇɴᴄᴇ 
 ○ ʜɪɢʜ-ꜱᴘᴇᴇᴅ ᴅᴏᴡɴʟᴏᴀᴅ ʟɪɴᴋ                         
 ○ ᴍᴜʟᴛɪ-ᴘʟᴀʏᴇʀ ꜱᴛʀᴇᴀᴍɪɴɢ ʟɪɴᴋꜱ                           
-○ ᴜɴʟɪᴍɪᴛᴇᴅ ᴍᴏᴠɪᴇꜱ & ꜱᴇʀɪᴇꜱ                                                                        
-○ ꜰᴜʟʟ ᴀᴅᴍɪɴ ꜱᴜᴘᴘᴏʀᴛ                              
-○ ʀᴇǫᴜᴇꜱᴛ ᴡɪʟʟ ʙᴇ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ɪɴ 1ʜ [ ɪꜰ ᴀᴠᴀɪʟᴀʙʟᴇ ]
+○ ᴜɴʟɪᴍɪᴛᴇᴅ ᴍᴏᴠɪᴇꜱ & ꜱᴇʀɪᴇꜱ
+○ 🔒 <b>ᴇxᴄʟᴜsɪᴠᴇ ᴇᴀʀʟʏ ᴀᴄᴄᴇss</b> — ɴᴇᴡ ᴍᴏᴠɪᴇs/sᴇʀɪᴇs ᴘʀᴇᴍɪᴜᴍ ᴜsᴇʀs ᴋᴏ sʙsᴇ ᴘʜʟᴇ ᴍɪʟᴛɪ ʜᴀɪɴ!
+○ 👑 ᴘʀɪᴏʀɪᴛʏ ʀᴇǫᴜᴇsᴛs — ᴘʀᴇᴍɪᴜᴍ ᴜsᴇʀs ᴋɪ ʀᴇǫᴜᴇsᴛ 1ʜ ᴍᴇ ᴘᴜʀɪ (ɪꜰ ᴀᴠᴀɪʟᴀʙʟᴇ)
+○ 💎 ꜰᴜʟʟ ᴀᴅᴍɪɴ ꜱᴜᴘᴘᴏʀᴛ
 
 • ʏᴏᴜ ᴄᴀɴ ɢᴇᴛ ᴘʀᴇᴍɪᴜᴍ ʙʏ ʀᴇꜰᴇʀɪɴɢ ʏᴏᴜʀ ꜰʀɪᴇɴᴅꜱ ᴏʀ ʏᴏᴜ ᴄᴀɴ ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ꜱᴇʀᴠɪᴄᴇ 
 
@@ -386,15 +387,70 @@ Mᴇꜱꜱᴀɢᴇ : <b>{}</b>"""
 
     SEND_ALL_PREMIUM_TEXT = """<b>⚠️ ᴛʜɪꜱ ꜰᴇᴀᴛᴜʀᴇ ɪꜱ ᴏɴʟʏ ꜰᴏʀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ !</b>\n\n<b>ᴘʟᴇᴀꜱᴇ ᴘᴜʀᴄʜᴀꜱᴇ ᴘʀᴇᴍɪᴜᴍ ᴛᴏ ᴜꜱᴇ ꜱᴇɴᴅ ᴀʟʟ ꜰᴇᴀᴛᴜʀᴇ.</b>\n\n<blockquote>प्रीमियम ले कर आप एक ही क्लिक में सारी फाइलें अपने PM में पाएंगे।</blockquote>"""
 
+    # ===== Premium Exclusive / Early Access — user requested feature =====
+    PREMIUM_LOCK_TXT = """<b>🔒 ᴘʀᴇᴍɪᴜᴍ ᴇxᴄʟᴜsɪᴠᴇ — ᴇᴀʀʟʏ ᴀᴄᴄᴇss</b>
+
+<b>🎬 {title}</b> ᴀʙʜɪ sɪʀꜰ <b>ᴘʀᴇᴍɪᴜᴍ ᴜsᴇʀs</b> ᴋᴇ ʟɪʏᴇ ᴀᴠᴀɪʟᴀʙʟᴇ ʜᴀɪ ✨
+
+<blockquote>💎 ᴘʀᴇᴍɪᴜᴍ ᴜsᴇʀs ᴋᴏ ʏᴇ ᴍᴏᴠɪᴇ/sᴇʀɪᴇs ɪɴsᴛᴀɴᴛ ᴍɪʟ ʀᴀʜɪ ʜᴀɪ — sᴇᴀʀᴄʜ ᴋᴀʀᴛᴇ ʜɪ ᴛᴜʀᴀɴᴛ!
+🔓 ɴᴏʀᴍᴀʟ ᴜsᴇʀs ᴋᴇ ʟɪʏᴇ ʏᴇ ᴋᴜᴄʜ sᴀᴍᴀʏ ʙᴀᴀᴅ ᴀᴠᴀɪʟᴀʙʟᴇ ʜᴏɢᴀ, ᴊᴀʙ ᴏᴡɴᴇʀ ʀᴇʟᴇᴀsᴇ ᴋᴀʀᴇɴɢᴇ।</blockquote>
+
+<b>🎯 ᴅᴏ ᴏᴘᴛɪᴏɴs ʜᴀɪɴ — ᴊᴏ ᴘsᴀɴᴅ ʜᴏ ᴠᴏ ᴄʜᴜɴ ʟᴏ 👇</b>
+
+1️⃣ <b>🆓 ꜰʀᴇᴇ — ᴠᴇʀɪꜰʏ &amp; ᴜɴʟᴏᴄᴋ</b> → 1 ᴄʜʜᴏᴛᴀ sʜᴏʀᴛʟɪɴᴋ ᴠᴇʀɪꜰʏ ᴋᴀʀᴏ, ᴛᴜʀᴀɴᴛ ᴅᴇᴋʜᴏ ⚡
+2️⃣ <b>💎 ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ</b> → sᴀʙ ᴇxᴄʟᴜsɪᴠᴇ ᴄᴏɴᴛᴇɴᴛ ɪɴsᴛᴀɴᴛ + ʙɪɴᴀ ᴠᴇʀɪꜰʏ (29₹ sᴇ sʜᴜʀᴜ)"""
+    PREMIUM_VERIFY_TXT = """<b>🔓 ꜰʀᴇᴇ ᴠᴇʀɪꜰʏ &amp; ᴜɴʟᴏᴄᴋ</b>
+
+<b>🎬 {title}</b> ᴜɴʟᴏᴄᴋ ᴋᴀʀɴᴇ ᴋᴇ ʟɪʏᴇ sɪʀꜰ 1 ᴄʜʜᴏᴛᴀ sᴛᴇᴘ:
+
+1️⃣ ɴᴇᴇᴄʜᴇ <b>✅ ᴠᴇʀɪꜰʏ ɴᴏᴡ</b> ᴘᴀʀ ᴛᴀᴘ ᴋᴀʀᴇɴ
+2️⃣ sʜᴏʀᴛʟɪɴᴋ ᴋʜᴜʟᴇɢᴀ — ᴠᴇʀɪꜰʏ ᴄᴏᴍᴘʟᴇᴛᴇ ᴋᴀʀᴇɴ
+3️⃣ ᴠᴀᴘs ʙᴏᴛ ᴍᴇ ᴀᴜᴛᴏ ʀᴇᴅɪʀᴇᴄᴛ — ᴄᴏɴᴛᴇɴᴛ ᴜɴʟᴏᴄᴋ ʜᴏ ᴊᴀʏᴇɢᴀ ✅
+
+<blockquote>⏳ ᴠᴇʀɪꜰʏ sᴇ ᴋᴇᴠᴀʟ ʏᴇʜ ᴇxᴄʟᴜsɪᴠᴇ ᴛɪᴛʟᴇ ᴜɴʟᴏᴄᴋ ʜᴏᴛᴀ ʜᴀɪ — ᴘʀᴇᴍɪᴜᴍ ᴍᴇ sᴀʙ ᴋᴜᴄʜ ɪɴsᴛᴀɴᴛ ᴍɪʟᴛᴀ ʜᴀɪ 💎</blockquote>
+
+<b>ᴛɪᴘ:</b> ᴘʀᴇᴍɪᴜᴍ ʟᴇ ʟᴏ ɢᴇ ᴛᴏ ᴀɪɴᴅᴀ ᴋᴀʙʜɪ ᴠᴇʀɪꜰʏ ɴᴀʜɪ ᴋᴀʀɴᴀ ᴘᴀᴅᴇɢᴀ 😎"""
+    PREMIUM_UNLOCKED_TXT = """<b>✅ ᴠᴇʀɪꜰɪᴇᴅ — {title} ᴜɴʟᴏᴄᴋᴇᴅ!</b>
+
+🎉 ᴄᴏɴɢʀᴀᴛs! ᴀᴀᴘᴋᴇ ʟɪʏᴇ ʏᴇ ᴇxᴄʟᴜsɪᴠᴇ ᴄᴏɴᴛᴇɴᴛ ᴀʙ ᴏᴘᴇɴ ʜᴀɪ — ʀᴇsᴜʟᴛs ɴᴇᴇᴄʜᴇ 👇
+
+<blockquote>ᴅᴜʙᴀʀᴀ sᴇᴀʀᴄʜ ᴋᴀʀɴᴇ ᴘᴀʀ ʙʜɪ ʏᴇ ᴜɴʟᴏᴄᴋᴇᴅ ʜɪ ʀᴀʜᴇɢᴀ ✅</blockquote>"""
+    PREMIUM_EARLY_ACCESS_BADGE = "💎 ᴘʀᴇᴍɪᴜᴍ ᴇᴀʀʟʏ ᴀᴄᴄᴇss"
+    PREMIUM_LOCK_ALERT = "🔒 Ye content sirf Premium users ke liye hai! Premium lo aur instant dekho. Owner jab chahe tab sabke liye release karenge."
+    PREMIUM_RELEASE_TXT = """<b>✅ {title} ᴀʙ sᴀʙᴋᴇ ʟɪʏᴇ ᴀᴠᴀɪʟᴀʙʟᴇ ʜᴀɪ!</b>
+
+ᴏᴡɴᴇʀ ɴᴇ <b>{title}</b> ᴋᴏ ᴘᴜʙʟɪᴄ ʀᴇʟᴇᴀsᴇ ᴋᴀʀ ᴅɪʏᴀ ʜᴀɪ 🎉
+ᴀʙ sᴀʙʜɪ ᴜsᴇʀs sᴇᴀʀᴄʜ ᴋᴀʀ ᴋᴇ ᴅᴇᴋʜ sᴀᴋᴛᴇ ʜᴀɪɴ!
+sᴇᴀʀᴄʜ ɴᴏᴡ: <code>{keyword}</code>"""
+    PREMIUM_CONTENT_ADDED_TXT = """<b>✅ ᴘʀᴇᴍɪᴜᴍ ᴇxᴄʟᴜsɪᴠᴇ ᴀᴅᴅᴇᴅ!</b>
+
+<b>🎬 Title:</b> <code>{title}</code>
+<b>🔑 Keyword:</b> <code>{keyword}</code>
+<b>📊 Status:</b> 🔒 Locked (Premium only)
+<b>👁 Hits:</b> {hits}
+
+ɴᴏʀᴍᴀʟ ᴜsᴇʀs ᴋᴏ ʟᴏᴄᴋ sᴄʀᴇᴇɴ ᴅɪᴋʜᴇɢᴀ + ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ʙᴜᴛᴛᴏɴ
+ᴘʀᴇᴍɪᴜᴍ ᴜsᴇʀs ᴋᴏ ɪɴsᴛᴀɴᴛ ʀᴇsᴜʟᴛs"""
+    PREMIUM_CONTENT_LIST_TXT = """<b>💎 ᴘʀᴇᴍɪᴜᴍ ᴇxᴄʟᴜsɪᴠᴇ — {count} ɪᴛᴇᴍs</b>
+
+{items}
+
+<b>💡 Tips:</b>
+• /add_premium_content <code>keyword</code> — add
+• /del_premium_content <code>keyword</code> — remove
+• /release_premium <code>keyword</code> — public
+• /premium_content — this list"""
+
+
     PREPLANS_TXT = PREMIUM_TXT = """<b>👋 ʜᴇʏ {},
 
 <blockquote>🎖️ <b>ᴀᴠᴀɪʟᴀʙʟᴇ ᴘʟᴀɴꜱ</b></blockquote>
 
-◉ 07 ᴅᴀʏꜱ - 10 ₹  
-◉ 15 ᴅᴀʏꜱ - 20 ₹  
-◉ 30 ᴅᴀʏꜱ - 40 ₹  
-◉ 45 ᴅᴀʏꜱ - 55 ₹  
-◉ 60 ᴅᴀʏꜱ - 75 ₹  
+◉ 07 ᴅᴀʏꜱ - 29 ₹  
+◉ 15 ᴅᴀʏꜱ - 49 ₹  
+◉ 30 ᴅᴀʏꜱ - 79 ₹  
+◉ 45 ᴅᴀʏꜱ - 109 ₹  
+◉ 60 ᴅᴀʏꜱ - 149 ₹  
 
 •─────•─────────•─────•
 
@@ -674,6 +730,12 @@ This Is Not A Open-Source Project. You Can Use It Freely, But Selling The Source
 • /remove_premium - <code>ʀᴇᴍᴏᴠᴇ ᴀɴʏ ᴜꜱᴇʀ ꜰʀᴏᴍ ᴘʀᴇᴍɪᴜᴍ.</code>
 • /premium_users - <code>ɢᴇᴛ ʟɪꜱᴛ ᴏꜰ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ.</code>
 • /get_premium - <code>ɢᴇᴛ ɪɴꜰᴏ ᴏꜰ ᴀɴʏ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ.</code>
+• /add_premium_content - <code>🔒 ᴍᴀʀᴋ ᴍᴏᴠɪᴇ/sᴇʀɪᴇs ᴀꜱ ᴘʀᴇᴍɪᴜᴍ-ᴏɴʟʏ (ᴇᴀʀʟʏ ᴀᴄᴄᴇss).</code>
+• /del_premium_content - <code>🗑 ʀᴇᴍᴏᴠᴇ ᴛʜᴇ ᴘʀᴇᴍɪᴜᴍ-ᴏɴʟʏ ʟᴏᴄᴋ.</code>
+• /release_premium - <code>🔓 ʀᴇʟᴇᴀꜱᴇ ᴇxᴄʟᴜꜱɪᴠᴇ ᴛɪᴛʟᴇ ᴛᴏ ᴇᴠᴇʀʏᴏɴᴇ.</code>
+• /schedule_release - <code>⏰ ᴀᴜᴛᴏ-ʀᴇʟᴇᴀꜱᴇ ᴀꜰᴛᴇʀ ɴ ᴍɪɴᴜᴛᴇs.</code>
+• /premium_content - <code>💎 ʟɪꜱᴛ ᴀʟʟ ᴇxᴄʟᴜꜱɪᴠᴇ ᴛɪᴛʟᴇs.</code>
+• /notify_premium_release - <code>🔔 ᴘᴍ ᴇᴠᴇʀʏᴏɴᴇ ᴡᴀɪᴛɪɴɢ ꜰᴏʀ ᴛʜᴇ ʀᴇʟᴇᴀꜱᴇ.</code>
 • /restart - <code>ʀᴇꜱᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ.</code>"""
 
     GROUP_CMD = """ʜᴇʏ 👋,

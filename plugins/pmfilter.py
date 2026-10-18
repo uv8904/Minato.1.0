@@ -16,6 +16,8 @@ from urllib.parse import quote_plus
 import logging
 from database.ia_filterdb import invalidate_search_cache, Media, Media2, get_file_details, get_search_results, get_bad_files
 from database.config_db import mdb
+from database.premium_content_db import premium_content_store
+from info import PREMIUM_CONTENT_ENABLED
 from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid, ChatAdminRequired, UserNotParticipant
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, InputMediaPhoto, WebAppInfo
@@ -213,6 +215,99 @@ def search_file_label(file):
     this module has exposed since the buttons-only search page.
     """
     return file_button_label(getattr(file, 'file_name', None), get_size(file.file_size))
+
+
+# ===== Premium Exclusive Helpers (Early Access) =====
+async def is_premium_locked_query(query: str):
+    """Return locked premium doc if query matches exclusive content, else None."""
+    if not PREMIUM_CONTENT_ENABLED:
+        return None
+    if not query or not query.strip():
+        return None
+    try:
+        return await premium_content_store.find_locked_for_query(query)
+    except Exception as e:
+        logger.debug(f"premium check failed: {e}")
+        return None
+
+async def show_premium_lock(client, message, locked_doc, progress_msg=None):
+    """Show lock screen for normal users when they search premium-exclusive title."""
+    title = locked_doc.get("display_title") or locked_doc.get("keyword") or "This content"
+    keyword = locked_doc.get("keyword") or locked_doc.get("_id") or title
+    # increment hit count (fire and forget)
+    try:
+        await premium_content_store.increment_hit(keyword)
+    except Exception:
+        pass
+    caption = script.PREMIUM_LOCK_TXT.format(title=html.escape(title))
+    # Buttons: TWO unlock options (free shortlink-verify + buy premium), then
+    # trial/fampay, notify-when-public and close.
+    buttons = [
+        [green("🆓 ꜰʀᴇᴇ — ᴠᴇʀɪꜰʏ & ᴜɴʟᴏᴄᴋ", callback_data=f"pcunlock#{keyword[:50]}")],
+        [green("💎 ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ — ɪɴsᴛᴀɴᴛ ᴀᴄᴄᴇss", callback_data="premium_info")],
+        [blue("⚡ ꜰᴀᴍᴘᴀʏ — ᴀᴜᴛᴏ ᴀᴘᴘʀᴏᴠᴀʟ", callback_data="fampay_info"), blue("🎁 ꜰʀᴇᴇ ᴛʀɪᴀʟ", callback_data="give_trial")],
+        [blue("🔔 ɴᴏᴛɪꜰʏ ᴡʜᴇɴ ᴘᴜʙʟɪᴄ", callback_data=f"premium_notify#{keyword[:30]}"), red("🚫 ᴄʟᴏsᴇ", callback_data="close_data")],
+    ]
+    # Add trending hint
+    try:
+        if progress_msg:
+            await progress_msg.delete()
+    except Exception:
+        pass
+    try:
+        # try to send with poster if available via get_poster
+        poster = None
+        try:
+            imdb_data = await get_poster(title, file=None)
+            if imdb_data and imdb_data.get('poster'):
+                poster = imdb_data.get('poster')
+        except Exception:
+            poster = None
+        if poster:
+            try:
+                k = await message.reply_photo(photo=poster, caption=caption, reply_markup=InlineKeyboardMarkup(buttons), parse_mode=enums.ParseMode.HTML)
+                delete_later(300, k, message)
+                return k
+            except Exception:
+                pass
+        k = await message.reply_text(text=caption, reply_markup=InlineKeyboardMarkup(buttons), parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True)
+        delete_later(300, k, message)
+        return k
+    except Exception as e:
+        logger.warning(f"premium lock send failed: {e}")
+        try:
+            k = await message.reply_text(caption, parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True)
+            return k
+        except Exception:
+            return None
+
+async def is_user_premium(user_id: int) -> bool:
+    try:
+        return await db.has_premium_access(user_id)
+    except Exception:
+        return False
+
+
+async def is_user_unlocked(user_id: int, locked_doc) -> bool:
+    """True when the user already passed the free shortlink-verify for this title."""
+    if not locked_doc:
+        return False
+    try:
+        keyword = locked_doc.get("keyword") or locked_doc.get("_id") or ""
+        return await premium_content_store.is_verified_user(keyword, user_id)
+    except Exception:
+        return False
+
+
+async def can_access_locked(user_id: int, locked_doc) -> bool:
+    """Premium, admin, or shortlink-verified users pass the gate."""
+    if not locked_doc:
+        return True
+    if user_id in ADMINS:
+        return True
+    if await is_user_premium(user_id):
+        return True
+    return await is_user_unlocked(user_id, locked_doc)
 
 
 async def build_search_buttons(key, files, offset, next_offset, total_results, req_user_id, settings, sort_by="newest"):
@@ -2034,6 +2129,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
 async def auto_filter(client, msg, spoll=False):
     started = perf_counter()
+    premium_lock_doc = None  # set when a premium user searches locked content (Early Access badge)
     if not spoll:
         message = msg
         if message.text.startswith("/"):
@@ -2057,6 +2153,25 @@ async def auto_filter(client, msg, spoll=False):
             search = re.sub(r"\s+", " ", search).strip()
             search = search.replace("-", " ")
             search = search.replace(":", "")
+            # ===== Premium Exclusive Early Access gate =====
+            # Check BEFORE any heavy search: if this query is premium-locked and
+            # the user is not premium/admin/shortlink-verified → lock screen
+            # (which offers BOTH: free shortlink-verify unlock + buy premium).
+            premium_lock_doc = None
+            try:
+                raw_query = message.text or display_search or search
+                locked_doc = await is_premium_locked_query(raw_query) or await is_premium_locked_query(search) or await is_premium_locked_query(display_search)
+                if locked_doc:
+                    uid = message.from_user.id if message.from_user else 0
+                    if await can_access_locked(uid, locked_doc):
+                        # premium / admin / verified user -> allow, badge later
+                        premium_lock_doc = locked_doc
+                    else:
+                        m = await message.reply_text(f'**🔎 sᴇᴀʀᴄʜɪɴɢ** `{display_search}`', reply_to_message_id=message.id)
+                        await show_premium_lock(client, message, locked_doc, progress_msg=m)
+                        return
+            except Exception as e:
+                logger.debug(f"premium gate check failed: {e}")
             m, search_result = await asyncio.gather(
                 message.reply_text(f'**🔎 sᴇᴀʀᴄʜɪɴɢ** `{display_search}`', reply_to_message_id=message.id),
                 get_search_results(message.chat.id, search, offset=0, filter=True),
@@ -2158,6 +2273,14 @@ async def auto_filter(client, msg, spoll=False):
         # stays clean with no links in message mode.
     else:
         cap = f"Results For 🔍  {html.escape(search)}"
+
+    # 💎 Early Access badge — premium user unlocked a premium-exclusive title
+    if premium_lock_doc:
+        try:
+            badge_title = html.escape(str(premium_lock_doc.get("display_title") or premium_lock_doc.get("keyword") or ""))
+            cap = (f"<b>{script.PREMIUM_EARLY_ACCESS_BADGE}</b> — <i>{badge_title} · you have instant access</i>\n\n{cap}")
+        except Exception:
+            cap = f"<b>{script.PREMIUM_EARLY_ACCESS_BADGE}</b>\n\n{cap}"
 
     if imdb and imdb.get('poster') and settings["imdb"]:
         try:

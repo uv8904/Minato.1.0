@@ -33,6 +33,7 @@ Try the live bot here:
 - ✅ Reset All Group Settings (Owner Only)
 - ✅ 3 Verification System
 - ✅ **FamPay Auto-Approval Payments** — UPI QR + auto premium activation (Gmail IMAP / FamGateway), manual fallback for admins · [Setup Guide](docs/FAMPAY_SETUP.md)
+- ✅ **Premium Exclusive / Early Access** — owner locks a movie/series as premium-only; premium users get it instantly on search, normal users see a lock screen with **two unlock options** — 🆓 **free shortlink-verify unlock** (same shortener as `info.py`) or 💎 **Buy Premium** — plus 🔔 notify-when-public, and the owner releases it whenever (or auto after N minutes) · [Guide](docs/PREMIUM_EARLY_ACCESS.md)
 
 ---
 
@@ -78,8 +79,9 @@ Join our support group for assistance:
 - ✅ Custom start-flash (the 🌿 before the start photo) & /alive sticker — emoji / text / sticker / GIF / photo / off, set live with `/setstartemoji` & `/setalivesticker` (admins) or `START_EMOJI` / `ALIVE_STICKER` env, saved in MongoDB so it survives restarts
 - ✅ Search results as buttons only: every file gets its own inline button `{size} • {SxxExx/Exx} • {filename}` — no file links inside the message text (`BUTTON_MODE`, default True)  
 - ✅ Keyboard top row always shows `⚡ Check Bot PM ⚡` and `Sᴇɴᴅ Aʟʟ`; Send All is visible for everyone, non-premium users get the premium purchase prompt and premium users receive every file of the search in PM  
-- ✅ Premium Membership Management  
-- ✅ Online Streaming & Fast Download  
+- ✅ Premium Membership Management 
+- ✅ **Premium Exclusive / Early Access** (`/add_premium_content`) — lock any movie/series for premium only: premium users search & get files instantly (💎 badge), normal users get a lock screen explaining "abhi sirf premium ke liye, baad me sabke liye" with **two ways to unlock** — 🆓 *free shortlink-verify* (one shortlink via the configured shortener, title unlocks instantly) or 🛒 **Buy Premium** — plus 🎁 free trial, ⚡ FamPay and 🔔 *notify when public* buttons; owner releases with `/release_premium` or auto via `/schedule_release` ([docs/PREMIUM_EARLY_ACCESS.md](docs/PREMIUM_EARLY_ACCESS.md)) 
+- ✅ Online Streaming & Fast Download 
 - ✅ File Indexing Above 2GB  
 - ✅ PreDVD & CamRip Auto Deletion  
 - ✅ Multiple File Deletion  
@@ -334,6 +336,12 @@ unban               – Unban user
 add_premium         – Add premium access
 remove_premium      – Remove premium access
 premium_users       – List premium users
+add_premium_content – Lock a movie/series as premium-only (early access) (admin)
+del_premium_content – Remove the premium-only lock (admin)
+release_premium     – Release a locked title to everyone + notify waiting users (admin)
+schedule_release    – Auto-release a locked title after N minutes (admin)
+premium_content     – List all premium-exclusive titles (admin)
+notify_premium_release – PM everyone waiting for a title's public release (admin)
 autoimport          – Auto-Import userbot on/off + status (admin): "autoimport on|off"
 watch               – Kisi bot/channel ki files auto-copy me add karo: "/watch @botname" (admin)
 watchlist           – Auto-Import watchlist dekho (admin)

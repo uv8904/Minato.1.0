@@ -242,6 +242,15 @@ async def dreamxbotz_start():
         dreamxbotz.loop.create_task(check_expired_premium(dreamxbotz, interval=60))
     else:
         dreamxbotz.loop.create_task(check_expired_premium(dreamxbotz))
+    # Premium Exclusive scheduled releases (docs/PREMIUM_EARLY_ACCESS.md):
+    # restart-safe — anything whose release_at has passed gets released and the
+    # waiting users get their 🔔 notification even after a restart.
+    try:
+        from plugins.PremiumContent import premium_release_watcher
+
+        dreamxbotz.loop.create_task(premium_release_watcher(dreamxbotz))
+    except Exception as e:
+        logging.warning(f"Premium release watcher not started: {e}")
     logging.info(f"{me.first_name} with Pyrogram v{__version__} (Layer {layer}) started on {me.username}.")
     logging.info(LOG_STR)
     logging.info(script.LOGO)
