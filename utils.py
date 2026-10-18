@@ -512,19 +512,32 @@ def _get_poster_sync(query, bulk=False, id=False, file=None):
     }
 
 async def get_shortlink(link, grp_id, is_second_shortener=False, is_third_shortener=False):
+    """Shorten ``link`` with the group's configured AdLinkFly shortener.
+
+    The site setting is normalized to a bare domain first — Shortzy builds
+    ``https://{site}/api`` on its own, so passing a full URL
+    (``https://arolinks.com``) used to produce ``https://https://…/api`` and
+    every verify link came out broken. The result is validated before it is
+    returned so a dead button link is never shown to users.
+    """
     settings = await get_settings(grp_id)
-    if is_third_shortener:             
-        api, site = settings['api_three'], settings['shortner_three']
+    if is_third_shortener:
+        api, site = settings.get('api_three'), settings.get('shortner_three')
+    elif is_second_shortener:
+        api, site = settings.get('api_two'), settings.get('shortner_two')
     else:
-        if is_second_shortener:
-            api, site = settings['api_two'], settings['shortner_two']
-        else:
-            api, site = settings['api'], settings['shortner']
+        api, site = settings.get('api'), settings.get('shortner')
+    api = (str(api).strip() if api else '')
+    site = normalize_shortener_site(site)
+    if not api or not site:
+        raise ValueError("Shortener API/website set nahi hai — /set_shortner se set karo")
     shortzy = Shortzy(api, site)
     try:
         link = await shortzy.convert(link)
-    except Exception as e:
+    except Exception:
         link = await shortzy.get_quick_link(link)
+    if not is_valid_http_url(link):
+        raise ValueError(f"Shortener ne invalid link return kiya: {link!r}")
     return link
 
 async def get_settings(group_id):

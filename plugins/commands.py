@@ -473,9 +473,18 @@ async def start(client, message):
                 await db.create_verify_id(user_id, verify_id)
                 temp.VERIFICATIONS[user_id] = grp_id
                 if message.command[1].startswith('allfiles'):
-                    verify = await get_shortlink(f"https://telegram.me/{temp.U_NAME}?start=sendall_{user_id}_{verify_id}_{file_id}", grp_id, is_second_shortener, is_third_shortener)
+                    target = f"https://telegram.me/{temp.U_NAME}?start=sendall_{user_id}_{verify_id}_{file_id}"
                 else:
-                    verify = await get_shortlink(f"https://telegram.me/{temp.U_NAME}?start=notcopy_{user_id}_{verify_id}_{file_id}", grp_id, is_second_shortener, is_third_shortener)
+                    target = f"https://telegram.me/{temp.U_NAME}?start=notcopy_{user_id}_{verify_id}_{file_id}"
+                try:
+                    verify = await get_shortlink(target, grp_id, is_second_shortener, is_third_shortener)
+                except Exception as e:
+                    # Shortlink service failed — NEVER fall through to the free file.
+                    print(f"Error In Verification - {e}")
+                    return await m.reply_text(
+                        "<b>⚠️ ᴠᴇʀɪꜰʏ sᴇʀᴠɪᴄᴇ ᴄᴜʀʀᴇɴᴛʟʏ ᴅᴏᴡɴ ʜᴀɪ !</b>\n\n"
+                        "<i>ᴛʜᴏᴅɪ ᴅᴇʀ ʙᴀᴀᴅ ᴛʀʏ ᴋᴀʀᴏ, ᴠᴇʀɪꜰʏ ᴋᴇ ʙɪɴᴀ ꜰɪʟᴇ ɴᴀʜɪ ᴍɪʟᴇɢɪ.</i>"
+                    )
                 if is_third_shortener:
                     howtodownload = settings.get('tutorial_3', TUTORIAL_3)
                 else:
@@ -501,8 +510,12 @@ async def start(client, message):
                 await m.delete()
                 return
         except Exception as e:
+            # Any verify-flow crash must not hand out the file unverified.
             print(f"Error In Verification - {e}")
-            pass
+            return await m.reply_text(
+                "<b>⚠️ ᴠᴇʀɪꜰʏ sᴇʀᴠɪᴄᴇ ᴄᴜʀʀᴇɴᴛʟʏ ᴅᴏᴡɴ ʜᴀɪ !</b>\n\n"
+                "<i>ᴛʜᴏᴅɪ ᴅᴇʀ ʙᴀᴀᴅ ᴛʀʏ ᴋᴀʀᴏ, ᴠᴇʀɪꜰʏ ᴋᴇ ʙɪɴᴀ ꜰɪʟᴇ ɴᴀʜɪ ᴍɪʟᴇɢɪ.</i>"
+            )
 
     if data.startswith(("allfiles", "sendfiles")):
         if not await db.has_premium_access(message.from_user.id):
@@ -1704,8 +1717,10 @@ async def handle_shortner_command(c, m, shortner_key, api_key, log_prefix, fallb
     if m.chat.type not in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
         return await m.reply_text("<b>ᴜꜱᴇ ᴛʜɪꜱ ᴄᴏᴍᴍᴀɴᴅ ɪɴ ɢʀᴏᴜᴘ...</b>")
     try:
-        URL = m.command[1]
-        API = m.command[2]
+        URL = normalize_shortener_site(m.command[1])   # bare domain — Shortzy adds https:// itself
+        API = m.command[2].strip()
+        if not URL or not API:
+            raise ValueError("site/api khaali hai")
         await save_group_settings(grp_id, shortner_key, URL)
         await save_group_settings(grp_id, api_key, API)
         await m.reply_text(f"<b><u>✅ sʜᴏʀᴛɴᴇʀ ᴀᴅᴅᴇᴅ</u>\n\nꜱɪᴛᴇ - `{URL}`\nᴀᴘɪ - `{API}`</b>")
