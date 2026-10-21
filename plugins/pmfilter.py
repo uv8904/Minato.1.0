@@ -1,5 +1,9 @@
 from utils import get_size, is_subscribed, is_req_subscribed, group_setting_buttons, get_poster, temp, get_settings, save_group_settings, imdb, is_check_admin, extract_request_content, log_error, clean_filename, generate_season_variations, start_buttons, blue, green, red
 from dreamxbotz.util.file_labels import file_button_label, normalize_file_name, episode_tag
+from dreamxbotz.util.bot_controls import (
+    effective_fsub_channels,
+    send_all_allowed,
+)
 from time import perf_counter
 from dreamxbotz.util.message_cleanup import delete_later
 from dreamxbotz.util.ai_spell import correct_title as groq_correct_title
@@ -1092,7 +1096,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("confirmfiles#"):
         _, key = query.data.split("#", 1)
-        if not await db.has_premium_access(query.from_user.id):
+        # Premium gate is a runtime switch: /sendall off in the bot makes this
+        # button work for everyone without touching the repo.
+        if not await send_all_allowed(query.from_user.id):
             await query.answer(script.SEND_ALL_PREMIUM_ALERT, show_alert=True)
             await send_all_premium_offer(query)
             return
@@ -1117,7 +1123,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         # links valid for compatibility with already-posted result keyboards.
         if len(parts) > 2 and parts[2].isdigit() and int(parts[2]) != clicked:
             return await query.answer(script.ALRT_TXT.format(query.from_user.first_name), show_alert=True)
-        if not await db.has_premium_access(clicked):
+        if not await send_all_allowed(clicked):
             await query.answer(script.SEND_ALL_PREMIUM_ALERT, show_alert=True)
             await send_all_premium_offer(query)
             return
@@ -1169,7 +1175,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
             btn = []
             chat = file_id.split("_")[0]
             settings = await get_settings(chat)
-            fsub_channels = list(dict.fromkeys((settings.get('fsub', []) if settings else [])+ AUTH_CHANNELS)) 
+            # /fsub in the bot can override the repo/env list at runtime.
+            fsub_channels = await effective_fsub_channels(settings=settings)
             btn += await is_subscribed(client, query.from_user.id, fsub_channels)
             btn += await is_req_subscribed(client, query.from_user.id, AUTH_REQ_CHANNELS)
             if btn:

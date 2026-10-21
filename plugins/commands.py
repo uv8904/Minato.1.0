@@ -1,4 +1,5 @@
 import os
+import html
 import re, sys
 import json
 import base64
@@ -8,6 +9,12 @@ import asyncio
 import string
 import pytz
 from .pmfilter import auto_filter 
+from dreamxbotz.util.bot_controls import (
+    effective_fsub_channels,
+    get_custom_fsub_channels,
+    send_all_allowed,
+    send_all_requires_premium,
+)
 from Script import script
 from datetime import datetime
 from database.refer import referdb
@@ -277,7 +284,8 @@ async def start(client, message):
     if len(m.command) == 2 and m.command[1].startswith(('notcopy', 'sendall')):
         _, userid, verify_id, file_id = m.command[1].split("_", 3)
         user_id = int(userid)
-        if m.command[1].startswith('sendall') and not await db.has_premium_access(user_id):
+        # Premium gate is a runtime switch (/sendall on|off in the bot).
+        if m.command[1].startswith('sendall') and not await send_all_allowed(user_id):
             btn = [[green("⚜️ ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium")]]
             return await message.reply("<b>⚠️ ᴛʜɪꜱ ꜰᴇᴀᴛᴜʀᴇ ɪꜱ ᴏɴʟʏ ꜰᴏʀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ !</b>\n\n<i>ᴘʟᴇᴀꜱᴇ ᴘᴜʀᴄʜᴀꜱᴇ ᴘʀᴇᴍɪᴜᴍ ᴛᴏ ᴜꜱᴇ ꜱᴇɴᴅ ᴀʟʟ ꜰᴇᴀᴛᴜʀᴇ.</i>", reply_markup=InlineKeyboardMarkup(btn))
         grp_id = temp.VERIFICATIONS.get(user_id, 0)
@@ -418,14 +426,16 @@ async def start(client, message):
         _, grp_id, file_id = "", 0, data
 
     if not await db.has_premium_access(message.from_user.id): 
-        if data.startswith(("allfiles", "sendfiles")) or (len(message.command) > 1 and message.command[1].startswith(('allfiles', 'sendall', 'sendfiles'))):
+        is_send_all = data.startswith(("allfiles", "sendfiles")) or (len(message.command) > 1 and message.command[1].startswith(('allfiles', 'sendall', 'sendfiles')))
+        if is_send_all and message.from_user.id not in ADMINS and await send_all_requires_premium():
             btn = [[green("⚜️ ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium")]]
             return await m.reply_text("<b>⚠️ ᴛʜɪꜱ ꜰᴇᴀᴛᴜʀᴇ ɪꜱ ᴏɴʟʏ ꜰᴏʀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ !</b>\n\n<i>ᴘʟᴇᴀꜱᴇ ᴘᴜʀᴄʜᴀꜱᴇ ᴘʀᴇᴍɪᴜᴍ ᴛᴏ ᴜꜱᴇ ꜱᴇɴᴅ ᴀʟʟ ꜰᴇᴀᴛᴜʀᴇ.</i>", reply_markup=InlineKeyboardMarkup(btn))
         try:
             btn = []
             chat = int(data.split("_", 2)[1])
             settings      = await get_settings(chat)
-            fsub_channels = list(dict.fromkeys((settings.get('fsub', []) if settings else [])+ AUTH_CHANNELS)) 
+            # Admin-managed force-sub (/fsub) overrides this at runtime.
+            fsub_channels = await effective_fsub_channels(settings=settings)
 
             if fsub_channels:
                 btn += await is_subscribed(client, message.from_user.id, fsub_channels)
@@ -459,7 +469,8 @@ async def start(client, message):
 
     user_id = m.from_user.id
     if not await db.has_premium_access(user_id):
-        if (len(m.command) > 1 and m.command[1].startswith(('allfiles', 'sendall', 'sendfiles'))) or data.startswith(("allfiles", "sendfiles")):
+        is_send_all = (len(m.command) > 1 and m.command[1].startswith(('allfiles', 'sendall', 'sendfiles'))) or data.startswith(("allfiles", "sendfiles"))
+        if is_send_all and user_id not in ADMINS and await send_all_requires_premium():
             btn = [[green("⚜️ ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium")]]
             return await m.reply_text("<b>⚠️ ᴛʜɪꜱ ꜰᴇᴀᴛᴜʀᴇ ɪꜱ ᴏɴʟʏ ꜰᴏʀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ !</b>\n\n<i>ᴘʟᴇᴀꜱᴇ ᴘᴜʀᴄʜᴀꜱᴇ ᴘʀᴇᴍɪᴜᴍ ᴛᴏ ᴜꜱᴇ ꜱᴇɴᴅ ᴀʟʟ ꜰᴇᴀᴛᴜʀᴇ.</i>", reply_markup=InlineKeyboardMarkup(btn))
         try:
@@ -519,7 +530,7 @@ async def start(client, message):
             )
 
     if data.startswith(("allfiles", "sendfiles")):
-        if not await db.has_premium_access(message.from_user.id):
+        if not await send_all_allowed(message.from_user.id):
             btn = [[green("⚜️ ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium")]]
             return await message.reply_text("<b>⚠️ ᴛʜɪꜱ ꜰᴇᴀᴛᴜʀᴇ ɪꜱ ᴏɴʟʏ ꜰᴏʀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ !</b>\n\n<i>ᴘʟᴇᴀꜱᴇ ᴘᴜʀᴄʜᴀꜱᴇ ᴘʀᴇᴍɪᴜᴍ ᴛᴏ ᴜꜱᴇ ꜱᴇɴᴅ ᴀʟʟ ꜰᴇᴀᴛᴜʀᴇ.</i>", reply_markup=InlineKeyboardMarkup(btn))
         try:
@@ -1982,9 +1993,22 @@ async def set_fsub(client, message):
             if chat.type != enums.ChatType.CHANNEL:
                 return await message.reply_text(f"{id} ɪs ɴᴏᴛ ᴀ ᴄʜᴀɴɴᴇʟ.")
             channel_titles.append(f"{chat.title} (`{id}`)")
-            channels += f'{chat.title}\n'
+            channels += f'{html.escape(chat.title)}\n'
         await save_group_settings(grp_id, 'fsub', fsub_ids)
-        await message.reply_text(f"sᴜᴄᴄᴇssғᴜʟʟʏ sᴇᴛ ꜰꜱᴜʙ ᴄʜᴀɴɴᴇʟ(ꜱ) ғᴏʀ {title} ᴛᴏ\n\n{channels}")
+        global_note = ""
+        try:
+            if await get_custom_fsub_channels() is not None:
+                global_note = (
+                    "\n\nℹ️ <b>ɴᴏᴛᴇ:</b> ᴀ ʙᴏᴛ-ᴡɪᴅᴇ ꜰᴏʀᴄᴇ-sᴜʙ ʟɪsᴛ ɪs ᴀᴄᴛɪᴠᴇ, "
+                    "sᴏ ᴛʜɪs ɢʀᴏᴜᴘ sᴇᴛᴛɪɴɢ ɪs ɪɢɴᴏʀᴇᴅ. ᴜsᴇ /fsub ɪɴ ᴛʜᴇ ʙᴏᴛ ᴘᴍ "
+                    "ᴛᴏ ᴄʜᴀɴɢᴇ ᴛʜᴇ ɢʟᴏʙᴀʟ ʟɪsᴛ."
+                )
+        except Exception:
+            global_note = ""
+        await message.reply_text(
+            f"sᴜᴄᴄᴇssғᴜʟʟʏ sᴇᴛ ꜰꜱᴜʙ ᴄʜᴀɴɴᴇʟ(ꜱ) ғᴏʀ {title} ᴛᴏ\n\n{channels}{global_note}",
+            parse_mode=enums.ParseMode.HTML,
+        )
         mention = message.from_user.mention if message.from_user else "Unknown"
         await client.send_message(
             LOG_API_CHANNEL,
@@ -1996,6 +2020,42 @@ async def set_fsub(client, message):
         err_text = f"⚠️ Error in set_fSub :\n{e}"
         logger.error(err_text)
         await client.send_message(LOG_API_CHANNEL, err_text)
+
+@Client.on_message(filters.command('remove_fsub'))
+async def remove_fsub(client, message):
+    """Group admins: drop this group's custom force-sub list.
+
+    Bot admins can also send /fsub reset in the bot's PM to reset the
+    bot-wide list (the one managed by plugins/bot_controls.py).
+    """
+    try:
+        userid = message.from_user.id if message.from_user else None
+        if not userid:
+            return await message.reply("<b>You are Anonymous admin you can't use this command !</b>")
+        if message.chat.type not in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
+            return await message.reply_text(
+                "ᴜsᴇ /fsub ɪɴ ᴛʜᴇ ʙᴏᴛ's ᴘᴍ ᴛᴏ ᴄʜᴀɴɢᴇ ᴛʜᴇ ɢʟᴏʙᴀʟ ꜰᴏʀᴄᴇ-sᴜʙ ʟɪsᴛ."
+            )
+        if not await is_check_admin(client, message.chat.id, userid):
+            return await message.reply_text(script.NT_ADMIN_ALRT_TXT)
+        await save_group_settings(message.chat.id, 'fsub', AUTH_CHANNELS)
+        await message.reply_text(
+            f"✅ ᴄᴜꜱᴛᴏᴍ ꜰꜱᴜʙ ʀᴇᴍᴏᴠᴇᴅ ғᴏʀ <b>{html.escape(message.chat.title)}</b>.\n\n"
+            f"ᴅᴇꜰᴀᴜʟᴛ ᴄʜᴀɴɴᴇʟ(ꜱ):\n<code>{' '.join(map(str, AUTH_CHANNELS)) or 'ɴᴏɴᴇ'}</code>",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        await client.send_message(
+            LOG_API_CHANNEL,
+            f"#Fsub_Channel_removed\n\nᴜꜱᴇʀ - {message.from_user.mention}\nɢʀᴏᴜᴘ - {message.chat.title}",
+        )
+    except Exception as e:
+        err_text = f"⚠️ Error in remove_fsub :\n{e}"
+        logger.error(err_text)
+        try:
+            await client.send_message(LOG_API_CHANNEL, err_text)
+        except Exception:
+            pass
+
 
 @Client.on_message(filters.private & filters.command("resetallgroup") & filters.user(ADMINS))
 async def reset_all_settings(client, message):

@@ -79,6 +79,7 @@ Join our support group for assistance:
 - ✅ Custom start-flash (the 🌿 before the start photo) & /alive sticker — emoji / text / sticker / GIF / photo / off, set live with `/setstartemoji` & `/setalivesticker` (admins) or `START_EMOJI` / `ALIVE_STICKER` env, saved in MongoDB so it survives restarts
 - ✅ Search results as buttons only: every file gets its own inline button `{size} • {SxxExx/Exx} • {filename}` — no file links inside the message text (`BUTTON_MODE`, default True)  
 - ✅ Keyboard top row always shows `⚡ Check Bot PM ⚡` and `Sᴇɴᴅ Aʟʟ`; Send All is visible for everyone, non-premium users get the premium purchase prompt and premium users receive every file of the search in PM  
+- ✅ **Bot controls — no repo edit needed** — `/sendall on|off` se Sᴇɴᴅ Aʟʟ premium gate live toggle karo, aur `/fsub` se force-sub channels bot ke PM se hi add/remove/reset karo (MongoDB me saved, restart-safe). Sab kuch `/botpanel` ke buttons se bhi ([docs/BOT_CONTROLS.md](docs/BOT_CONTROLS.md))  
 - ✅ Premium Membership Management 
 - ✅ **Premium Exclusive / Early Access** (`/add_premium_content`) — lock any movie/series for premium only: premium users search & get files instantly (💎 badge), normal users get a lock screen explaining "abhi sirf premium ke liye, baad me sabke liye" with **two ways to unlock** — 🆓 *free shortlink-verify* (one shortlink via the configured shortener, title unlocks instantly) or 🛒 **Buy Premium** — plus 🎁 free trial, ⚡ FamPay and 🔔 *notify when public* buttons; owner releases with `/release_premium` or auto via `/schedule_release` ([docs/PREMIUM_EARLY_ACCESS.md](docs/PREMIUM_EARLY_ACCESS.md)) 
 - ✅ Online Streaming & Fast Download 
@@ -326,6 +327,10 @@ deleteall           – Delete all files from DB
 delete              – Delete a specific file
 deletefiles         – Remove PreDVD and CamRip files
 maint               – Maintenance mode: "/maint on" blocks normal users with an under-maintenance notice, "/maint off" brings the bot back instantly, "/maint status" shows the state (admin)
+botpanel            – Bot control panel: Send All premium gate + force-sub channels, all editable from the bot (admin)
+sendall             – "/sendall on|off|status" — Send All premium gate, persisted in MongoDB, no repo edit (admin)
+fsub                – "/fsub add|remove|reset" — global force-sub channel list managed from the bot, no repo/env edit (admin)
+remove_fsub         – Reset a group's custom force-sub list to the default (group admin); bot admins use "/fsub reset"
 broadcast           – Broadcast to users
 grp_broadcast       – Broadcast to groups
 enable              – Enable group joining
@@ -350,6 +355,28 @@ target              – Auto-Import copy destination channel set karo (admin)
 grab                – Kisi channel ki files bulk-copy: "/grab @channel 1 5000" (admin)
 restart             – Restart the bot
 ```
+
+---
+
+## 🎛️ Bot Controls (Send All gate + FSub) — no repo edits
+
+Do cheezein pehle repo/env edit maangti thi; ab **bot ke private chat se**
+admin live badal sakta hai:
+
+| Command | Kaam |
+|---|---|
+| `/botpanel` | Dono controls ka ek panel (buttons ke saath) |
+| `/sendall on` / `/sendall off` / `/sendall status` | "Sᴇɴᴅ Aʟʟ" sirf premium users ke liye, ya sabke liye free |
+| `/fsub` | Global force-sub channel panel (❌ remove, ➕ add, ♻️ reset) |
+| `/fsub add -100123 @channel` | Channels add karo (ID / username / `t.me` link / forwarded post) |
+| `/fsub remove -100123` | Channel hatao (aakhri channel hatne par force-sub off) |
+| `/fsub reset` | Wapas repo/env `AUTH_CHANNELS` par |
+
+* Values MongoDB (`bot_settings` → `runtime_config`) me save hoti hain — restart/redeploy ke baad bhi rehti hain.
+* Bot-managed FSub list active hone par env/group list ignore hoti hai; pehla edit current list ko copy karke shuru hota hai, isliye repo ke channels bhi panel se hata sakte ho.
+* Send All gate OFF par bhi force-sub aur verification rules lagu rehte hain.
+
+Poora guide: [docs/BOT_CONTROLS.md](docs/BOT_CONTROLS.md)
 
 ---
 
