@@ -9,6 +9,15 @@ The two values this plugin manages are stored in MongoDB through
   ``AUTH_CHANNELS``/per-group ``fsub`` while it exists.  Channels can be
   added, removed and reset to the repo/env list from the panel.
 
+Everything is designed to be used **from the buttons**:
+
+* tapping a button never pops a toast/alert – the panel simply updates,
+* ➕ *Add channel* opens a reply box (ForceReply) – paste the ID / ``@name`` /
+  ``t.me`` link or forward a post and it is added,
+* pasting a channel ID / ``t.me`` link / ``@username`` or forwarding a post in
+  the bot's PM at **any time** shows a one-tap "Add this channel?" card, so a
+  channel can be added without remembering any command.
+
 Commands (bot admins, private chat)::
 
     /botpanel                         one panel with both controls
@@ -25,11 +34,17 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
+import re
 import time
 
 from pyrogram import Client, filters, enums
 from pyrogram.errors import MessageNotModified
-from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from pyrogram.types import (
+    CallbackQuery,
+    ForceReply,
+    InlineKeyboardMarkup,
+    Message,
+)
 
 from dreamxbotz.util import bot_controls as controls
 from dreamxbotz.util.buttons import blue, green, red
@@ -48,7 +63,19 @@ _PENDING_TTL = 300.0
 
 _TITLE_CACHE: dict = {}
 
+# user_id -> (chat_id, message_id, kind) of the last panel we sent, so every
+# change can refresh that same message instead of spamming a new one.
+_PANEL_MSG: dict = {}
+
 SAVED_NOTE = "Saved in MongoDB — applies instantly, no repo edit or restart."
+
+# A bare channel reference sent in the bot's PM (no command needed).
+_ID_RE = re.compile(r"^-100\d{6,}$")
+_TME_LINK_RE = re.compile(
+    r"^(?:https?://)?(?:www\.)?(?:t(?:elegram)?\.me)/[A-Za-z][A-Za-z0-9_]{4,31}/?$",
+    re.IGNORECASE,
+)
+_AT_RE = re.compile(r"^@[A-Za-z][A-Za-z0-9_]{4,31}$")
 
 
 # --------------------------------------------------------------------------- #
@@ -63,8 +90,8 @@ def _mode_line(custom) -> str:
     if custom is None:
         return (
             "📦 <b>Mode:</b> repo/env default (<code>AUTH_CHANNELS</code>)\n"
-            "<i>The first add/remove copies that list into MongoDB so you can "
-            "manage it entirely from here.</i>"
+            "<i>Tap ➕ Add channel (or just paste a channel ID / t.me link here) "
+            "to manage the list entirely from this bot.</i>"
         )
     if not custom:
         return "📦 <b>Mode:</b> bot-managed — force-sub is disabled (0 channels)"
@@ -108,12 +135,20 @@ def fsub_panel_text(custom, effective, titles=None) -> str:
             lines.append(f"{index}. <b>{title}</b> — <code>{channel_id}</code>")
     else:
         lines.append("🚫 <b>Force-sub is OFF</b> — no channel is required.")
-    lines.extend([
-        "",
-        "Tap ❌ to remove a channel, ➕ to add one, or ♻️ to go back to the "
-        "repo/env list.",
-        f"<i>{SAVED_NOTE}</i>",
-    ])
+
+    if custom is not None:
+        lines.extend([
+            "",
+            "Tap ❌ to remove a channel, ➕ to add one, or ♻️ to go back to the "
+            "repo/env list.",
+        ])
+    else:
+        lines.extend([
+            "",
+            "Tap ❌ to remove a channel or ➕ to add one. Changes are saved in "
+            "MongoDB and apply instantly.",
+        ])
+    lines.append(f"<i>{SAVED_NOTE}</i>")
     return "\n".join(lines)
 
 
@@ -206,6 +241,27 @@ def _clear_pending(user_id: int) -> None:
     _PENDING_ADD.pop(user_id, None)
 
 
+def _remember_panel(user_id, message, kind: str) -> None:
+    try:
+        _PANEL_MSG[int(user_id)] = (int(message.chat.id), int(message.id), kind)
+    except Exception:
+        pass
+
+
+def _channel_from_forward(message: Message):
+    """Channel id behind a forwarded post, or ``None``."""
+    forward = getattr(message, "forward_from_chat", None)
+    if forward is not None and getattr(forward, "type", None) == enums.ChatType.CHANNEL:
+        return int(forward.id)
+
+    origin = getattr(message, "forward_origin", None)
+    if origin is not None:
+        chat = getattr(origin, "chat", None) or getattr(origin, "sender_chat", None)
+        if chat is not None and getattr(chat, "type", None) == enums.ChatType.CHANNEL:
+            return int(chat.id)
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # Panels
 # --------------------------------------------------------------------------- #
@@ -258,7 +314,7 @@ async def _show_main_panel(client, message=None, query=None):
     effective = await controls.effective_fsub_channels(settings={})
     text = main_panel_text(premium_required, custom, len(effective))
     keyboard = await _main_keyboard()
-    await _deliver(message, query, text, keyboard)
+    await _deliver(message, query, text, keyboard, kind="main")
 
 
 async def _show_sendall_panel(client, message=None, query=None):
@@ -268,6 +324,7 @@ async def _show_sendall_panel(client, message=None, query=None):
         query,
         sendall_panel_text(premium_required),
         await _sendall_keyboard(premium_required),
+        kind="sendall",
     )
 
 
@@ -280,10 +337,11 @@ async def _show_fsub_panel(client, message=None, query=None):
         query,
         fsub_panel_text(custom, effective, titles),
         await _fsub_keyboard(client, custom, effective),
+        kind="fsub",
     )
 
 
-async def _deliver(message=None, query=None, text: str = "", keyboard=None):
+async def _deliver(message=None, query=None, text: str = "", keyboard=None, kind: str = ""):
     kwargs = dict(
         reply_markup=keyboard,
         disable_web_page_preview=True,
@@ -300,9 +358,58 @@ async def _deliver(message=None, query=None, text: str = "", keyboard=None):
                 await query.message.reply_text(text, **kwargs)
             except Exception:
                 pass
+        _remember_panel(query.from_user.id, query.message, kind)
         return
     if message is not None:
-        await message.reply_text(text, **kwargs)
+        sent = await message.reply_text(text, **kwargs)
+        _remember_panel(message.from_user.id, sent, kind)
+
+
+async def _refresh_panel(client, user_id: int, kind: str = "fsub") -> bool:
+    """Edit the last panel message in place (no new messages, no toasts)."""
+    ref = _PANEL_MSG.get(int(user_id))
+    if not ref or ref[2] != kind:
+        return False
+    chat_id, message_id, _ = ref
+
+    custom = await controls.get_custom_fsub_channels()
+    effective = await controls.effective_fsub_channels(settings={})
+    titles = await _fetch_titles(client, effective)
+    try:
+        await client.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=fsub_panel_text(custom, effective, titles),
+            reply_markup=await _fsub_keyboard(client, custom, effective),
+            disable_web_page_preview=True,
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return True
+    except MessageNotModified:
+        return True
+    except Exception as exc:
+        logger.debug("Could not refresh the force-sub panel in place: %s", exc)
+        _PANEL_MSG.pop(int(user_id), None)
+        return False
+
+
+async def _refresh_or_send_panel(client, message: Message):
+    """Refresh the remembered panel, otherwise send one new panel message."""
+    if not await _refresh_panel(client, message.from_user.id):
+        await _show_fsub_panel(client, message=message)
+
+
+def _add_channel_prompt() -> tuple[str, ForceReply]:
+    text = (
+        "<b>➕ Add a force-sub channel</b>\n\n"
+        "Type it in the reply box below (it is already focused):\n"
+        "• channel ID — <code>-1001234567890</code>\n"
+        "• username — <code>@YourChannel</code>\n"
+        "• link — <code>t.me/YourChannel</code>\n\n"
+        "…or simply <b>forward any post</b> from that channel.\n\n"
+        "<i>Send /fsub cancel to stop.</i>"
+    )
+    return text, ForceReply(selective=True, placeholder="Channel ID / @username / t.me link")
 
 
 # --------------------------------------------------------------------------- #
@@ -391,13 +498,9 @@ async def fsub_cmd(client, message: Message):
         references = args[1:]
         if not references:
             _set_pending(message.from_user.id)
+            text, markup = _add_channel_prompt()
             return await message.reply_text(
-                "<b>➕ Add a force-sub channel</b>\n\n"
-                "Send the channel ID (<code>-100…</code>), <code>@username</code> "
-                "or a <code>t.me/…</code> link as your next message, or forward "
-                "a post from the channel.\n\n"
-                "<i>Send /fsub cancel to stop.</i>",
-                parse_mode=enums.ParseMode.HTML,
+                text, reply_markup=markup, parse_mode=enums.ParseMode.HTML
             )
         return await _add_channels(client, message, references)
 
@@ -416,7 +519,14 @@ async def fsub_cmd(client, message: Message):
     )
 
 
-async def _add_channels(client, message: Message, references):
+# --------------------------------------------------------------------------- #
+# Add / remove / reset
+# --------------------------------------------------------------------------- #
+async def _apply_channel_additions(client, references):
+    """Resolve + save channels.
+
+    Returns ``(added_chats, warnings, errors, save_error)``.
+    """
     added, errors, warnings = [], [], []
     for reference in references[:10]:
         parsed = controls.parse_channel_reference(reference)
@@ -436,34 +546,49 @@ async def _add_channels(client, message: Message, references):
                 "Add it as admin there, otherwise users will not get a join button."
             )
 
+    if not added:
+        return added, warnings, errors, None
+
+    seed = await controls.effective_fsub_channels(settings={})
+    try:
+        await controls.add_custom_fsub_channels([chat.id for chat in added], seed_from=seed)
+    except Exception as exc:
+        logger.exception("Could not save force-sub channels: %s", exc)
+        return [], warnings, errors, "⚠️ Could not save the channels (MongoDB error). Nothing was changed."
+    return added, warnings, errors, None
+
+
+def _added_summary(added, warnings, errors) -> str:
+    lines = [
+        "✅ <b>Added to force-sub:</b>",
+        *[
+            f"• <b>{html.escape(chat.title or str(chat.id))}</b> — <code>{chat.id}</code>"
+            for chat in added
+        ],
+    ]
+    if warnings:
+        lines.extend(["", *warnings])
+    if errors:
+        lines.extend(["", "⚠️ Skipped:", *errors])
+    return "\n".join(lines)
+
+
+async def _add_channels(client, message: Message, references):
+    added, warnings, errors, save_error = await _apply_channel_additions(client, references)
+
+    if save_error:
+        return await message.reply_text(save_error)
     if added:
-        seed = await controls.effective_fsub_channels(settings={})
-        try:
-            await controls.add_custom_fsub_channels([chat.id for chat in added], seed_from=seed)
-        except Exception as exc:
-            logger.exception("Could not save force-sub channels: %s", exc)
-            return await message.reply_text(
-                "⚠️ Could not save the channels (MongoDB error). Nothing was changed."
-            )
-        lines = [
-            "✅ <b>Added to force-sub:</b>",
-            *[
-                f"• <b>{html.escape(chat.title or str(chat.id))}</b> — <code>{chat.id}</code>"
-                for chat in added
-            ],
-        ]
-        if warnings:
-            lines.extend(["", *warnings])
-        if errors:
-            lines.extend(["", "⚠️ Skipped:", *errors])
-        await message.reply_text("\n".join(lines), parse_mode=enums.ParseMode.HTML)
+        await message.reply_text(
+            _added_summary(added, warnings, errors), parse_mode=enums.ParseMode.HTML
+        )
         await _log_change(
             client,
             "📢 <b>Force-sub channels added</b>\n"
             + "\n".join(f"• {chat.title} (<code>{chat.id}</code>)" for chat in added)
             + f"\n\nBy: <code>{message.from_user.id}</code>",
         )
-        return await _show_fsub_panel(client, message=message)
+        return await _refresh_or_send_panel(client, message)
 
     if errors:
         return await message.reply_text(
@@ -471,6 +596,23 @@ async def _add_channels(client, message: Message, references):
             parse_mode=enums.ParseMode.HTML,
         )
     return await message.reply_text("Send a channel ID, @username or t.me link.")
+
+
+async def _remove_channel_id(client, user_id: int, channel_id: int):
+    """Remove one channel; returns ``(saved, error)``."""
+    seed = await controls.effective_fsub_channels(settings={})
+    try:
+        saved = await controls.remove_custom_fsub_channel(channel_id, seed_from=seed)
+    except Exception as exc:
+        logger.exception("Could not remove a force-sub channel: %s", exc)
+        return None, "⚠️ Could not save the change (MongoDB error). Nothing was changed."
+
+    await _log_change(
+        client,
+        f"🗑 <b>Force-sub channel removed</b>: <code>{channel_id}</code>\n"
+        f"By: <code>{user_id}</code>",
+    )
+    return saved, None
 
 
 async def _remove_channel(client, message: Message, reference: str):
@@ -489,14 +631,9 @@ async def _remove_channel(client, message: Message, reference: str):
         channel_id = chat.id
         _TITLE_CACHE[channel_id] = chat.title or str(channel_id)
 
-    seed = await controls.effective_fsub_channels(settings={})
-    try:
-        saved = await controls.remove_custom_fsub_channel(channel_id, seed_from=seed)
-    except Exception as exc:
-        logger.exception("Could not remove a force-sub channel: %s", exc)
-        return await message.reply_text(
-            "⚠️ Could not save the change (MongoDB error). Nothing was changed."
-        )
+    saved, error = await _remove_channel_id(client, message.from_user.id, channel_id)
+    if error:
+        return await message.reply_text(error)
 
     await message.reply_text(
         f"✅ Removed <code>{channel_id}</code> from force-sub.\n\n"
@@ -504,12 +641,7 @@ async def _remove_channel(client, message: Message, reference: str):
         + ("" if saved else "\n\n🚫 Force-sub is now disabled."),
         parse_mode=enums.ParseMode.HTML,
     )
-    await _log_change(
-        client,
-        f"🗑 <b>Force-sub channel removed</b>: <code>{channel_id}</code>\n"
-        f"By: <code>{message.from_user.id}</code>",
-    )
-    await _show_fsub_panel(client, message=message)
+    await _refresh_or_send_panel(client, message)
 
 
 async def _reset_fsub(client, message: Message):
@@ -529,41 +661,110 @@ async def _reset_fsub(client, message: Message):
         client,
         f"♻️ <b>Force-sub reset to repo/env</b>\nBy: <code>{message.from_user.id}</code>",
     )
-    await _show_fsub_panel(client, message=message)
+    await _refresh_or_send_panel(client, message)
 
 
 # --------------------------------------------------------------------------- #
-# "Send the channel id" follow-up
+# One-tap "add this channel?" card
+# --------------------------------------------------------------------------- #
+def _add_confirm_text(chat) -> str:
+    title = html.escape(chat.title or str(chat.id))
+    return (
+        "<b>➕ Add this channel to force-sub?</b>\n\n"
+        f"<b>{title}</b>\n<code>{chat.id}</code>\n\n"
+        "Users will have to join it before they can get files."
+    )
+
+
+def _add_confirm_keyboard(channel_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [green("✅ Add to force-sub", callback_data=f"botctl#fsub#ok#{channel_id}")],
+        [red("❌ Cancel", callback_data="botctl#fsub#no")],
+    ])
+
+
+async def _send_add_confirm(client, message: Message, reference):
+    parsed = controls.parse_channel_reference(reference)
+    if parsed is None:
+        return False
+    try:
+        chat = await _resolve_channel(client, parsed)
+    except ValueError:
+        # Not a channel: let the message behave normally (e.g. a search).
+        return False
+
+    _TITLE_CACHE[chat.id] = chat.title or str(chat.id)
+    await message.reply_text(
+        _add_confirm_text(chat),
+        reply_markup=_add_confirm_keyboard(chat.id),
+        parse_mode=enums.ParseMode.HTML,
+    )
+    return True
+
+
+# --------------------------------------------------------------------------- #
+# Channel input (button flow + "just paste it" flow)
 # --------------------------------------------------------------------------- #
 @Client.on_message(
     filters.private & filters.incoming & filters.user(ADMINS),
     group=CONTROL_GROUP,
 )
-async def fsub_pending_input(client, message: Message):
+async def fsub_channel_input(client, message: Message):
     user_id = message.from_user.id if message.from_user else None
-    if user_id is None or not _pending_active(user_id):
+    if user_id is None:
         return
     if message.text and message.text.startswith("/"):
         return                                   # let /fsub cancel etc. work
 
-    reference = None
-    forward = getattr(message, "forward_from_chat", None)
-    if forward is not None and getattr(forward, "type", None) == enums.ChatType.CHANNEL:
-        reference = forward.id
-    elif message.text:
-        reference = message.text.strip()
+    pending = _pending_active(user_id)
+    text = (message.text or "").strip()
 
-    if not reference:
-        await message.reply_text(
-            "Send a channel ID / @username / t.me link, or forward a post from "
-            "the channel. /fsub cancel to stop."
-        )
+    # 1) Forwarded post -> its channel.
+    forward_id = _channel_from_forward(message)
+    if forward_id is not None:
         message.stop_propagation()
+        if pending:
+            _clear_pending(user_id)
+            return await _add_channels(client, message, [forward_id])
+        return await _send_add_confirm(client, message, forward_id)
+
+    if not text:
+        if pending:
+            message.stop_propagation()
+            await message.reply_text(
+                "Send a channel ID / @username / t.me link, or forward a post "
+                "from the channel. /fsub cancel to stop."
+            )
         return
 
-    _clear_pending(user_id)
-    await _add_channels(client, message, [reference])
-    message.stop_propagation()
+    # 2) Unambiguous channel references: numeric id / t.me link.
+    if _ID_RE.match(text) or _TME_LINK_RE.match(text):
+        message.stop_propagation()
+        if pending:
+            _clear_pending(user_id)
+            return await _add_channels(client, message, [text])
+        return await _send_add_confirm(client, message, text)
+
+    # 3) @username: only treat it as a channel when it really is one.
+    if _AT_RE.match(text):
+        if pending:
+            message.stop_propagation()
+            _clear_pending(user_id)
+            return await _add_channels(client, message, [text])
+        handled = await _send_add_confirm(client, message, text)
+        if handled:
+            message.stop_propagation()
+        return
+
+    # 4) Something else while we wait for input: say what we expect.
+    if pending:
+        message.stop_propagation()
+        await message.reply_text(
+            "That doesn't look like a channel. Send a channel ID "
+            "(<code>-100…</code>), <code>@username</code>, a <code>t.me/…</code> "
+            "link, or forward a post. /fsub cancel to stop.",
+            parse_mode=enums.ParseMode.HTML,
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -579,7 +780,7 @@ async def bot_control_callback(client, query: CallbackQuery):
 
     try:
         if section == "panel":
-            await query.answer("Refreshed")
+            await query.answer()                 # silent: no toast
             return await _show_main_panel(client, query=query)
 
         if section == "sendall":
@@ -592,9 +793,7 @@ async def bot_control_callback(client, query: CallbackQuery):
                     logger.exception("Could not save the Send All gate: %s", exc)
                     await query.answer("MongoDB error — nothing changed.", show_alert=True)
                     return
-                await query.answer(
-                    "Send All premium gate ON" if enabled else "Send All is now free for everyone"
-                )
+                await query.answer()             # silent: the panel shows the new state
                 await _log_change(
                     client,
                     f"{'🔐 Send All gate ON (premium only)' if enabled else '🔓 Send All gate OFF (free for everyone)'}\n\n"
@@ -609,15 +808,55 @@ async def bot_control_callback(client, query: CallbackQuery):
 
             if action == "add":
                 _set_pending(query.from_user.id)
-                await query.answer("Send the channel ID, @username or t.me link")
+                await query.answer()             # silent: no toast
+                text, markup = _add_channel_prompt()
                 await query.message.reply_text(
-                    "<b>➕ Add a force-sub channel</b>\n\n"
-                    "Send the channel ID (<code>-100…</code>), <code>@username</code> "
-                    "or a <code>t.me/…</code> link as your next message, or forward "
-                    "a post from the channel.\n\n"
-                    "<i>Send /fsub cancel to stop.</i>",
+                    text, reply_markup=markup, parse_mode=enums.ParseMode.HTML
+                )
+                return
+
+            if action == "ok" and len(parts) > 3:
+                try:
+                    channel_id = int(parts[3])
+                except ValueError:
+                    await query.answer("Invalid channel", show_alert=True)
+                    return
+                await query.answer()             # silent
+                added, warnings, errors, save_error = await _apply_channel_additions(
+                    client, [channel_id]
+                )
+                if save_error or not added:
+                    detail = save_error or "\n".join(errors) or "Could not add that channel."
+                    await query.message.edit_text(detail, parse_mode=enums.ParseMode.HTML)
+                    return
+                chat = added[0]
+                await _log_change(
+                    client,
+                    f"📢 <b>Force-sub channel added</b>\n"
+                    f"• {chat.title} (<code>{chat.id}</code>)\n\n"
+                    f"By: <code>{query.from_user.id}</code>",
+                )
+                note = ""
+                if warnings:
+                    note = "\n\n" + "\n".join(warnings)
+                await query.message.edit_text(
+                    f"✅ <b>Added to force-sub</b>\n\n"
+                    f"<b>{html.escape(chat.title or str(chat.id))}</b> — "
+                    f"<code>{chat.id}</code>{note}",
+                    reply_markup=InlineKeyboardMarkup(
+                        [[blue("🎛️ Open force-sub panel", callback_data="botctl#fsub")]]
+                    ),
                     parse_mode=enums.ParseMode.HTML,
                 )
+                await _refresh_panel(client, query.from_user.id)
+                return
+
+            if action == "no":
+                await query.answer()             # silent
+                try:
+                    await query.message.delete()
+                except Exception:
+                    pass
                 return
 
             if action == "rm" and len(parts) > 3:
@@ -626,21 +865,21 @@ async def bot_control_callback(client, query: CallbackQuery):
                 except ValueError:
                     await query.answer("Invalid channel", show_alert=True)
                     return
-                seed = await controls.effective_fsub_channels(settings={})
-                saved = await controls.remove_custom_fsub_channel(channel_id, seed_from=seed)
-                await query.answer(
-                    f"Removed {channel_id}" + ("" if saved else " — force-sub disabled")
-                )
-                await _log_change(
-                    client,
-                    f"🗑 <b>Force-sub channel removed</b>: <code>{channel_id}</code>\n"
-                    f"By: <code>{query.from_user.id}</code>",
-                )
+                saved, error = await _remove_channel_id(client, query.from_user.id, channel_id)
+                if error:
+                    await query.answer("MongoDB error — nothing changed.", show_alert=True)
+                    return
+                await query.answer()             # silent: the panel updates itself
                 return await _show_fsub_panel(client, query=query)
 
             if action == "reset":
-                await controls.reset_custom_fsub_channels()
-                await query.answer("Reset to repo/env AUTH_CHANNELS")
+                try:
+                    await controls.reset_custom_fsub_channels()
+                except Exception as exc:
+                    logger.exception("Could not reset force-sub channels: %s", exc)
+                    await query.answer("MongoDB error — nothing changed.", show_alert=True)
+                    return
+                await query.answer()             # silent
                 await _log_change(
                     client,
                     f"♻️ <b>Force-sub reset to repo/env</b>\nBy: <code>{query.from_user.id}</code>",
