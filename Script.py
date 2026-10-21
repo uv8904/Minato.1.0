@@ -721,6 +721,9 @@ This Is Not A Open-Source Project. You Can Use It Freely, But Selling The Source
 • /del_msg - <code>ʀᴇᴍᴏᴠᴇ ғɪʟᴇ ɴᴀᴍᴇ ᴄᴏʟʟᴇᴄᴛɪᴏɴ ɴᴏтɪғɪᴄᴀᴛɪᴏɴ...</code>
 • /movie_update - <code>ᴏɴ / ᴏғғ ᴀᴄᴄᴏʀᴅɪɴɢ ʏᴏᴜʀ ɴᴇᴇᴅᴇᴅ...</code> 
 • /pm_search - <code>ᴘᴍ sᴇᴀʀᴄʜ ᴏɴ / ᴏғғ ᴀᴄᴄᴏʀᴅɪɴɢ ʏᴏᴜʀ ɴᴇᴇᴅᴇᴅ...</code>
+• /botpanel - <code>🎛️ ᴏᴘᴇɴ ᴛʜᴇ ʙᴏᴛ ᴄᴏɴᴛʀᴏʟ ᴘᴀɴᴇʟ (sᴇɴᴅ ᴀʟʟ ɢᴀᴛᴇ + ꜰsᴜʙ).</code>
+• /sendall on|off - <code>🔐 sᴇɴᴅ ᴀʟʟ ᴘʀᴇᴍɪᴜᴍ ɢᴀᴛᴇ — ᴄʜᴀɴɢᴇ ғʀᴏᴍ ᴛʜᴇ ʙᴏᴛ, ɴᴏ ʀᴇᴘᴏ ᴇᴅɪᴛ.</code>
+• /fsub - <code>📢 ᴀᴅᴅ/ʀᴇᴍᴏᴠᴇ ɢʟᴏʙᴀʟ ꜰᴏʀᴄᴇ-sᴜʙ ᴄʜᴀɴɴᴇʟs — ɴᴏ ʀᴇᴘᴏ ᴇᴅɪᴛ.</code>
 • /verify - <code>ᴛᴜʀɴ ᴏɴ / ᴏꜰꜰ ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ (ᴏɴʟʏ ᴡᴏʀᴋ ɪɴ ɢʀᴏᴜᴘ)</code>
 • /logs - <code>ɢᴇᴛ ᴛʜᴇ ʀᴇᴄᴇɴᴛ ᴇʀʀᴏʀꜱ.</code>
 • /delete - <code>ᴅᴇʟᴇᴛᴇ ᴀ ꜱᴘᴇᴄɪꜰɪᴄ ꜰɪʟᴇ ꜰʀᴏᴍ ᴅʙ.</code>

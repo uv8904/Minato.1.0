@@ -137,6 +137,35 @@ class Database:
         doc = await self.botcol.find_one({'id': self.MAINTENANCE_DOC_ID})
         return bool(doc and doc.get('enabled'))
 
+    # ------------------------------------------------------------------ #
+    # Runtime controls (docs/BOT_CONTROLS.md)                            #
+    #                                                                    #
+    # Small key/value store for switches an admin changes from the bot   #
+    # itself (Send All premium gate, global force-sub channels).  They   #
+    # live in the same bot_settings collection as the maintenance flag,  #
+    # so a restart or redeploy keeps the last value.                    #
+    # ------------------------------------------------------------------ #
+    RUNTIME_CONFIG_DOC_ID = "runtime_config"
+
+    async def get_runtime_setting(self, key, default=None):
+        doc = await self.botcol.find_one(
+            {'id': self.RUNTIME_CONFIG_DOC_ID}, {key: 1, '_id': 0}
+        )
+        return doc.get(key, default) if doc else default
+
+    async def set_runtime_setting(self, key, value):
+        await self.botcol.update_one(
+            {'id': self.RUNTIME_CONFIG_DOC_ID},
+            {'$set': {key: value, 'updated_at': datetime.datetime.utcnow()}},
+            upsert=True,
+        )
+
+    async def unset_runtime_setting(self, key):
+        await self.botcol.update_one(
+            {'id': self.RUNTIME_CONFIG_DOC_ID},
+            {'$unset': {key: ''}},
+        )
+
     async def add_chat(self, chat, title):
         chat = self.new_group(chat, title)
         await self.grp.insert_one(chat)

@@ -198,6 +198,21 @@ async def dreamxbotz_start():
         temp.MAINTENANCE = False
     if temp.MAINTENANCE:
         logging.warning("Maintenance mode is ON – only ADMINS can use the bot until '/maint off'.")
+    # Runtime controls (docs/BOT_CONTROLS.md): Send All premium gate + global
+    # force-sub channels, both editable from the bot with /sendall and /fsub.
+    # A Mongo hiccup keeps the defaults (gate ON, env force-sub) instead of
+    # blocking startup; the refresher picks the saved values up later.
+    try:
+        from dreamxbotz.util.bot_controls import (
+            refresh_runtime_controls,
+            runtime_controls_refresher,
+        )
+
+        await refresh_runtime_controls()
+        dreamxbotz.loop.create_task(runtime_controls_refresher())
+        logging.info("Runtime controls loaded (Send All gate + global force-sub).")
+    except Exception as e:
+        logging.warning("Runtime controls not refreshed – using safe defaults: %s", e)
     # Index creation is idempotent, Mongo is often still slow while the
     # container comes up – don't let it block the start.
     try:
