@@ -59,11 +59,37 @@ Purana tareeka: `info.py` / `AUTH_CHANNELS` env edit karo, ya group me
 
 Panel me:
 
-* har channel ke saath **❌ Remove** button,
-* **➕ Add channel** — dabao aur next message me ID / `@username` /
-  `t.me/...` bhejo, ya channel ki koi post **forward** kar do,
-* **♻️ Reset to env** (sirf tab jab bot-managed list active ho),
+* har channel ke saath **❌ Remove** button — tap = turant remove,
+* **➕ Add channel** — tap karte hi neeche reply box khud focus ho jata hai
+  (ForceReply), wahan ID / `@username` / `t.me/...` paste karo ya channel ki
+  koi post **forward** kar do,
+* **♻️ Reset to env** (sirf tab dikhta hai jab bot-managed list active ho),
 * **🔄 Refresh** aur **🎛️ Panel**.
+
+### ⚡ Bina command add karo (sabse aasan)
+
+Koi command ya button zaroori nahi — bot ke PM me bas ye bhejo:
+
+| Aap bhejte ho | Bot kya karta hai |
+|---|---|
+| `-1001234567890` | "➕ Add this channel to force-sub?" card + **✅ Add** button |
+| `t.me/YourChannel` (ya `@YourChannel`) | wahi one-tap card |
+| channel ki koi **post forward** | wahi one-tap card |
+
+Card me **✅ Add to force-sub** dabao — channel add ho jata hai aur panel update
+ho jata hai. **❌ Cancel** dabao to card delete ho jata hai.
+
+> `@username` sirf tab card banata hai jab wo waqai koi channel ho; warna wo
+> normal message/search hi rehta hai.
+
+### 🔕 Koi alert/toast popup nahi
+
+Panel ke buttons (Remove, Add, Reset, Refresh, Send All toggle) dabane par ab
+koi "alert" ya toast nahi aata — bas panel wahi ki wahi update ho jata hai.
+Sirf asli error (jaise MongoDB down) par hi alert dikhta hai.
+
+Panel ek hi message me update hota hai (naya message spam nahi hota) jab tak
+aap `/fsub` fresh panel na bhejo.
 
 ### Mode kaise kaam karta hai
 

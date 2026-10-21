@@ -45,19 +45,31 @@ def fresh_botcol():
     controls.invalidate_runtime_cache()
     botctl._PENDING_ADD.clear()
     botctl._TITLE_CACHE.clear()
+    botctl._PANEL_MSG.clear()
     yield db.botcol
     db.botcol = original
     controls.invalidate_runtime_cache()
     botctl._PENDING_ADD.clear()
     botctl._TITLE_CACHE.clear()
+    botctl._PANEL_MSG.clear()
 
 
 class FakeSentMessage:
-    def __init__(self):
+    _next_id = 1000
+
+    def __init__(self, chat_id=ADMIN_ID):
         self.deleted = False
+        self.chat = SimpleNamespace(id=chat_id)
+        FakeSentMessage._next_id += 1
+        self.id = FakeSentMessage._next_id
+        self.edits = []
 
     async def delete(self):
         self.deleted = True
+
+    async def edit_text(self, text="", **kwargs):
+        self.edits.append({"text": text, "kwargs": kwargs})
+        return self
 
 
 class FakeMessage:
@@ -76,11 +88,14 @@ class FakeMessage:
 
     async def reply_text(self, text="", **kwargs):
         self.replies.append({"text": text, "kwargs": kwargs})
-        return FakeSentMessage()
+        return FakeSentMessage(chat_id=self.chat.id)
 
     async def edit_text(self, text="", **kwargs):
         self.edits.append({"text": text, "kwargs": kwargs})
         return FakeSentMessage()
+
+    async def delete(self):
+        self.deleted = True
 
     def stop_propagation(self):
         self.stopped = True
@@ -90,13 +105,23 @@ class FakeClient:
     def __init__(self, titles=None):
         self.titles = titles or {}
         self.sent = []
+        self.edited_messages = []
+
+    async def edit_message_text(self, chat_id, message_id, text="", **kwargs):
+        self.edited_messages.append(
+            {"chat_id": chat_id, "message_id": message_id, "text": text, "kwargs": kwargs}
+        )
+        return SimpleNamespace(id=message_id, chat=SimpleNamespace(id=chat_id))
 
     async def get_chat(self, chat_id):
         if chat_id in self.titles:
+            value = self.titles[chat_id]
+            if hasattr(value, "id"):            # already a chat-like object
+                return value
             return SimpleNamespace(
                 id=chat_id,
                 type=enums.ChatType.CHANNEL,
-                title=self.titles[chat_id],
+                title=value,
             )
         raise RuntimeError("chat not found")
 
@@ -387,7 +412,7 @@ def test_pending_channel_input_adds_forwarded_channel(fresh_botcol):
         id=-100777, type=enums.ChatType.CHANNEL, title="Forwarded Channel"
     )
 
-    asyncio.run(botctl.fsub_pending_input(client, message))
+    asyncio.run(botctl.fsub_channel_input(client, message))
 
     async def saved():
         return await controls.get_custom_fsub_channels()
@@ -419,7 +444,7 @@ class _SendAllMessage:
 
     async def reply_text(self, text="", **kwargs):
         self.replies.append({"text": text, "kwargs": kwargs})
-        return FakeSentMessage()
+        return FakeSentMessage(chat_id=self.chat.id)
 
 
 class _SendAllQuery:
@@ -475,3 +500,111 @@ def test_send_all_gate_on_still_prompts_premium(monkeypatch, fresh_botcol):
         assert query.message.replies, "premium offer should be sent"
 
     asyncio.run(run())
+
+
+# --------------------------------------------------------------------------- #
+# Button-first UX: direct add + no toast popups
+# --------------------------------------------------------------------------- #
+def test_add_button_is_silent_and_opens_a_reply_box(fresh_botcol):
+    """➕ Add channel must not pop a toast; it opens a focused reply box."""
+    from pyrogram.types import ForceReply
+
+    client = FakeClient()
+    query = FakeCallbackQuery("botctl#fsub#add")
+
+    asyncio.run(botctl.bot_control_callback(client, query))
+
+    assert query.answers == [{"text": "", "show_alert": False}]   # no popup text
+    assert botctl._pending_active(ADMIN_ID) is True
+    prompt = query.message.replies[0]
+    assert "Add a force-sub channel" in prompt["text"]
+    assert isinstance(prompt["kwargs"]["reply_markup"], ForceReply)
+
+
+def test_pasting_a_channel_id_shows_a_one_tap_add_card(fresh_botcol):
+    """No command needed: a bare -100… id in PM offers a one-tap add."""
+    client = FakeClient({-1008880001111: "Pasted Channel"})
+    message = FakeMessage(text="-1008880001111")
+
+    asyncio.run(botctl.fsub_channel_input(client, message))
+
+    assert message.stopped is True
+    card = message.replies[0]
+    assert "Add this channel to force-sub?" in card["text"]
+    buttons = card["kwargs"]["reply_markup"].inline_keyboard
+    assert buttons[0][0].callback_data == "botctl#fsub#ok#-1008880001111"
+    assert buttons[1][0].callback_data == "botctl#fsub#no"
+
+    async def saved():
+        return await controls.get_custom_fsub_channels()
+
+    assert asyncio.run(saved()) is None      # only after the button is tapped
+
+
+def test_pasting_a_tme_link_also_offers_the_add_card(fresh_botcol):
+    client = FakeClient({
+        -1008880002222: "Linked Channel",
+        "@LinkedChannel": SimpleNamespace(
+            id=-1008880002222, type=enums.ChatType.CHANNEL, title="Linked Channel"
+        ),
+    })
+    message = FakeMessage(text="https://t.me/LinkedChannel")
+
+    asyncio.run(botctl.fsub_channel_input(client, message))
+
+    assert message.stopped is True
+    assert "Add this channel" in message.replies[0]["text"]
+
+
+def test_confirm_button_adds_the_channel_without_a_toast(fresh_botcol):
+    client = FakeClient({-1008880001111: "Pasted Channel"})
+    query = FakeCallbackQuery("botctl#fsub#ok#-1008880001111")
+
+    asyncio.run(botctl.bot_control_callback(client, query))
+
+    async def saved():
+        return await controls.get_custom_fsub_channels()
+
+    custom = asyncio.run(saved())
+    assert -1008880001111 in custom
+    assert query.answers == [{"text": "", "show_alert": False}]
+    assert "Added to force-sub" in query.message.edits[-1]["text"]
+
+
+def test_confirm_card_cancel_just_deletes_the_card(fresh_botcol):
+    client = FakeClient()
+    query = FakeCallbackQuery("botctl#fsub#no")
+
+    asyncio.run(botctl.bot_control_callback(client, query))
+
+    assert query.answers == [{"text": "", "show_alert": False}]
+    assert query.message.deleted is True
+
+
+def test_non_channel_username_is_left_for_normal_search(fresh_botcol):
+    """An @mention that is not a channel must not swallow the message."""
+    client = FakeClient()                     # resolves nothing
+    message = FakeMessage(text="@notachannel")
+
+    asyncio.run(botctl.fsub_channel_input(client, message))
+
+    assert message.stopped is False
+    assert message.replies == []
+
+
+def test_panel_buttons_never_show_a_toast(fresh_botcol):
+    client = FakeClient()
+    for data in (
+        "botctl#panel",
+        "botctl#sendall",
+        "botctl#sendall#off",
+        "botctl#sendall#on",
+        "botctl#fsub",
+        "botctl#fsub#rm#-1003140286992",
+        "botctl#fsub#reset",
+    ):
+        query = FakeCallbackQuery(data)
+        asyncio.run(botctl.bot_control_callback(client, query))
+        assert query.answers, data
+        assert all(a["text"] == "" for a in query.answers), (data, query.answers)
+        assert all(a["show_alert"] is False for a in query.answers), (data, query.answers)
