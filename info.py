@@ -144,6 +144,7 @@ ADMINS = [int(admin) if id_pattern.search(admin) else admin for admin in environ
 CHANNELS = [int(ch) if id_pattern.search(ch) else ch for ch in environ.get('CHANNELS', '-1002086319581 -1003276318629 -1003453367461 -1003016600468').split()]  # Channel id for auto indexing (make sure bot is admin)
 
 LOG_CHANNEL = int(environ.get('LOG_CHANNEL', '-1002573823548'))  # Log channel id (make sure bot is admin)
+MESSAGE_LOGGING = is_enabled(environ.get("MESSAGE_LOGGING", "True"), True)
 BIN_CHANNEL = int(environ.get('BIN_CHANNEL', '-1002551533001'))  # Bin channel id (make sure bot is admin)
 PREMIUM_LOGS = int(environ.get('PREMIUM_LOGS', '-1002648671971'))  # Premium logs channel id
 DELETE_CHANNELS = [int(dch) if id_pattern.search(dch) else dch for dch in environ.get('DELETE_CHANNELS', '-1002635477308').split()] #(make sure bot is admin)
