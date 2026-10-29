@@ -173,17 +173,7 @@ async def pm_text(bot, message):
                 ), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📝 ʀᴇǫᴜᴇsᴛ ʜᴇʀᴇ ", url=grp_link)]]))
         except Exception as e:
             logger.warning(f"pm_text: reply PM disabled message failed: {e}")
-        try:
-            await bot.send_message(chat_id=LOG_CHANNEL,
-                                   text=(
-                                       f"<b>#𝐏𝐌_𝐌𝐒𝐆\n\n"
-                                       f"👤 Nᴀᴍᴇ : {user}\n"
-                                       f"🆔 ID : {user_id}\n"
-                                       f"💬 Mᴇssᴀɢᴇ : {content}</b>"
-                                   )
-                                   )
-        except Exception as e:
-            logger.warning(f"pm_text: log to LOG_CHANNEL failed: {e}")
+
 
 
 @Client.on_callback_query(filters.regex(r"^reffff"))
