@@ -281,53 +281,60 @@ async def start(client, message):
             )
         m.text = found["query"]
         return await auto_filter(client, m)
-    if len(m.command) == 2 and m.command[1].startswith(('notcopy', 'sendall')):
-        _, userid, verify_id, file_id = m.command[1].split("_", 3)
-        user_id = int(userid)
+    if len(m.command) == 2 and m.command[1].startswith(('notcopy_', 'sendall_')):
+        try:
+            action, userid, verify_id, file_id = m.command[1].split("_", 3)
+            user_id = int(userid)
+            if not verify_id or not file_id:
+                raise ValueError("empty verification payload")
+        except (ValueError, TypeError):
+            return await message.reply("<b>ʟɪɴᴋ ɪɴᴠᴀʟɪᴅ ᴛʀʏ ᴀɢᴀɪɴ...</b>")
+        if not m.from_user or m.from_user.id != user_id:
+            return await message.reply("<b>⚠️ ʏᴇ ᴠᴇʀɪꜰʏ ʟɪɴᴋ ᴀᴀᴘᴋᴇ ʟɪʏᴇ ɴᴀʜɪ ʜᴀɪ.</b>")
         # Premium gate is a runtime switch (/sendall on|off in the bot).
-        if m.command[1].startswith('sendall') and not await send_all_allowed(user_id):
+        if action == 'sendall' and not await send_all_allowed(user_id):
             btn = [[green("⚜️ ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ ⚜️", url=f"https://t.me/{temp.U_NAME}?start=premium")]]
             return await message.reply("<b>⚠️ ᴛʜɪꜱ ꜰᴇᴀᴛᴜʀᴇ ɪꜱ ᴏɴʟʏ ꜰᴏʀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀꜱ !</b>\n\n<i>ᴘʟᴇᴀꜱᴇ ᴘᴜʀᴄʜᴀꜱᴇ ᴘʀᴇᴍɪᴜᴍ ᴛᴏ ᴜꜱᴇ ꜱᴇɴᴅ ᴀʟʟ ꜰᴇᴀᴛᴜʀᴇ.</i>", reply_markup=InlineKeyboardMarkup(btn))
-        grp_id = temp.VERIFICATIONS.get(user_id, 0)
-        settings = await get_settings(grp_id)         
         verify_id_info = await db.get_verify_id_info(user_id, verify_id)
-        if not verify_id_info or verify_id_info["verified"]:
-            return await message.reply("<b>ʟɪɴᴋ ᴇxᴘɪʀᴇᴅ ᴛʀʏ ᴀɢᴀɪɴ...</b>")  
-        
-        ist_timezone = pytz.timezone('Asia/Kolkata')
-        if await db.user_verified(user_id):
-            key = "third_time_verified"
-        else:
-            key = "second_time_verified" if await db.is_user_verified(user_id) else "last_verified"
-        current_time = datetime.now(tz=ist_timezone)
-        result = await db.update_notcopy_user(user_id, {key:current_time})
-        await db.update_verify_id_info(user_id, verify_id, {"verified":True})
-        if key == "third_time_verified": 
-            num = 3 
-        else: 
-            num =  2 if key == "second_time_verified" else 1 
-        if key == "third_time_verified": 
-            msg = script.THIRDT_VERIFY_COMPLETE_TEXT
-        else:
-            msg = script.SECOND_VERIFY_COMPLETE_TEXT if key == "second_time_verified" else script.VERIFY_COMPLETE_TEXT
-        if message.command[1].startswith('sendall'):
+        if not verify_id_info or verify_id_info.get("verified"):
+            return await message.reply("<b>ʟɪɴᴋ ᴇxᴘɪʀᴇᴅ ᴛʀʏ ᴀɢᴀɪɴ...</b>")
+        # Old outstanding links used only the in-memory map; new ones retain
+        # their own group and stage even after a restart or another request.
+        grp_id = verify_id_info.get("group_id", temp.VERIFICATIONS.get(user_id, 0))
+        settings = await get_settings(grp_id)
+        key = verify_id_info.get("stage")
+        if key not in ("last_verified", "second_time_verified", "third_time_verified"):
+            if not await db.is_user_verified(user_id):
+                key = "last_verified"
+            elif await db.user_verified(user_id):
+                key = "third_time_verified"
+            else:
+                key = "second_time_verified"
+        current_time = datetime.now(tz=pytz.timezone('Asia/Kolkata'))
+        await db.update_notcopy_user(user_id, {key: current_time})
+        await db.update_verify_id_info(user_id, verify_id, {"verified": True})
+        num = {"last_verified": 1, "second_time_verified": 2, "third_time_verified": 3}[key]
+        msg = {"last_verified": script.VERIFY_COMPLETE_TEXT,
+               "second_time_verified": script.SECOND_VERIFY_COMPLETE_TEXT,
+               "third_time_verified": script.THIRDT_VERIFY_COMPLETE_TEXT}[key]
+        if action == 'sendall':
             verifiedfiles = f"https://telegram.me/{temp.U_NAME}?start=allfiles_{grp_id}_{file_id}"
         else:
             verifiedfiles = f"https://telegram.me/{temp.U_NAME}?start=file_{grp_id}_{file_id}"
-        await client.send_message(settings['log'], script.VERIFIED_LOG_TEXT.format(m.from_user.mention, user_id, datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%d %B %Y'), num))
-        btn = [[
-            green("✅ ᴄʟɪᴄᴋ ʜᴇʀᴇ ᴛᴏ ɢᴇᴛ ꜰɪʟᴇ ✅", url=verifiedfiles),
-        ]]
-        reply_markup=InlineKeyboardMarkup(btn)
-        dlt=await m.reply_photo(
-            photo=(VERIFY_IMG),
-            caption=msg.format(message.from_user.mention, get_readable_time(TWO_VERIFY_GAP)),
-            reply_markup=reply_markup,
-            parse_mode=enums.ParseMode.HTML
-        )
+        try:
+            await client.send_message(settings.get('log', LOG_CHANNEL), script.VERIFIED_LOG_TEXT.format(m.from_user.mention, user_id, current_time.strftime('%d %B %Y'), num))
+        except Exception:
+            logger.exception("Could not send verification log for user %s", user_id)
+        reply_markup = InlineKeyboardMarkup([[green("✅ ᴄʟɪᴄᴋ ʜᴇʀᴇ ᴛᴏ ɢᴇᴛ ꜰɪʟᴇ ✅", url=verifiedfiles)]])
+        caption = msg.format(message.from_user.mention, get_readable_time(settings.get('verify_time', TWO_VERIFY_GAP)))
+        try:
+            dlt = await m.reply_photo(photo=VERIFY_IMG, caption=caption, reply_markup=reply_markup, parse_mode=enums.ParseMode.HTML)
+        except Exception:
+            logger.exception("Could not send verification photo for user %s", user_id)
+            dlt = await m.reply_text(caption, reply_markup=reply_markup, parse_mode=enums.ParseMode.HTML)
         await asyncio.sleep(300)
         await dlt.delete()
-        return         
+        return
     if message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
         buttons = [[
                     green('➕ ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ➕', url=f'http://t.me/{temp.U_NAME}?startgroup=true')
@@ -481,14 +488,16 @@ async def start(client, message):
             is_third_shortener = await db.use_third_shortener(user_id, settings.get('third_verify_time', THREE_VERIFY_GAP))
             if settings.get("is_verify", IS_VERIFY) and (not user_verified or is_second_shortener or is_third_shortener):
                 verify_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=7))
-                await db.create_verify_id(user_id, verify_id)
+                stage = ("last_verified" if not user_verified else
+                         "third_time_verified" if is_third_shortener else "second_time_verified")
+                await db.create_verify_id(user_id, verify_id, group_id=grp_id, stage=stage)
                 temp.VERIFICATIONS[user_id] = grp_id
                 if message.command[1].startswith('allfiles'):
                     target = f"https://telegram.me/{temp.U_NAME}?start=sendall_{user_id}_{verify_id}_{file_id}"
                 else:
                     target = f"https://telegram.me/{temp.U_NAME}?start=notcopy_{user_id}_{verify_id}_{file_id}"
                 try:
-                    verify = await get_shortlink(target, grp_id, is_second_shortener, is_third_shortener)
+                    verify = await get_shortlink(target, grp_id, stage == "second_time_verified", stage == "third_time_verified")
                 except Exception as e:
                     # Shortlink service failed — NEVER fall through to the free file.
                     print(f"Error In Verification - {e}")
@@ -496,10 +505,10 @@ async def start(client, message):
                         "<b>⚠️ ᴠᴇʀɪꜰʏ sᴇʀᴠɪᴄᴇ ᴄᴜʀʀᴇɴᴛʟʏ ᴅᴏᴡɴ ʜᴀɪ !</b>\n\n"
                         "<i>ᴛʜᴏᴅɪ ᴅᴇʀ ʙᴀᴀᴅ ᴛʀʏ ᴋᴀʀᴏ, ᴠᴇʀɪꜰʏ ᴋᴇ ʙɪɴᴀ ꜰɪʟᴇ ɴᴀʜɪ ᴍɪʟᴇɢɪ.</i>"
                     )
-                if is_third_shortener:
+                if stage == "third_time_verified":
                     howtodownload = settings.get('tutorial_3', TUTORIAL_3)
                 else:
-                    howtodownload = settings.get('tutorial_2', TUTORIAL_2) if is_second_shortener else settings.get('tutorial', TUTORIAL)
+                    howtodownload = settings.get('tutorial_2', TUTORIAL_2) if stage == "second_time_verified" else settings.get('tutorial', TUTORIAL)
                 buttons = [[
                     green("♻️ ᴄʟɪᴄᴋ ʜᴇʀᴇ ᴛᴏ ᴠᴇʀɪꜰʏ ♻️", url=verify)
                 ],[
@@ -507,10 +516,10 @@ async def start(client, message):
                     blue("📖 ʜᴏᴡ ᴛᴏ ᴠᴇʀɪꜰʏ ᴍᴇ ?", callback_data="howtoverify")
                 ]]
                 reply_markup=InlineKeyboardMarkup(buttons)
-                if await db.user_verified(user_id): 
+                if stage == "third_time_verified":
                     msg = script.THIRDT_VERIFICATION_TEXT
-                else:            
-                    msg = script.SECOND_VERIFICATION_TEXT if is_second_shortener else script.VERIFICATION_TEXT
+                else:
+                    msg = script.SECOND_VERIFICATION_TEXT if stage == "second_time_verified" else script.VERIFICATION_TEXT
                 n=await m.reply_text(
                     text=msg.format(message.from_user.mention),
                     protect_content = True,
