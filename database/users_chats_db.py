@@ -259,7 +259,8 @@ class Database:
                 "last_verified": datetime.datetime(2020, 5, 17, 0, 0, 0, tzinfo=ist_timezone),
                 "second_time_verified": datetime.datetime(2019, 5, 17, 0, 0, 0, tzinfo=ist_timezone),
             }
-            user = await self.misc.insert_one(res)
+            await self.misc.insert_one(res)
+            user = res
         return user
 
     async def update_notcopy_user(self, user_id, value:dict):
@@ -278,7 +279,7 @@ class Database:
         ist_timezone = pytz.timezone('Asia/Kolkata')
         pastDate = pastDate.astimezone(ist_timezone)
         current_time = datetime.datetime.now(tz=ist_timezone)
-        seconds_since_midnight = (current_time - datetime.datetime(current_time.year, current_time.month, current_time.day, 0, 0, 0, tzinfo=ist_timezone)).total_seconds()
+        seconds_since_midnight = (current_time - ist_timezone.localize(datetime.datetime(current_time.year, current_time.month, current_time.day))).total_seconds()
         time_diff = current_time - pastDate
         total_seconds = time_diff.total_seconds()
         return total_seconds <= seconds_since_midnight
@@ -293,7 +294,7 @@ class Database:
         ist_timezone = pytz.timezone('Asia/Kolkata')
         pastDate = pastDate.astimezone(ist_timezone)
         current_time = datetime.datetime.now(tz=ist_timezone)
-        seconds_since_midnight = (current_time - datetime.datetime(current_time.year, current_time.month, current_time.day, 0, 0, 0, tzinfo=ist_timezone)).total_seconds()
+        seconds_since_midnight = (current_time - ist_timezone.localize(datetime.datetime(current_time.year, current_time.month, current_time.day))).total_seconds()
         time_diff = current_time - pastDate
         total_seconds = time_diff.total_seconds()
         return total_seconds <= seconds_since_midnight
@@ -342,8 +343,12 @@ class Database:
                 return second_time < pastDate
         return False
    
-    async def create_verify_id(self, user_id: int, hash):
+    async def create_verify_id(self, user_id: int, hash, *, group_id=None, stage=None):
         res = {"user_id": user_id, "hash":hash, "verified":False}
+        if group_id is not None:
+            res["group_id"] = group_id
+        if stage is not None:
+            res["stage"] = stage
         return await self.verify_id.insert_one(res)
 
     async def get_verify_id_info(self, user_id: int, hash):
