@@ -569,6 +569,50 @@ def test_webhook_accepts_nested_data_payload(webhook_client, store):
     asyncio.run(_run())
 
 
+def test_webhook_fails_closed_without_a_signing_secret(webhook_client, store, monkeypatch):
+    """The documented IMAP-only setup must not accept unsigned 'success' posts."""
+    monkeypatch.setattr(fampay_webhook, "_webhook_secret", lambda: "")
+
+    async def _run():
+        client_factory, granted = webhook_client
+        await _create(store)
+        async with await client_factory() as client:
+            resp = await client.post(
+                "/fampay/webhook",
+                data=json.dumps({"status": "success", "order_id": "FMP-TEST01", "utr": "420987654321"}),
+            )
+            assert resp.status == 503
+        assert granted == []
+
+    asyncio.run(_run())
+
+
+def test_webhook_rejects_amount_and_expiry_mismatches(webhook_client, store):
+    async def _run():
+        client_factory, granted = webhook_client
+        await _create(store)
+        async with await client_factory() as client:
+            wrong_amount, headers = _signed(
+                {"status": "success", "order_id": "FMP-TEST01", "amount": 1.0, "utr": "420987654321"}
+            )
+            resp = await client.post("/fampay/webhook", data=wrong_amount, headers=headers)
+            assert resp.status == 400
+            assert (await resp.json())["status"] == "amount_mismatch"
+
+            await store.col.update_one(
+                {"_id": "FMP-TEST01"},
+                {"$set": {"expires_at": datetime.now() - timedelta(minutes=1)}},
+            )
+            expired, headers = _signed(
+                {"status": "success", "order_id": "FMP-TEST01", "amount": 40.07, "utr": "420987654321"}
+            )
+            resp = await client.post("/fampay/webhook", data=expired, headers=headers)
+            assert resp.status == 400
+            assert (await resp.json())["status"] == "expired_order"
+        assert granted == []
+
+    asyncio.run(_run())
+
 
 # --------------------------------------------------------------------------- #
 # Plugin sanity (no pyrogram import – syntax + wiring only)

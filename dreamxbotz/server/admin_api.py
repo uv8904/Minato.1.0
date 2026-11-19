@@ -9,16 +9,17 @@ Stats:
 - Daily growth, premium expiry, poster health
 
 Security:
-- In preview, open to all
-- In production, check ?admin_id= or X-Admin-Token header matches ADMINS
+- Shared authentication lives in ``dreamxbotz/server/auth.py``; the public
+  preview mode is an explicit opt-in used by ``tools/preview_section.py``.
 - No sensitive data (file_ids, tokens) ever exposed
 """
 
 import logging
-import re
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from aiohttp import web
 import asyncio
+
+from dreamxbotz.server.auth import is_admin_request as _is_admin_request
 
 logger = logging.getLogger(__name__)
 routes = web.RouteTableDef()
@@ -26,48 +27,11 @@ routes = web.RouteTableDef()
 def _utcnow():
     return datetime.now(timezone.utc)
 
-def _is_admin_request(request):
-    """Check if request is from admin - best effort, open in preview"""
-    try:
-        import info
-        admins = getattr(info, "ADMINS", [])
-        if not admins:
-            return True  # No admins set = allow in preview
-        
-        # Check query param admin_id
-        admin_id = request.query.get("admin_id") or request.headers.get("X-Admin-Id")
-        if admin_id:
-            try:
-                if int(admin_id) in admins:
-                    return True
-            except Exception:
-                pass
-        
-        # Check token header
-        token = request.headers.get("X-Admin-Token") or request.query.get("token")
-        if token:
-            # Simple token = bot token prefix or any admin id as token for preview
-            if len(token) > 10:
-                return True
-        
-        # In preview, allow all but show warning
-        # Check if request is from localhost or preview
-        forwarded = request.headers.get("X-Forwarded-For", "")
-        host = request.headers.get("Host", "")
-        if "localhost" in host or "127.0.0.1" in host or "e2b.app" in host:
-            return True
-            
-        # For real production, you should implement proper auth
-        # For now, allow but frontend will show admin check
-        return True
-    except Exception as e:
-        logger.debug(f"admin check failed: {e}")
-        return True
-
-
 @routes.get("/api/admin/stats")
 async def admin_stats(request: web.Request):
     """Live bot stats for admin dashboard"""
+    if not _is_admin_request(request):
+        return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
     try:
         # Gather stats in parallel with timeouts
         stats = {
@@ -202,7 +166,12 @@ async def admin_stats(request: web.Request):
 async def admin_dashboard(request: web.Request):
     """Admin Dashboard HTML - JioHotstar level"""
     is_admin = _is_admin_request(request)
-    
+    if not is_admin:
+        return web.Response(
+            text="<!doctype html><title>Unauthorized</title><h1>401 — admin only</h1>",
+            content_type="text/html", status=401,
+        )
+
     html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -460,7 +429,7 @@ setInterval(refresh, 15000);
 </html>
     """
     html = html.replace("__ADMIN_BANNER__", (
-        "<div class=\'alert alert-warn\'>⚠️ Preview mode - admin auth bypassed for e2b.app. In production, add ?admin_id=YOUR_ID to URL.</div>"
+        "<div class=\'alert alert-warn\'>⚠️ Preview mode: auth is bypassed only because ADMIN_DASHBOARD_PUBLIC=True. In production pass ?admin_id=YOUR_ID or X-Admin-Token.</div>"
         if is_admin else
         "<div class=\'alert alert-warn\'>🔒 Not admin - showing demo data. Add ?admin_id=YOUR_TELEGRAM_ID</div>"
     ))

@@ -53,6 +53,17 @@ The premium-expiry background task (`plugins.check_expired_premium`) also
 survives a Mongo error now — it logs, sleeps 30 s and tries again instead of
 silently dying until the next restart.
 
+Before any of this, `__main__` calls `info.required_config_issues()`. Missing
+`BOT_TOKEN`, `API_ID`, `API_HASH` or `DATABASE_URI` (and a missing scoped
+`CLONE_DATABASE_URI` when cloning is enabled) stop the process immediately with
+an actionable error; non-fatal gaps such as an unset `FQDN` are logged as
+warnings. Optional steps still never block `idle()`.
+
+Every background task and the aiohttp `AppRunner` are tracked for the lifetime
+of one start attempt. A decorator cancels them on both a clean `idle()` return
+and a failed start, so a retry cannot leave a duplicate expiry checker,
+refresher or second listener behind.
+
 ## Knobs
 
 `START_RETRY_BASE_DELAY` (5 s) and `START_RETRY_MAX_DELAY` (300 s) at the top of

@@ -1,9 +1,10 @@
 import sys
 import os
+import functools
 import importlib
 import types
 from pathlib import Path
-from pyrogram import Client, idle, __version__
+from pyrogram import idle, __version__
 from pyrogram.raw.all import layer
 import time
 from pyrogram.errors import FloodWait
@@ -13,7 +14,10 @@ import pytz
 from aiohttp import web
 from database.ia_filterdb import Media, Media2
 from database.users_chats_db import db
-from info import *
+from info import (
+    ADMINS, CLONE_CHILD_ID, CLONE_CHILD_MODE, LOG_CHANNEL, LOG_STR, MULTIPLE_DB,
+    ON_HEROKU, PORT, config_warnings, required_config_issues,
+)
 from utils import temp
 from Script import script
 from plugins import web_server, check_expired_premium, keep_alive
@@ -52,6 +56,49 @@ botStartTime = time.time()
 # ---------------------------------------------------------------------------
 START_RETRY_BASE_DELAY = 5      # seconds; doubles after every failed attempt ...
 START_RETRY_MAX_DELAY = 300     # ... but never waits longer than 5 minutes
+
+# Background work and the web runner belong to one start-up attempt. Tracking
+# them here means a retry can never leave a duplicate expiry checker (or a
+# second listener on PORT) behind, and shutdown actually releases resources.
+_runtime_tasks: set = set()
+_web_runner = None
+
+
+def spawn(coro) -> asyncio.Task:
+    """Start background work in the running loop and remember it for cleanup."""
+    task = asyncio.get_running_loop().create_task(coro)
+    _runtime_tasks.add(task)
+    task.add_done_callback(_runtime_tasks.discard)
+    return task
+
+
+async def shutdown_runtime() -> None:
+    """Cancel everything started by this attempt and close the web server."""
+    global _web_runner
+    tasks = list(_runtime_tasks)
+    for task in tasks:
+        task.cancel()
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+    _runtime_tasks.clear()
+    if _web_runner is not None:
+        try:
+            await _web_runner.cleanup()
+        except Exception as e:  # pragma: no cover - defensive shutdown
+            logging.warning("Web server cleanup failed: %s", e)
+        finally:
+            _web_runner = None
+
+
+def _cleanup_on_exit(func):
+    """Guarantee runtime cleanup on both a clean idle() and a failed start."""
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        finally:
+            await shutdown_runtime()
+    return wrapper
 
 
 def startup_retry_delay(attempt: int) -> int:
@@ -144,6 +191,7 @@ async def stop_client_quietly():
         logging.warning("Ignoring error while stopping the client before retry: %s", e)
 
 
+@_cleanup_on_exit
 async def dreamxbotz_start():
     print('\n\nInitializing DreamxBotz')
     # Import once before Client.start(). The framework will discover handlers
@@ -178,7 +226,7 @@ async def dreamxbotz_start():
         except Exception as e:
             logging.warning(f"FamPay workers not started: {e}")
         if ON_HEROKU:
-            asyncio.create_task(ping_server())
+            spawn(ping_server())
     # Banned users/chats: a Mongo hiccup at boot means "nobody banned" for this
     # run instead of a dead bot.
     try:
@@ -209,7 +257,7 @@ async def dreamxbotz_start():
         )
 
         await refresh_runtime_controls()
-        dreamxbotz.loop.create_task(runtime_controls_refresher())
+        spawn(runtime_controls_refresher())
         logging.info("Runtime controls loaded (Send All gate + global force-sub).")
     except Exception as e:
         logging.warning("Runtime controls not refreshed – using safe defaults: %s", e)
@@ -254,16 +302,16 @@ async def dreamxbotz_start():
     if CLONE_CHILD_MODE:
         # The clone has its own DB; a slower expiry poll avoids multiplying
         # the main bot's per-second Mongo reads for every clone process.
-        dreamxbotz.loop.create_task(check_expired_premium(dreamxbotz, interval=60))
+        spawn(check_expired_premium(dreamxbotz, interval=60))
     else:
-        dreamxbotz.loop.create_task(check_expired_premium(dreamxbotz))
+        spawn(check_expired_premium(dreamxbotz))
     # Premium Exclusive scheduled releases (docs/PREMIUM_EARLY_ACCESS.md):
     # restart-safe — anything whose release_at has passed gets released and the
     # waiting users get their 🔔 notification even after a restart.
     try:
         from plugins.PremiumContent import premium_release_watcher
 
-        dreamxbotz.loop.create_task(premium_release_watcher(dreamxbotz))
+        spawn(premium_release_watcher(dreamxbotz))
     except Exception as e:
         logging.warning(f"Premium release watcher not started: {e}")
     logging.info(f"{me.first_name} with Pyrogram v{__version__} (Layer {layer}) started on {me.username}.")
@@ -294,14 +342,15 @@ async def dreamxbotz_start():
         # Web server (stream links, health checks on Koyeb/Heroku). If the port
         # is taken or the app fails to build, the Telegram side keeps working.
         try:
-            app = web.AppRunner(await web_server())
-            await app.setup()
+            global _web_runner
+            _web_runner = web.AppRunner(await web_server())
+            await _web_runner.setup()
             bind_address = "0.0.0.0"
-            await web.TCPSite(app, bind_address, PORT).start()
+            await web.TCPSite(_web_runner, bind_address, PORT).start()
             logging.info(f"Web server listening on {bind_address}:{PORT}")
         except Exception as e:
             logging.exception(f"Web server failed to start on port {PORT} – bot keeps running without it: {e}")
-        dreamxbotz.loop.create_task(keep_alive())
+        spawn(keep_alive())
         # Daily Index Report (docs/DAILY_INDEX_REPORT.md): every morning the
         # previous day's indexed files list goes to LOG_CHANNEL.  Main bot
         # only – clones would otherwise post duplicate reports.
@@ -314,6 +363,15 @@ async def dreamxbotz_start():
     await idle()
     
 if __name__ == '__main__':
+    # Fail fast on a misconfigured deployment instead of connecting to a
+    # stranger's cluster or silently running with a broken token.
+    _config_issues = required_config_issues()
+    if _config_issues:
+        for _issue in _config_issues:
+            logging.error("Configuration error: %s", _issue)
+        sys.exit(1)
+    for _warning in config_warnings():
+        logging.warning("Configuration warning: %s", _warning)
     # Use the loop the Client captured in its __init__ so dreamxbotz.loop and
     # the running loop are always the same object.
     loop = getattr(dreamxbotz, "loop", None) or asyncio.get_event_loop()

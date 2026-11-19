@@ -25,7 +25,13 @@ from info import PREMIUM_CONTENT_ENABLED
 from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid, ChatAdminRequired, UserNotParticipant
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, InputMediaPhoto, WebAppInfo
-from info import *
+from info import (
+    ADMINS, AUTH_REQ_CHANNELS, BIN_CHANNEL, CUSTOM_FILE_CAPTION, DELETE_TIME, EMOJI_MODE,
+    GRP_LNK, IS_VERIFY, LANGUAGES, LOG_CHANNEL, MAX_B_TN, MSG_ALRT, MULTIPLE_DB,
+    NO_RESULTS_MSG, OWNER_LNK, OWNER_UPI_ID, PICS, QR_CODE, QUALITIES, REACTIONS,
+    REQST_CHANNEL, SEASONS, STAR_PREMIUM_PLANS, SUBSCRIPTION, SUPPORT_CHAT_ID,
+    UPDATE_CHNL_LNK, URL,
+)
 from Script import script
 from pyrogram.errors.exceptions.bad_request_400 import MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty
 from database.refer import referdb

@@ -6,7 +6,7 @@ Endpoints:
   GET  /api/recommend?based_on=title  lightweight AI recs (Jinja-free)
 
 Dashboard:
-  GET  /analytics  admin HTML (Chart.js, no auth in preview; in prod check ADMINS)
+  GET  /analytics  admin HTML (shared auth; public only in the preview harness)
 
 Storage:
   Tries Mongo collection `analytics_events` (DATABASE_URI/DATABASE_NAME).
@@ -27,12 +27,19 @@ from typing import Any, Dict, List
 
 from aiohttp import web
 
+from dreamxbotz.server.auth import is_admin_request
+
 logger = logging.getLogger(__name__)
 routes = web.RouteTableDef()
 
 # In-memory fallback (preview + when Mongo down) — also imported by preview_section.py
 _memory_events: List[Dict[str, Any]] = []
 _memory_max = 5000
+# The tracking endpoint is intentionally public (browser beacons), but a
+# per-IP budget stops one visitor from filling the events collection.
+_track_hits: Dict[str, List[float]] = {}
+_TRACK_BUDGET = 60
+_TRACK_WINDOW = 3600
 
 def _utcnow():
     return datetime.now(timezone.utc)
@@ -125,8 +132,26 @@ async def _load_events(limit=2000) -> List[Dict[str, Any]]:
     return list(reversed(_memory_events[-limit:]))
 
 # ---------- Tracking ----------
+def _track_allowed(request: web.Request) -> bool:
+    import time
+
+    ip = _client_ip(request) or "unknown"
+    now = time.monotonic()
+    hits = [stamp for stamp in _track_hits.get(ip, []) if now - stamp < _TRACK_WINDOW]
+    if len(hits) >= _TRACK_BUDGET:
+        _track_hits[ip] = hits
+        return False
+    hits.append(now)
+    _track_hits[ip] = hits
+    if len(_track_hits) > 10000:  # bound memory even under distributed abuse
+        _track_hits.clear()
+    return True
+
+
 @routes.post("/api/analytics/track")
 async def track(request: web.Request):
+    if not _track_allowed(request):
+        return web.json_response({"ok": False, "error": "rate limited"}, status=429)
     try:
         try:
             data = await request.json()
@@ -198,6 +223,8 @@ def _aggregate(rows: List[Dict[str, Any]]):
 
 @routes.get("/api/analytics/stats")
 async def stats(request: web.Request):
+    if not is_admin_request(request):
+        return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
     try:
         limit = 2000
         try:
@@ -282,16 +309,8 @@ async def recommend(request: web.Request):
 # ---------- Dashboard HTML ----------
 @routes.get("/analytics")
 async def dashboard(request: web.Request):
-    # in prod, gate by ADMINS; in preview allow all
-    try:
-        import info
-        admins = getattr(info, "ADMINS", [])
-        # allow ?token= or header, but don't block preview
-        # we just show banner if not admin
-        is_admin = True
-        # optional check: if request has no admin ip, still allow but show warning
-    except Exception:
-        is_admin = True
+    if not is_admin_request(request):
+        return web.Response(text="401 — admin only", status=401)
     html = open_dashboard_html()
     return web.Response(text=html, content_type="text/html")
 

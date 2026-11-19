@@ -79,8 +79,9 @@ hooks, non-blocking deletion, photo fallbacks and off-loop IMDb execution.
 ## About the 0.2-second target
 
 A warm in-process cache removes MongoDB reads from the search layer. It does
-**not** guarantee a 200 ms user-visible reply. Cold unanchored regex/caption
-queries can still scan the collection; MongoDB's existing text index cannot
+**not** guarantee a 200 ms user-visible reply. User queries are now escaped and
+capped at 200 characters, so they cannot inject regex quantifiers, but cold
+unanchored regex/caption queries can still scan the collection; MongoDB's existing text index cannot
 transparently replace those queries without changing matching behavior. Telegram
 RPCs, regional network latency, host load/cold starts, and cold IMDb/Groq requests
 also affect response time. IMDb-enabled searches still wait for their own poster,

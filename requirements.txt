@@ -6,28 +6,28 @@ electrogram==0.3.230
 pymongo==4.16.0
 dnspython==2.7.0            # needed by pymongo/motor for mongodb+srv:// URIs
 motor==3.7.1
-umongo
+umongo==3.1.0
 marshmallow<4.0.0           # umongo breaks with marshmallow 4.x
 
 # ---------- HTTP / utilities ----------
-aiohttp
-requests
-jinja2
-pytz
+aiohttp>=3.9,<4
+requests>=2.31,<3
+jinja2>=3.1,<4
+pytz>=2024.1
 python-dotenv==0.21.1
 
 # ---------- Features used by the code ----------
-Pillow                      # poster editing (bot.py, Imdbposter.py, movie_api.py)
-qrcode[pil]                 # FamPay UPI QR images (plugins/FamPay.py)
-psutil                      # /status RAM-CPU stats (p_ttishow.py) + clone RAM guard
-cryptography>=42.0.0        # Fernet encryption for user-provided clone bot tokens
-shortzy                     # shortlink generation (utils.py)
-fuzzywuzzy                  # title spelling/suggest (ai_spell.py, title_suggest.py)
+Pillow>=10,<14            # poster editing (bot.py, Imdbposter.py, movie_api.py)
+qrcode[pil]>=8,<9            # FamPay UPI QR images (plugins/FamPay.py)
+psutil>=5.9,<8            # /status RAM-CPU stats (p_ttishow.py) + clone RAM guard
+cryptography>=42.0.0,<60        # Fernet encryption for user-provided clone bot tokens
+shortzy==0.0.8             # shortlink generation (utils.py)
+fuzzywuzzy==0.18.0         # title spelling/suggest (ai_spell.py, title_suggest.py)
 Levenshtein==0.24.0         # fast C backend for fuzzywuzzy
 
 # ---------- IMDb metadata (Joelkb fork) ----------
 # IMPORTANT: this package pulls beautifulsoup4 + lxml itself — no need to list bs4.
-git+https://github.com/Joelkb/cinemagoer
+git+https://github.com/Joelkb/cinemagoer@aca62692b6f0ca7ed9c70871bafd8b558c6ba6ec#egg=cinemagoer
 
 # ============================================================
 # REMOVED (unused in the entire codebase — keeps the bot lite):

@@ -112,6 +112,13 @@ def test_rate_limit_blocks_after_the_hourly_budget(monkeypatch):
 
 
 def test_rate_limit_can_be_disabled(monkeypatch):
+    import info
+
+    # Exercise the real env parsing: min(max(0, 10), 2000) used to turn the
+    # documented "0 = unlimited" setting into 10 requests/hour.
+    assert info.inline_rate_limit("0") == 0
+    assert info.inline_rate_limit("") == 240
+    assert info.inline_rate_limit("5000") == 2000
     monkeypatch.setattr(inline, "INLINE_SEARCH_MAX_REQUESTS", 0)
     inline.reset_rate_limits()
 

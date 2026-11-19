@@ -171,6 +171,7 @@ def env(monkeypatch):
     monkeypatch.setattr(ai, "BOOT_RETRY_BASE_DELAY", 0)
     monkeypatch.setattr(ai, "GRAB_COPY_DELAY", 0)
     monkeypatch.setattr(ai, "mdb", FakeMdb())
+    monkeypatch.setattr(ai, "CHANNELS", [-1002086319581])  # no channel IDs ship in the source any more
     monkeypatch.setattr(ai, "ubot", None)
     monkeypatch.setattr(ai, "worker_task", None)
     monkeypatch.setattr(ai, "flusher_task", None)

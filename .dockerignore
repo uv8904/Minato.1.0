@@ -1,0 +1,24 @@
+# Secrets and local state must never enter an image layer.
+.env
+.env.*
+!.env.example
+*.session
+*.session-journal
+DreamXlogs.txt
+cinemagoer.db
+
+# Development-only files.
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+tests/
+docs/
+preview/
+*.md
+Dockerfile
+docker-compose.yml

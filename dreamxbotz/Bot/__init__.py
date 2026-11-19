@@ -16,16 +16,13 @@ logging.basicConfig(
 logging.getLogger("aiohttp").setLevel(logging.ERROR)
 logging.getLogger("aiohttp.web").setLevel(logging.ERROR)
 
-from pyrogram import Client
-from database.ia_filterdb import Media
-from info import *
-from utils import temp
+from pyrogram import Client, types
 from typing import Union, Optional, AsyncGenerator
-from pyrogram import types
-from aiohttp import web
 
-from pyrogram import Client
-from info import *
+from info import (
+    API_HASH, API_ID, BOT_TOKEN, CLONE_CHILD_MODE, SESSION,
+    SESSION_WORKDIR, WORKERS,
+)
 
 
 class dreamcinezoneXBot(Client):
