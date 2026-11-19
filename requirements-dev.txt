@@ -1,0 +1,4 @@
+# Test/CI-only dependencies (see .github/workflows/tests.yml).
+pytest>=8,<10
+# Static import sanity check for the modules we touched.
+pyflakes>=3.2,<4

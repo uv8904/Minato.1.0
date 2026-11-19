@@ -1212,6 +1212,10 @@ def build_app(limit: int = DEFAULT_LIMIT) -> web.Application:
     # ones; production also answers "/" with the storefront.
     ott_api.build_routes(app, with_pages=True)
     # Admin dashboard/API, using the same handlers as production.
+    # The standalone preview harness runs on localhost with no Telegram login;
+    # it is the only place where the dashboards are intentionally public.
+    import info
+    info.ADMIN_DASHBOARD_PUBLIC = True
     from dreamxbotz.server import admin_api
 
     app.add_routes(admin_api.routes)

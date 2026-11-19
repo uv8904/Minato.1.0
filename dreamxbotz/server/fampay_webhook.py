@@ -7,6 +7,10 @@ deployed with a public URL (``URL``/``PORT`` in ``info.py``) this makes
 approval near-instant; without a public URL the IMAP worker and the
 FamGateway status poll still cover everything, just a few seconds slower.
 
+Security: an unsigned webhook is *never* trusted. If no signing secret is
+configured the endpoint returns 503 instead of accepting arbitrary "success"
+posts from the internet.
+
 Route (registered in ``plugins/__init__.py`` **before** the catch-all stream
 route so it can never be swallowed)::
 
@@ -51,9 +55,10 @@ def _webhook_secret() -> str:
 def _signature_ok(body: bytes, header_value: str) -> bool:
     secret = _webhook_secret()
     if not secret:
-        # No secret configured: nothing to verify against.  Accept the payload
-        # (the order-id lookup below still has to match a pending order).
-        return True
+        # Fail closed. Accepting unsigned payloads meant anyone who could see
+        # their own order id could grant themselves premium in the documented
+        # IMAP-only setup (no FamGateway key = no signing secret).
+        return False
     if not header_value:
         return False
     provided = header_value.strip()
@@ -71,6 +76,22 @@ def _first(payload: dict, *keys, default=""):
     return default
 
 
+def _amount_matches(order: dict, payload: dict) -> bool:
+    """Reject a signed webhook whose amount belongs to a different order."""
+    raw = _first(payload, "amount", "payable_amount", "total", "amount_paid", default="")
+    if raw in (None, ""):
+        return True  # some gateways omit the amount; signature still required
+    try:
+        paid = round(float(str(raw).replace(",", "").replace("₹", "")), 2)
+    except (TypeError, ValueError):
+        return False
+    expected = {
+        round(float(order.get("amount") or 0), 2),
+        round(float(order.get("payable_amount") or 0), 2),
+    }
+    return paid in expected
+
+
 def _looks_paid(payload: dict) -> bool:
     status = str(_first(payload, "status", "event", "type", default="")).lower()
     if status in ("success", "paid", "payment.success", "completed", "credit"):
@@ -83,6 +104,11 @@ def _looks_paid(payload: dict) -> bool:
 async def famgateway_webhook(request: web.Request):
     from database.payment_db import paydb
 
+    if not _webhook_secret():
+        logger.error("FamPay webhook disabled: no signing secret configured")
+        return web.json_response(
+            {"status": "error", "reason": "webhook not configured"}, status=503
+        )
     body = await request.read()
     signature = request.headers.get("X-FamGateway-Signature", "")
     if not _signature_ok(body, signature):
@@ -114,6 +140,12 @@ async def famgateway_webhook(request: web.Request):
     if order is None:
         logger.info("FamPay webhook: no pending order matches '%s'.", order_ref)
         return web.json_response({"status": "unknown_order"})
+    if paydb.is_expired(order):
+        logger.warning("FamPay webhook: expired order %s ignored.", order["order_id"])
+        return web.json_response({"status": "expired_order"}, status=400)
+    if not _amount_matches(order, merged):
+        logger.warning("FamPay webhook: amount mismatch for %s ignored.", order["order_id"])
+        return web.json_response({"status": "amount_mismatch"}, status=400)
 
     if _fulfilment_handler is None:
         logger.error("FamPay webhook: no fulfilment handler registered.")

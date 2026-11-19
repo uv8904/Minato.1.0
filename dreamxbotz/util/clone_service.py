@@ -55,6 +55,7 @@ class CloneManager:
         collection,
         *,
         encryption_key: str,
+        clone_database_uri: str = "",
         enabled: bool = True,
         max_bots: int = 1,
         max_records: int = 100,
@@ -69,6 +70,10 @@ class CloneManager:
     ):
         self.collection = collection
         self.enabled = bool(enabled)
+        # A separate, least-privilege Mongo URI is mandatory: giving a user's
+        # clone process the host's URI would let it read every database on the
+        # cluster, not just its own minato_clone_<id> database.
+        self.clone_database_uri = str(clone_database_uri or "")
         self.max_bots = max(0, min(int(max_bots), 10))
         self.max_records = max(1, min(int(max_records), 1000))
         self.min_free_ram_mb = max(0, int(min_free_ram_mb))
@@ -97,7 +102,12 @@ class CloneManager:
 
     @property
     def configured(self) -> bool:
-        return self.enabled and self._vault is not None and self.max_bots > 0
+        return (
+            self.enabled
+            and self._vault is not None
+            and bool(self.clone_database_uri)
+            and self.max_bots > 0
+        )
 
     @staticmethod
     def valid_token_format(token: str) -> bool:
@@ -500,10 +510,13 @@ class CloneManager:
             "LANG", "LC_ALL", "TZ", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE",
         )
         env = {key: self.base_environment[key] for key in allowed_runtime if self.base_environment.get(key)}
-        for key in ("API_ID", "API_HASH", "DATABASE_URI", "DATABASE_URI2", "MULTIPLE_DB", "COLLECTION_NAME"):
+        # Only the Telegram app credentials are shared. Never hand a clone the
+        # host's DATABASE_URI/DATABASE_URI2 – those are cluster-wide secrets.
+        for key in ("API_ID", "API_HASH"):
             value = self.base_environment.get(key)
             if value:
                 env[key] = value
+        env["DATABASE_URI"] = self.clone_database_uri
 
         owner_id = int(record["owner_id"])
         bot_id = int(record["bot_id"])
@@ -559,6 +572,7 @@ def get_clone_manager(main_bot_id: Optional[int] = None) -> CloneManager:
             CLONE_MIN_FREE_RAM_MB,
             CLONE_SESSION_WORKDIR,
             CLONE_START_TIMEOUT,
+            CLONE_DATABASE_URI,
             DATABASE_NAME,
             DATABASE_URI,
         )
@@ -568,6 +582,7 @@ def get_clone_manager(main_bot_id: Optional[int] = None) -> CloneManager:
         _manager = CloneManager(
             collection,
             encryption_key=CLONE_ENCRYPTION_KEY,
+            clone_database_uri=CLONE_DATABASE_URI,
             enabled=CLONE_ENABLED,
             max_bots=CLONE_MAX_BOTS,
             max_records=CLONE_MAX_RECORDS,

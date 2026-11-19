@@ -1,7 +1,11 @@
 import re
 import os
 import logging
-from info import  *
+from info import (
+    BAD_WORDS, CLONE_CHILD_MODE, IS_VERIFY, LOG_CHANNEL, LONG_IMDB_DESCRIPTION, MAX_B_TN,
+    MAX_LIST_ELM, TUTORIAL, TUTORIAL_2, TUTORIAL_3, is_valid_http_url,
+    normalize_shortener_site,
+)
 from imdb import Cinemagoer 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor

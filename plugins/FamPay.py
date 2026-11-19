@@ -396,6 +396,9 @@ async def fulfil_order(client: Client, order_id: str, utr: str = "", sender_name
     order = await paydb.get_order(order_id)
     if not order or order.get("status") != STATUS_PENDING:
         return False
+    if paydb.is_expired(order):
+        logger.warning("FamPay: order %s expired before verification, ignoring", order_id)
+        return False
     if utr and await paydb.utr_already_used(utr):
         logger.warning("FamPay: UTR %s already used, ignoring order %s", utr, order_id)
         return False

@@ -100,9 +100,12 @@ def is_valid_http_url(url):
 # Bot Information Configuration
 # ============================
 SESSION = environ.get('SESSION', 'dreamxbotz_search')   # Session name for the bot
-API_ID = env_int('API_ID', 20803355)  # API ID from my.telegram.org — set via env, do not hardcode
-API_HASH = environ.get('API_HASH', 'caa85d91bcde4e8826ad697de02af771')  # API Hash from my.telegram.org — set via env
-BOT_TOKEN = environ.get('BOT_TOKEN', '')    # Bot token from @BotFather
+# No credentials or third-party identifiers ship with the source.  The real
+# values must come from the environment; required_config_issues() is called at
+# startup so a misconfigured deployment fails fast with an actionable message.
+API_ID = env_int('API_ID', 0)  # API ID from my.telegram.org (required)
+API_HASH = env_str('API_HASH', default='')  # API Hash from my.telegram.org (required)
+BOT_TOKEN = env_str('BOT_TOKEN', default='')  # Bot token from @BotFather (required)
 SESSION_WORKDIR = env_str('SESSION_WORKDIR', default='')  # Optional main-bot session directory; clones use CLONE_SESSION_WORKDIR
 
 # ============================
@@ -140,21 +143,21 @@ AUTO_IMPORT_RETRY_DELAY = env_int('AUTO_IMPORT_RETRY_DELAY', 300)  # userbot sel
 # ============================
 # Admin, Channels & Users Configuration
 # ============================
-ADMINS = [int(admin) if id_pattern.search(admin) else admin for admin in environ.get('ADMINS', '8023726997 6389414945').split()] # Replace with the actual admin ID(s) to add
-CHANNELS = [int(ch) if id_pattern.search(ch) else ch for ch in environ.get('CHANNELS', '-1002086319581 -1003276318629 -1003453367461 -1003016600468').split()]  # Channel id for auto indexing (make sure bot is admin)
+ADMINS = [int(admin) if id_pattern.search(admin) else admin for admin in env_str('ADMINS', default='').split()]
+CHANNELS = [int(ch) if id_pattern.search(ch) else ch for ch in env_str('CHANNELS', default='').split()]
 
-LOG_CHANNEL = int(environ.get('LOG_CHANNEL', '-1002573823548'))  # Log channel id (make sure bot is admin)
+LOG_CHANNEL = env_int('LOG_CHANNEL', 0)  # Log channel id (make sure bot is admin)
 MESSAGE_LOGGING = is_enabled(environ.get("MESSAGE_LOGGING", "True"), True)
-BIN_CHANNEL = int(environ.get('BIN_CHANNEL', '-1002551533001'))  # Bin channel id (make sure bot is admin)
-PREMIUM_LOGS = int(environ.get('PREMIUM_LOGS', '-1002648671971'))  # Premium logs channel id
-DELETE_CHANNELS = [int(dch) if id_pattern.search(dch) else dch for dch in environ.get('DELETE_CHANNELS', '-1002635477308').split()] #(make sure bot is admin)
-support_chat_id = environ.get('SUPPORT_CHAT_ID', '-1003506315650')  # Support group id (make sure bot is admin)
-reqst_channel = environ.get('REQST_CHANNEL_ID', '-1003494610843')  # Request channel id (make sure bot is admin)
-SUPPORT_CHAT = environ.get('SUPPORT_CHAT', 'https://t.me/premiumottreleases')  # Support group link (make sure bot is admin)
+BIN_CHANNEL = env_int('BIN_CHANNEL', 0)  # Bin channel id (make sure bot is admin)
+PREMIUM_LOGS = env_int('PREMIUM_LOGS', 0)  # Premium logs channel id
+DELETE_CHANNELS = [int(dch) if id_pattern.search(dch) else dch for dch in env_str('DELETE_CHANNELS', default='').split()]
+support_chat_id = env_str('SUPPORT_CHAT_ID', default='')
+reqst_channel = env_str('REQST_CHANNEL_ID', default='')
+SUPPORT_CHAT = env_str('SUPPORT_CHAT', default='')
 
-# FORCE_SUB 
-auth_req_channels = environ.get("AUTH_REQ_CHANNELS", "-1003565940256")# requst to join Channel for force sub (make sure bot is admin) only for bot ADMINS  
-auth_channels     = environ.get("AUTH_CHANNELS", "-1003140286992 -1002536320197 -1003192727274 -1003696183217 -1003435139728 ")# Channels for force sub (make sure bot is admin)
+# FORCE_SUB
+auth_req_channels = env_str("AUTH_REQ_CHANNELS", default='')
+auth_channels = env_str("AUTH_CHANNELS", default='')
 
 # ============================
 # Payment Configuration
@@ -237,13 +240,13 @@ FAMPAY_PLANS = _parse_fampay_plans(environ.get('FAMPAY_PLANS', ''), STAR_PREMIUM
 # ============================
 # MongoDB Configuration
 # ============================
-DATABASE_URI = environ.get('DATABASE_URI', 'mongodb+srv://uvjangra:uvjangra@cluster0.cmjdvgq.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')  # MongoDB URI — set via env, never commit credentials
-DATABASE_NAME = environ.get('DATABASE_NAME', "Cluster0") # Database name (default: cluster)
-COLLECTION_NAME = environ.get('COLLECTION_NAME', 'dreamcinezone_files') # Collection name (default: dreamcinezone_files)
+DATABASE_URI = env_str('DATABASE_URI', default='')  # MongoDB URI — required, never committed
+DATABASE_NAME = env_str('DATABASE_NAME', default='dreamxbotz')  # Database name
+COLLECTION_NAME = env_str('COLLECTION_NAME', default='dreamcinezone_files')
 
-# If MULTIPLE_DB Is True Then Fill DATABASE_URI2 Value Else You Will Get Error.
-MULTIPLE_DB = is_enabled(os.environ.get('MULTIPLE_DB', "True"), False) # Type True For Turn On MULTIPLE DB FUNTION 
-DATABASE_URI2 = environ.get('DATABASE_URI2', 'mongodb+srv://yuvi123:yuvi123@cluster0.hlyhypg.mongodb.net/?appName=Cluster0')  # Second MongoDB URI (required when MULTIPLE_DB is True)
+# Opt-in only: a second database must be configured explicitly.
+MULTIPLE_DB = is_enabled(os.environ.get('MULTIPLE_DB', "False"), False)
+DATABASE_URI2 = env_str('DATABASE_URI2', default='')  # Required when MULTIPLE_DB is True
 
 # ============================
 # User-created bot clones
@@ -262,11 +265,18 @@ CLONE_START_TIMEOUT = min(max(env_int('CLONE_START_TIMEOUT', 60), 10), 180)
 CLONE_CHILD_MODE = is_enabled(environ.get('MINATO_CLONE_CHILD', 'False'), False)
 CLONE_CHILD_ID = env_int('MINATO_CLONE_ID', 0)
 CLONE_CHILD_OWNER_ID = env_int('MINATO_CLONE_OWNER_ID', 0)
+# Clones must not inherit the host's Mongo credentials. Give them a separate,
+# least-privilege URI (or disable cloning) and this becomes a hard boundary.
+CLONE_DATABASE_URI = env_str('CLONE_DATABASE_URI', default='')
+# Optional shared secret for the HTTP admin/analytics dashboards. When unset,
+# only configured numeric ADMINS may use them; the dashboards are never public.
+ADMIN_DASHBOARD_TOKEN = env_str('ADMIN_DASHBOARD_TOKEN', default='')
+ADMIN_DASHBOARD_PUBLIC = is_enabled(environ.get('ADMIN_DASHBOARD_PUBLIC', 'False'), False)
 # ============================
 # Movie Notification & Update Settings
 # ============================
 MOVIE_UPDATE_NOTIFICATION = is_enabled(environ.get('MOVIE_UPDATE_NOTIFICATION', 'True'), True)  # Notification On / Off
-MOVIE_UPDATE_CHANNEL = int(environ.get('MOVIE_UPDATE_CHANNEL', '-1003192727274'))  # Notification of sent to your channel
+MOVIE_UPDATE_CHANNEL = env_int('MOVIE_UPDATE_CHANNEL', 0)  # Notification channel
 DREAMXBOTZ_IMAGE_FETCH = is_enabled(environ.get('DREAMXBOTZ_IMAGE_FETCH', 'True'), True)  # On / Off
 LINK_PREVIEW = is_enabled(environ.get('LINK_PREVIEW', 'True'), True) # Shows link preview in notification msg instead of image
 ABOVE_PREVIEW = is_enabled(environ.get('ABOVE_PREVIEW', 'True'), True) # Shows link preview above the text in notification msg if True else below the msg
@@ -311,25 +321,25 @@ LANDSCAPE_POSTER = is_enabled(environ.get('LANDSCAPE_POSTER', 'True'), True) # S
 # Verification Settings
 # ============================
 IS_VERIFY = is_enabled(environ.get('IS_VERIFY', 'True'), True)  # Verification On (True) / Off (False)
-LOG_VR_CHANNEL = int(environ.get('LOG_VR_CHANNEL', '-1003536704514')) #Verification Channel Id 
-LOG_API_CHANNEL = int(environ.get('LOG_API_CHANNEL', '-1003625579058')) #If Anyone Set Your Bot In Any Group And Set Shortner In That Group Then In This Channel The All Details Come
-VERIFY_IMG = environ.get("VERIFY_IMG", "https://telegra.ph/file/9ecc5d6e4df5b83424896.jpg")
+LOG_VR_CHANNEL = env_int('LOG_VR_CHANNEL', 0)  # Verification channel id
+LOG_API_CHANNEL = env_int('LOG_API_CHANNEL', 0)  # Shortener-config audit channel
+VERIFY_IMG = env_str("VERIFY_IMG", default="https://telegra.ph/file/9ecc5d6e4df5b83424896.jpg")
 
-TUTORIAL = environ.get("TUTORIAL", "https://t.me/hmmmmw876/785")   # Tutorial link for verification
-TUTORIAL_2 = environ.get("TUTORIAL_2", "https://t.me/hmmmmw876/785")   # Second tutorial link for verification
-TUTORIAL_3 = environ.get("TUTORIAL_3", "https://t.me/hmmmmw876/785")   # Third tutorial link for verification
+TUTORIAL = env_str("TUTORIAL", default="")
+TUTORIAL_2 = env_str("TUTORIAL_2", default="")
+TUTORIAL_3 = env_str("TUTORIAL_3", default="")
 
 # Verification (Must Fill All Variables. Else You Got Error)
 # NOTE: Shortzy wants the bare domain (arolinks.com) — NOT a full URL. Values
 # are normalized here so `https://arolinks.com` in env/panel also works.
-SHORTENER_API = env_str("SHORTENER_API", default="ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8") # Shortener API key — set via env
-SHORTENER_WEBSITE = normalize_shortener_site(env_str("SHORTENER_WEBSITE", default="arolinks.com")) # Shortener website (bare domain)
+SHORTENER_API = env_str("SHORTENER_API", default="")  # Shortener API key — required for verification links
+SHORTENER_WEBSITE = normalize_shortener_site(env_str("SHORTENER_WEBSITE", default=""))
 
-SHORTENER_API2 = env_str("SHORTENER_API2", default="ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8")  # Shortener API key for second website
-SHORTENER_WEBSITE2 = normalize_shortener_site(env_str("SHORTENER_WEBSITE2", default="arolinks.com")) # Shortener website for second website
+SHORTENER_API2 = env_str("SHORTENER_API2", default="")
+SHORTENER_WEBSITE2 = normalize_shortener_site(env_str("SHORTENER_WEBSITE2", default=""))
 
-SHORTENER_API3 = env_str("SHORTENER_API3", default="ef7e0434f2fc6e97dbf4f981f9bb3ed5aa90bae8")
-SHORTENER_WEBSITE3 = normalize_shortener_site(env_str("SHORTENER_WEBSITE3", default="arolinks.com")) # Shortener website for third website
+SHORTENER_API3 = env_str("SHORTENER_API3", default="")
+SHORTENER_WEBSITE3 = normalize_shortener_site(env_str("SHORTENER_WEBSITE3", default="")) # Shortener website for third website
 
 TWO_VERIFY_GAP = int(environ.get('TWO_VERIFY_GAP', "43200")) # Time gap for two-step verification in seconds (default: 12 hours)
 THREE_VERIFY_GAP = int(environ.get('THREE_VERIFY_GAP', "43200"))    # Time gap for three-step verification in seconds (default: 12 hours)
@@ -337,9 +347,9 @@ THREE_VERIFY_GAP = int(environ.get('THREE_VERIFY_GAP', "43200"))    # Time gap f
 # ============================
 # Channel & Group Links Configuration
 # ============================
-GRP_LNK = environ.get('GRP_LNK', 'https://t.me/movie_requestss_group') # Group link for the bot
-OWNER_LNK = environ.get('OWNER_LNK', 'https://t.me/yuviiiii_i') # Owner link for the bot
-UPDATE_CHNL_LNK = environ.get('UPDATE_CHNL_LNK', 'https://t.me/wanda_movies_update') # Update channel link for the bot
+GRP_LNK = env_str('GRP_LNK', default='')
+OWNER_LNK = env_str('OWNER_LNK', default='')
+UPDATE_CHNL_LNK = env_str('UPDATE_CHNL_LNK', default='')
 
 # ============================
 # User Configuration
@@ -544,7 +554,18 @@ INLINE_SEARCH_POSTERS = is_enabled(environ.get('INLINE_SEARCH_POSTERS', "True"),
 INLINE_SEARCH_GROUPS = is_enabled(environ.get('INLINE_SEARCH_GROUPS', "True"), True)  # Allow inline search outside PM
 INLINE_SEARCH_TOP = min(max(env_int('INLINE_SEARCH_TOP', 6), 0), 20)  # Results shown for an empty query (top searches)
 INLINE_SEARCH_MAX_QUERY = min(max(env_int('INLINE_SEARCH_MAX_QUERY', 64), 8), 128)  # Longest inline query accepted
-INLINE_SEARCH_MAX_REQUESTS = min(max(env_int('INLINE_SEARCH_MAX_REQUESTS', 240), 10), 2000)  # Per-user queries/hour (0 = unlimited)
+def inline_rate_limit(raw, default=240):
+    """Per-user hourly budget; 0 keeps its documented 'unlimited' meaning."""
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        value = default
+    if value == 0:
+        return 0
+    return min(max(value, 10), 2000)
+
+
+INLINE_SEARCH_MAX_REQUESTS = inline_rate_limit(environ.get('INLINE_SEARCH_MAX_REQUESTS', '240'))
 
 
 # ============================
@@ -674,6 +695,64 @@ Bot_cmds = {
 # When a second DB is not configured, reuse the primary URI.
 if not MULTIPLE_DB or not DATABASE_URI2:
     DATABASE_URI2 = DATABASE_URI
+
+
+# ---------------------------------------------------------------------------
+# Deployment validation
+# ---------------------------------------------------------------------------
+def _env_value(env, key, default=""):
+    """Read one env value, tolerating quotes pasted by hosting dashboards."""
+    return str(env.get(key, default) or "").strip().strip('"').strip("'")
+
+
+def required_config_issues(env=None):
+    """Return actionable error strings for missing *required* configuration.
+
+    Kept as a pure function so it can be unit-tested without importing a
+    Telegram client. ``bot.py`` calls it before starting; importing config for
+    offline tests therefore stays safe.
+    """
+    env = environ if env is None else env
+    issues = []
+    token = _env_value(env, "BOT_TOKEN")
+    if not token or ":" not in token:
+        issues.append("BOT_TOKEN is missing or invalid (get it from @BotFather)")
+    try:
+        api_id = int(_env_value(env, "API_ID", "0") or 0)
+    except ValueError:
+        api_id = 0
+    if api_id <= 0:
+        issues.append("API_ID is missing or invalid (get it from my.telegram.org)")
+    if not _env_value(env, "API_HASH"):
+        issues.append("API_HASH is missing (get it from my.telegram.org)")
+    database_uri = _env_value(env, "DATABASE_URI")
+    if not database_uri.startswith(("mongodb://", "mongodb+srv://")):
+        issues.append("DATABASE_URI is missing or not a mongodb:// URI")
+    if is_enabled(_env_value(env, "MULTIPLE_DB", "False"), False):
+        if not _env_value(env, "DATABASE_URI2").startswith(("mongodb://", "mongodb+srv://")):
+            issues.append("MULTIPLE_DB=True requires a valid DATABASE_URI2")
+    if is_enabled(_env_value(env, "CLONE_ENABLED", "False"), False):
+        if not _env_value(env, "CLONE_ENCRYPTION_KEY"):
+            issues.append("CLONE_ENABLED=True requires a persistent CLONE_ENCRYPTION_KEY")
+        if not _env_value(env, "CLONE_DATABASE_URI"):
+            issues.append("CLONE_ENABLED=True requires a scoped CLONE_DATABASE_URI for user clones")
+    return issues
+
+
+def config_warnings(env=None):
+    """Non-fatal configuration gaps worth surfacing once at startup."""
+    env = environ if env is None else env
+    warnings = []
+    if not _env_value(env, "ADMINS"):
+        warnings.append("ADMINS is empty: nobody will be recognised as a bot admin")
+    if not _env_value(env, "LOG_CHANNEL"):
+        warnings.append("LOG_CHANNEL is empty: restart/payment logs will not be delivered")
+    if is_enabled(_env_value(env, "IS_VERIFY", "True"), True) and not _env_value(env, "SHORTENER_API"):
+        warnings.append("SHORTENER_API is empty: verification links cannot be generated")
+    if not _env_value(env, "FQDN") and "DYNO" not in env and "KOYEB_APP_NAME" not in env:
+        warnings.append("FQDN is unset: public stream links default to https://0.0.0.0:<PORT>/")
+    return warnings
+
 
 # ============================
 # Logs Configuration

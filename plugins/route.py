@@ -12,7 +12,7 @@ from dreamxbotz.zzint import StartTime, __version__
 from dreamxbotz.util.custom_dl import ByteStreamer
 from dreamxbotz.util.time_format import get_readable_time
 from dreamxbotz.util.render_template import render_page
-from info import *
+from info import MULTI_CLIENT
 
 
 routes = web.RouteTableDef()
@@ -142,11 +142,14 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
                 file_name = f"{secrets.token_hex(2)}.unknown"
     else:
         if file_name:
-            mime_type = mimetypes.guess_type(file_id.file_name)
+            # guess_type returns (type, encoding); interpolating the tuple into
+            # a header produced e.g. "('video/mp4', None)" and broke playback.
+            mime_type = (mimetypes.guess_type(file_name)[0] or "application/octet-stream")
         else:
             mime_type = "application/octet-stream"
             file_name = f"{secrets.token_hex(2)}.unknown"
 
+    safe_name = str(file_name).replace('"', "").replace("\r", "").replace("\n", "")
     return web.Response(
         status=206 if range_header else 200,
         body=body,
@@ -154,7 +157,7 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
             "Content-Type": f"{mime_type}",
             "Content-Range": f"bytes {from_bytes}-{until_bytes}/{file_size}",
             "Content-Length": str(req_length),
-            "Content-Disposition": f'{disposition}; filename="{file_name}"',
+            "Content-Disposition": f'{disposition}; filename="{safe_name}"',
             "Accept-Ranges": "bytes",
         },
     )

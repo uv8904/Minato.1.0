@@ -10,7 +10,11 @@ from pymongo.errors import DuplicateKeyError
 from umongo import Instance, Document, fields
 from motor.motor_asyncio import AsyncIOMotorClient
 from marshmallow import ValidationError
-from info import *
+from info import (
+    COLLECTION_NAME, DATABASE_NAME, DATABASE_URI, DATABASE_URI2,
+    DAILY_INDEX_REPORT, INDEX_CAPTION, MAX_B_TN, MULTIPLE_DB,
+    SEARCH_CACHE_SIZE, SEARCH_CACHE_TTL, USE_CAPTION_FILTER,
+)
 from utils import get_settings, save_group_settings
 from dreamxbotz.util.new_uploaded import notify_new_file
 from datetime import datetime, timedelta
@@ -195,6 +199,26 @@ async def save_file(media, source="auto"):
     return True, 1
 
 
+# Search strings come straight from Telegram messages. Treat them as literal
+# text, never as regex source: unescaped `.*`/nested quantifiers can make a
+# single message scan the whole collection or backtrack for a long time.
+MAX_QUERY_LENGTH = 200
+
+
+def _query_pattern(query):
+    query = str(query or "").strip()[:MAX_QUERY_LENGTH]
+    if not query:
+        return "."
+    escaped = re.escape(query)
+    if " " not in escaped:
+        # Word boundaries only make sense for a plain word; a query containing
+        # punctuation (e.g. "(a+)+$") must be matched literally as typed.
+        if query.replace("_", "").isalnum():
+            return r"(\b|[\.\+\-_])" + escaped + r"(\b|[\.\+\-_])"
+        return escaped
+    return escaped.replace(r"\ ", r".*[\s\.\+\-_()\[\]]")
+
+
 async def get_search_results(
     chat_id, query, file_type=None, max_results=10, offset=0, filter=False,
     sort_by="newest",
@@ -216,14 +240,10 @@ async def get_search_results(
     if isinstance(query, list):
         regex_list = []
         for q in query:
-            q = q.strip()
+            q = str(q or "").strip()
             if not q:
                 continue
-            if " " not in q:
-                raw = r"(\b|[\.\+\-_])" + re.escape(q) + r"(\b|[\.\+\-_])"
-            else:
-                raw = re.escape(q).replace(r"\ ", r".*[\s\.\+\-_()]")
-            regex_list.append(re.compile(raw, re.IGNORECASE))
+            regex_list.append(re.compile(_query_pattern(q), re.IGNORECASE))
 
         if not regex_list:
             return [], "", 0
@@ -238,18 +258,8 @@ async def get_search_results(
             filter_mongo = {"$or": [{"file_name": r} for r in regex_list]}
 
     else:
-        query = query.strip()
-        if not query:
-            raw_pattern = "."
-        elif " " not in query:
-            raw_pattern = r"(\b|[\.\+\-_])" + query + r"(\b|[\.\+\-_])"
-        else:
-            raw_pattern = query.replace(
-                " ", r".*[\s\.\+\-_()\[\]]" 
-            )
-
         try:
-            regex = re.compile(raw_pattern, flags=re.IGNORECASE)
+            regex = re.compile(_query_pattern(query), flags=re.IGNORECASE)
         except re.error:
             return [], "", 0
 
@@ -329,16 +339,9 @@ async def get_search_results(
 
 
 async def get_bad_files(query, file_type=None):
-    query = query.strip()
-    if not query:
-        raw_pattern = '.'
-    elif ' ' not in query:
-        raw_pattern = r"(\b|[\.\+\-_])" + query + r"(\b|[\.\+\-_])"
-    else:
-        raw_pattern = query.replace(" ", r".*[\s\.\+\-_()]")
     try:
-        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-    except:
+        regex = re.compile(_query_pattern(query), flags=re.IGNORECASE)
+    except re.error:
         return []
     if USE_CAPTION_FILTER:
         filter = {'$or': [{'file_name': regex}, {'caption': regex}]}
@@ -406,7 +409,10 @@ def unpack_new_file_id(new_file_id):
 async def dreamxbotz_fetch_media(limit: int) -> List[dict]:
     try:
         if MULTIPLE_DB:
-            db_size = await check_db_size(Media)
+            # check_db_size() needs the Motor *database* (it runs db.command),
+            # not the umongo Document class – passing Media silently returned 0
+            # and made multi-DB spillover unreachable from the read path.
+            db_size = await check_db_size(db)
             if db_size > 407:
                 cursor = Media2.find().sort("$natural", -1).limit(limit)
                 files = await cursor.to_list(length=limit)

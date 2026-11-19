@@ -1,7 +1,7 @@
 #Thanks @dreamxbotz for helping in this journey 
 
 import jinja2
-from info import *
+from info import BIN_CHANNEL, UPDATE_CHNL_LNK, URL
 from dreamxbotz.Bot import dreamxbotz
 from dreamxbotz.util.human_readable import humanbytes
 from dreamxbotz.util.file_properties import get_file_ids

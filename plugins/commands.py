@@ -24,7 +24,17 @@ from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, ChatAdminRequired, UserNotParticipant
 from database.ia_filterdb import invalidate_search_cache, Media, Media2, get_file_details, unpack_new_file_id, get_bad_files
 from database.users_chats_db import db
-from info import *
+from info import (
+    ADMINS, ALIVE_STICKER, AUTH_CHANNELS, AUTH_REQ_CHANNELS, BUTTON_PREMIUM_EMOJI,
+    COLLECTION_NAME, CUSTOM_FILE_CAPTION, DATABASE_NAME, DATABASE_URI, DATABASE_URI2,
+    DELETE_TIME, EMOJI_MODE, FSUB_PICS, IMDB_TEMPLATE, IS_VERIFY, LOG_API_CHANNEL,
+    LOG_CHANNEL, MULTIPLE_DB, OWNER_LNK, OWNER_UPI_ID, PICS, PREMIUM_CONTENT_ENABLED,
+    PREMIUM_STREAM_MODE, PROTECT_CONTENT, QR_CODE, REACTIONS, REQST_CHANNEL, SHORTENER_API,
+    SHORTENER_API2, SHORTENER_API3, SHORTENER_WEBSITE, SHORTENER_WEBSITE2,
+    SHORTENER_WEBSITE3, START_EMOJI, STREAM_MODE, SUPPORT_CHAT_ID, THREE_VERIFY_GAP,
+    TUTORIAL, TUTORIAL_2, TUTORIAL_3, TWO_VERIFY_GAP, UPDATE_CHNL_LNK, VERIFY_IMG,
+    normalize_shortener_site,
+)
 from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename, start_buttons, blue, green, red, send_start_flash, get_flash_value, parse_flash_value
 
 

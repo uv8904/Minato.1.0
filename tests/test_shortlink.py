@@ -231,7 +231,7 @@ def test_verify_button_link_would_be_tappable(monkeypatch, fake_shortzy):
     convert() fails like the real API did, and the fallback quick link must be
     a single-scheme URL on the real host."""
     fake_shortzy.convert_raises = True
-    _fake_settings(monkeypatch, {"api": "ef7e0434", "shortner": "https://arolinks.com"})
+    _fake_settings(monkeypatch, {"api": "offline-test-api-key", "shortner": "https://arolinks.com"})
     out = run(utils.get_shortlink(DEEP, -1003536704514))
     assert info.is_valid_http_url(out)
     assert out.startswith("https://arolinks.com/st?")

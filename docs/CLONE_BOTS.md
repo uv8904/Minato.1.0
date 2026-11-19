@@ -50,6 +50,11 @@ token. Cloning can also be disabled immediately with `CLONE_ENABLED=False`.
 - Each clone has a separate Mongo database named `minato_clone_<bot_id>` and a
   separate session file inside the private `CLONE_SESSION_WORKDIR`. Its
   files/users/group settings do not mix with the main bot or another clone.
+  The clone only receives `CLONE_DATABASE_URI`, a dedicated least-privilege
+  credential: it never inherits the host's `DATABASE_URI`/`DATABASE_URI2`, so a
+  different database name is not the only thing protecting the main bot.
+  `CLONE_ENABLED=True` without that URI disables cloning (and fails startup
+  validation) instead of silently sharing the host credential.
 - To add files, the owner adds their clone as an admin to their own file channel,
   starts the clone, then uses `/index` in its PM. The clone's `CHANNELS` starts
   empty, so it does not attempt to index the main bot's private channels.

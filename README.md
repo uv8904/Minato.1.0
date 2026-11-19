@@ -17,6 +17,39 @@
 <!-- > ## ⚠ <u>Under Maintenance</u> ⚠  
 > This repository is currently under maintenance. Please **DO NOT deploy** until further notice. -->
 
+## 🧰 Quick start (self-hosting)
+
+Python 3.12 is required. The bot refuses to start with missing credentials —
+no API hash, MongoDB URI, admin id or shortener key is shipped in this repo.
+
+```bash
+git clone <this-repo> && cd Minato.1.0
+python -m venv .venv && source .venv/bin/activate
+python -m pip install -r requirements.txt
+cp .env.example .env      # then fill in EVERY placeholder in the CORE section
+python bot.py
+```
+
+Docker alternative: `cp .env.example .env`, edit it, then
+`docker compose up -d --build`. The image runs as a non-root user and has a
+health check; the compose file reads all configuration from `.env`.
+
+**Required:** `BOT_TOKEN`, `API_ID`, `API_HASH`, `DATABASE_URI`.
+**Set immediately:** `ADMINS`, `LOG_CHANNEL`, `FQDN` (the public hostname used
+in stream links — without it links point at `0.0.0.0:PORT`). If
+`IS_VERIFY=True` (default), set `SHORTENER_WEBSITE` + `SHORTENER_API`. If you
+expose `/admin` or `/analytics`, set `ADMIN_DASHBOARD_TOKEN`. If you enable
+`/clone`, set `CLONE_ENCRYPTION_KEY` **and** a least-privilege
+`CLONE_DATABASE_URI` — clones never receive the host database URI.
+
+Startup prints a clear list of missing/invalid settings and exits before
+connecting to Telegram. Non-fatal gaps (e.g. `FQDN`) are logged as warnings.
+
+**Development:** `python -m pip install -r requirements.txt -r requirements-dev.txt`
+then `python -m pytest -q`. CI runs the same suite on every push and PR.
+
+---
+
 ## 🚀 Demo Bot
 
 

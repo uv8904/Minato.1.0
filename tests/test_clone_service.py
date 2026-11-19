@@ -92,6 +92,7 @@ def make_manager(*, max_bots=1, memory=1024, process_factory=None, session_workd
     manager = CloneManager(
         collection,
         encryption_key=key,
+        clone_database_uri="mongodb://clone-scoped/clones",
         enabled=True,
         max_bots=max_bots,
         min_free_ram_mb=256,
@@ -127,6 +128,17 @@ def test_token_format_and_invalid_encryption_key_fail_closed():
     assert not CloneManager.valid_token_format("not-a-token")
     manager = CloneManager(FakeCollection(), encryption_key="bad-key", max_bots=2)
     assert not manager.configured
+
+
+def test_clones_require_a_scoped_database_uri():
+    manager = CloneManager(
+        FakeCollection(),
+        encryption_key=Fernet.generate_key().decode(),
+        clone_database_uri="",
+        enabled=True,
+    )
+    assert not manager.configured
+    assert asyncio.run(manager.preflight(42))["status"] == "disabled"
 
 
 def test_clone_session_workdir_is_created_with_private_permissions(tmp_path):
@@ -236,6 +248,8 @@ def test_child_environment_uses_private_database_and_does_not_inherit_secrets():
         {"bot_id": 123456, "owner_id": 77}, sample_token()
     )
     assert env["DATABASE_NAME"] == "minato_clone_123456"
+    assert env["DATABASE_URI"] == "mongodb://clone-scoped/clones"
+    assert "DATABASE_URI2" not in env
     assert env["ADMINS"] == "77"
     assert env["LOG_CHANNEL"] == "77"
     assert env["PORT"] == "0"

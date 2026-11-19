@@ -39,12 +39,24 @@
             "required": true
         },
         "CLONE_ENABLED": {
-            "description": "Enable private /clone bot creation (requires a persistent CLONE_ENCRYPTION_KEY).",
-            "value": "True",
+            "description": "Enable private /clone bot creation (requires CLONE_ENCRYPTION_KEY and a scoped CLONE_DATABASE_URI).",
+            "value": "False",
             "required": false
         },
         "CLONE_ENCRYPTION_KEY": {
             "description": "Persistent Fernet key for encrypted clone tokens. Generate with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\". Keep the same key across restarts.",
+            "required": false
+        },
+        "CLONE_DATABASE_URI": {
+            "description": "Required when CLONE_ENABLED=True: a scoped, least-privilege MongoDB URI for user clones. Never reuse DATABASE_URI.",
+            "required": false
+        },
+        "ADMIN_DASHBOARD_TOKEN": {
+            "description": "Shared secret for /admin and /analytics HTTP dashboards. Without it, only numeric ADMINS ids are accepted.",
+            "required": false
+        },
+        "FQDN": {
+            "description": "Public hostname for generated stream links (e.g. mybot.koyeb.app). Without it links default to 0.0.0.0:PORT.",
             "required": false
         },
         "CLONE_MAX_BOTS": {
@@ -113,8 +125,13 @@
             "required": true
         },
         "DATABASE_URI2": {
-            "description": "mongoDB URI. Get this value from https://www.mongodb.com.",
-            "required": true
+            "description": "Second MongoDB URI. Only needed when MULTIPLE_DB=True; otherwise the primary URI is reused.",
+            "required": false
+        },
+        "MULTIPLE_DB": {
+            "description": "Opt-in spillover to DATABASE_URI2 once the primary database reaches its threshold.",
+            "value": "False",
+            "required": false
         },
         "DATABASE_NAME": {
             "description": "Name of the database in mongoDB.",

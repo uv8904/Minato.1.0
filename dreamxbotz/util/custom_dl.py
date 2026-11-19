@@ -2,7 +2,7 @@
 import math
 import asyncio
 import logging
-from info import *
+from info import BIN_CHANNEL
 from typing import Dict, Union
 from dreamxbotz.Bot import work_loads
 from pyrogram import Client, utils, raw

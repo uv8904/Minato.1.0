@@ -136,7 +136,11 @@ the Gmail address, …).
 3. In the FamGateway dashboard → Webhooks, set:
    `https://<your-bot-url>/fampay/webhook` (your `URL` from `info.py`).
    Signature verification (`X-FamGateway-Signature`, HMAC-SHA256) is enforced
-   automatically.
+   on every request. The endpoint now **fails closed with HTTP 503** when no
+   `FAMGATEWAY_API_KEY`/`FAMGATEWAY_WEBHOOK_SECRET` is configured — an unsigned
+   "success" post can never activate premium, including in IMAP-only setups.
+   The webhook also rejects expired orders and amounts that do not match the
+   order's base or payable amount.
 
 With the webhook configured, approval is near-instant; without a public URL the
 IMAP scan and the FamGateway status poll still cover everything.

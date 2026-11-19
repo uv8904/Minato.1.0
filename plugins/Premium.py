@@ -3,13 +3,18 @@ import os
 import pytz
 import datetime
 from Script import script 
-from info import *
+from info import (
+    ADMINS, PLAN_IMG, PREMIUM_LOGS, STAR_PREMIUM_PLANS, SUBSCRIPTION,
+)
 from utils import get_seconds, temp
 from database.users_chats_db import db 
 import asyncio
 from pyrogram import Client, filters 
 from pyrogram.errors.exceptions.bad_request_400 import MessageTooLong
-from pyrogram.types import *
+from pyrogram.types import (
+    CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice,
+    PreCheckoutQuery,
+)
 
 
 @Client.on_message(filters.command("remove_premium") & filters.user(ADMINS))

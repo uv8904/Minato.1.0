@@ -1,15 +1,18 @@
-version: "3.12"
 services:
-   worker:
+  worker:
     build: .
-    environment:
-      BOT_TOKEN: $BOT_TOKEN
-      API_ID: $API_ID
-      API_HASH: $API_HASH
-      CHANNELS: $CHANNELS
-      ADMINS: $ADMINS
-      LOG_CHANNEL: $LOG_CHANNEL
-      DATABASE_NAME: $DATABASE_NAME
-      DATABASE_URI: $DATABASE_URI
-      HEROKU_API_KEY: $HEROKU_API_KEY
-      TMDB_API_KEY: $TMDB_API_KEY
+    restart: unless-stopped
+    # All configuration comes from .env (copy .env.example and fill it in).
+    # Nothing is hardcoded in the image; missing required vars stop the bot.
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+EOF

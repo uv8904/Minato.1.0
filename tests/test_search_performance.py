@@ -321,3 +321,64 @@ def test_save_file_invalidates_after_successful_commit(store, monkeypatch):
     record.commit.side_effect = RuntimeError("database unavailable")
     assert asyncio.run(mod.save_file(media)) == (False, 3)
     assert calls == [True]
+
+
+class _FetchCursor:
+    def __init__(self, model):
+        self.model = model
+
+    def sort(self, *_args):
+        return self
+
+    def limit(self, _size):
+        return self
+
+    async def to_list(self, length):
+        self.model.reads.append(self.model.name)
+        return self.model.rows
+
+
+class _FetchModel:
+    def __init__(self, name, rows, reads):
+        self.name, self.rows, self.reads = name, rows, reads
+
+    def find(self, *_args, **_kwargs):
+        return _FetchCursor(self)
+
+
+class _FakeDb:
+    def __init__(self, megabytes):
+        self.megabytes = megabytes
+
+    async def command(self, _name):
+        return {"dataSize": self.megabytes * 1024 * 1024, "indexSize": 0}
+
+
+@pytest.mark.parametrize("primary_mb,expected", [(500, "secondary"), (10, "primary")])
+def test_fetch_media_honours_the_primary_db_size(store, monkeypatch, primary_mb, expected):
+    """Regression: check_db_size must receive the Motor db, not a Document class."""
+    mod, _, _ = store
+    reads = []
+    monkeypatch.setattr(mod, "MULTIPLE_DB", True)
+    monkeypatch.setattr(mod, "db", _FakeDb(primary_mb))
+    monkeypatch.setattr(mod, "_db_stats_cache", {"timestamp": None, "primary_size": 0.0})
+    monkeypatch.setattr(mod, "Media", _FetchModel("primary", [], reads))
+    monkeypatch.setattr(mod, "Media2", _FetchModel("secondary", [], reads))
+
+    asyncio.run(mod.dreamxbotz_fetch_media(5))
+
+    assert reads == [expected]
+
+
+def test_user_queries_are_literal_not_regex_source(store):
+    """A message like `(a+)+$` must not become an expensive regex."""
+    mod, primary, _ = store
+    primary.rows = Model(["Movie 1", "Movie (a+)+$", "special"]).rows
+
+    async def scenario():
+        assert (await mod.get_search_results(None, "(a+)+$"))[2] == 1
+        assert (await mod.get_search_results(None, "movie.*"))[2] == 0
+        assert (await mod.get_search_results(None, "a" * 10000))[2] == 0
+        assert len((await mod.get_bad_files("(a+)+$"))[0]) == 1
+
+    asyncio.run(scenario())
