@@ -2,6 +2,10 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from info import DATABASE_URI
 from datetime import datetime
 
+# Per-user tracked texts are capped so the document can never grow towards
+# Mongo's 16MB limit (every group message used to be $push-ed forever).
+MAX_TRACKED_MESSAGES = 200
+
 class Database:
     def __init__(self, uri, db_name):
         self.client = AsyncIOMotorClient(uri)
@@ -15,7 +19,10 @@ class Database:
         if not user:
             await self.col.update_one(
                 {"user_id": user_id},
-                {"$push": {"messages": {"text": message_text, "count": 1}}},
+                {"$push": {"messages": {
+                    "$each": [{"text": message_text, "count": 1}],
+                    "$slice": -MAX_TRACKED_MESSAGES,
+                }}},
                 upsert=True
             )
         else:

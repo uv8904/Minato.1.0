@@ -85,6 +85,11 @@ AUDIO_SUB_FILTERS = {
 
 @Client.on_message(filters.group & filters.text & filters.incoming)
 async def give_filter(client, message):
+    if message.from_user is None:
+        # Anonymous admins and linked-channel posts have no from_user. They
+        # are not searches — and must not crash the handler (the old code hit
+        # AttributeError on message.from_user.id before filtering anything).
+        return
     if EMOJI_MODE:
         for emoji in (random.choice(REACTIONS), "⚡️"):
             try:
@@ -184,11 +189,12 @@ async def pm_text(bot, message):
 
 @Client.on_callback_query(filters.regex(r"^reffff"))
 async def refercall(bot, query):
+    points = await referdb.get_refer_points(query.from_user.id)
     btn = [[
         InlineKeyboardButton(
             'invite link', url=f'https://telegram.me/share/url?url=https://t.me/{bot.me.username}?start=reff_{query.from_user.id}&text=Hello%21%20Experience%20a%20bot%20that%20offers%20a%20vast%20library%20of%20unlimited%20movies%20and%20series.%20%F0%9F%98%83'),
         InlineKeyboardButton(
-            f'⏳ {referdb.get_refer_points(query.from_user.id)}', callback_data='ref_point'),
+            f'⏳ {points}', callback_data='ref_point'),
         InlineKeyboardButton('Back', callback_data='premium_info')
     ]]
     reply_markup = InlineKeyboardMarkup(btn)
@@ -1035,13 +1041,30 @@ async def send_all_confirmation_prompt(query, key):
         logger.warning("send all confirmation prompt failed: %s", e)
 
 
+_REQST_INVITE = {"url": "", "ts": 0.0}
+
+
+async def _request_channel_invite(client):
+    """One cached request-channel invite per hour — not one per button press.
+
+    The old code created a fresh invite link at the top of EVERY callback
+    query (pagination, close, settings...), burning an API call per click and
+    littering the request channel with links.
+    """
+    now = perf_counter()
+    if _REQST_INVITE["url"] and now - _REQST_INVITE["ts"] < 3600:
+        return _REQST_INVITE["url"]
+    try:
+        link = await client.create_chat_invite_link(int(REQST_CHANNEL))
+        _REQST_INVITE.update(url=link.invite_link, ts=now)
+    except Exception:
+        logger.debug("Could not create request-channel invite", exc_info=True)
+    return _REQST_INVITE["url"] or UPDATE_CHNL_LNK
+
+
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
     DreamxData = query.data
-    try:
-        link = await client.create_chat_invite_link(int(REQST_CHANNEL))
-    except:
-        pass
     if query.data == "close_data":
         try:
             user = query.message.reply_to_message.from_user.id
@@ -1154,7 +1177,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             f_caption = f_caption
         if f_caption is None:
             f_caption = f"{files.file_name}"
-        await query.answer(url=f"href='https://telegram.me/{temp.U_NAME}?start=file_{query.message.chat.id}_{file.file_id}")
+        await query.answer(url=f"https://telegram.me/{temp.U_NAME}?start=file_{query.message.chat.id}_{files.file_id}")
 
     elif query.data.startswith("autofilter_delete"):
         await Media.collection.drop()
@@ -1434,7 +1457,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                                   callback_data=f"unalert#{from_user}")]
         ]
         btn2 = [
-            [InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link.invite_link),
+            [InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=await _request_channel_invite(client)),
              InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")]
         ]
         if query.from_user.id in ADMINS:
@@ -1463,7 +1486,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         btn = [[InlineKeyboardButton(
             "📌 Not Released 📌", callback_data=f"nralert#{from_user}")]]
         btn2 = [[
-            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link.invite_link),
+            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=await _request_channel_invite(client)),
             InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ]]
         if query.from_user.id in ADMINS:
@@ -1505,7 +1528,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                                  callback_data=f"wsalert#{from_user}")
         ]]
         btn2 = [[
-            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link.invite_link),
+            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=await _request_channel_invite(client)),
             InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ]]
         if query.from_user.id in ADMINS:
@@ -1547,7 +1570,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 "⚜️ Not Available In The Hindi ⚜️", callback_data=f"hnalert#{from_user}")
         ]]
         btn2 = [[
-            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link.invite_link),
+            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=await _request_channel_invite(client)),
             InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ]]
         if query.from_user.id in ADMINS:
@@ -1589,7 +1612,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 "🟢 ᴜᴘʟᴏᴀᴅᴇᴅ 🟢", callback_data=f"upalert#{from_user}")
         ]]
         btn2 = [[
-            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link.invite_link),
+            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=await _request_channel_invite(client)),
             InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ], [
             InlineKeyboardButton("🔍 ꜱᴇᴀʀᴄʜ ʜᴇʀᴇ 🔎", url=GRP_LNK)
@@ -1635,7 +1658,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                                  callback_data=f"alalert#{from_user}")
         ]]
         btn2 = [[
-            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=link.invite_link),
+            InlineKeyboardButton('ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ', url=await _request_channel_invite(client)),
             InlineKeyboardButton("ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ", url=f"{query.message.link}")
         ], [
             InlineKeyboardButton("🔍 ꜱᴇᴀʀᴄʜ ʜᴇʀᴇ 🔎", url=GRP_LNK)
@@ -1770,8 +1793,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     ]
                 ])
             )
-            await asyncio.sleep(DELETE_TIME)
-            await dreamcinezone.delete()
+            delete_later(DELETE_TIME, dreamcinezone)
             return
         except Exception as e:
             print(e)
@@ -1789,8 +1811,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 [InlineKeyboardButton("🚀 Buy Premium 🚀", callback_data="premium_info")]
             ])
         )
-        await asyncio.sleep(DELETE_TIME)
-        await dreamcinezone.delete()
+        delete_later(DELETE_TIME, dreamcinezone)
 
 
     elif query.data == "pagesn1":
@@ -1903,8 +1924,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
                         InlineKeyboardButton("🚀 Buy Premium 🚀", callback_data="premium_info")
                     ]])
                 )
-                await asyncio.sleep(DELETE_TIME)
-                return await msg.delete()
+                delete_later(DELETE_TIME, msg)
+                return
         except Exception as e:
             logging.exception("Error in give_trial callback")
 
@@ -1923,7 +1944,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
         )
 
     elif query.data == "ref_point":
-        await query.answer(f'You Have: {referdb.get_refer_points(query.from_user.id)} Refferal points.', show_alert=True)
+        points = await referdb.get_refer_points(query.from_user.id)
+        await query.answer(f'You Have: {points} Refferal points.', show_alert=True)
     
     elif query.data == "disclaimer":
             btn = [[
@@ -2130,7 +2152,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
     await query.answer(MSG_ALRT)
 
 
-async def auto_filter(client, msg, spoll=False):
+async def auto_filter(client, msg, spoll=False, _spell_depth=0):
+    # ``_spell_depth`` caps the spell-fix → re-search recursion. A corrected
+    # title that contains a stripped stop-word ("The New Mutants" -> "the
+    # mutants") used to bounce between correction and search forever.
     started = perf_counter()
     premium_lock_doc = None  # set when a premium user searches locked content (Early Access badge)
     if not spoll:
@@ -2155,7 +2180,12 @@ async def auto_filter(client, msg, spoll=False):
             search = re.sub(r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|bro|bruh|broh|helo|that|find|dubbed|link|venum|iruka|pannunga|pannungga|anuppunga|anupunga|anuppungga|anupungga|film|undo|kitti|kitty|tharu|kittumo|kittum|movie|any(one)|with\ssubtitle(s)?)", "", search, flags=re.IGNORECASE)
             search = re.sub(r"\s+", " ", search).strip()
             search = search.replace("-", " ")
-            search = search.replace(":", "")
+            search = search.replace(":", "").strip()
+            if not search:
+                # Stop-word-only messages ("bro", "please send", "new movie")
+                # are not searches. The old code searched "" which matches
+                # EVERY file and handed out random results.
+                return
             # ===== Premium Exclusive Early Access gate =====
             # Check BEFORE any heavy search: if this query is premium-locked and
             # the user is not premium/admin/shortlink-verified → lock screen
@@ -2182,7 +2212,7 @@ async def auto_filter(client, msg, spoll=False):
             files, offset, total_results = search_result
             settings = await get_settings(message.chat.id)
             if not files:
-                if settings["spell_check"]:
+                if settings["spell_check"] and _spell_depth < 2:
                     ai_sts = await m.edit('𝐏𝐋𝐄𝐀𝐒𝐄 𝐖𝐀𝐈𝐓, 𝐀𝐈 𝐂𝐇𝐄𝐂𝐊𝐈𝐍𝐆 𝐘𝐎𝐔𝐑 𝐒𝐏𝐄𝐋𝐋𝐈𝐍𝐆...')
                     is_misspelled = await ai_spell_check(chat_id=message.chat.id, wrong_name=search)
                     fixed_by_ai = bool(is_misspelled)
@@ -2199,7 +2229,7 @@ async def auto_filter(client, msg, spoll=False):
                         await ai_sts.edit(f'{head} ➜ <code>{is_misspelled}</code>\n🔍 Searching for it...')
                         message.text = is_misspelled
                         await ai_sts.delete()
-                        return await auto_filter(client, message)
+                        return await auto_filter(client, message, _spell_depth=_spell_depth + 1)
                     await ai_sts.delete()
                     return await advantage_spell_chok(client, message)
                 else:

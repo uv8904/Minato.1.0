@@ -325,4 +325,4 @@ def test_premium_expiry_worker_survives_a_db_error():
         mp.undo()
 
     assert len(calls) == 2                                   # loop went on after the failure
-    assert naps == [30, 1]                                   # back-off after error, normal tick after
+    assert naps == [30, 30.0]                                # back-off after error, normal 30s tick after

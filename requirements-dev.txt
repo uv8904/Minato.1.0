@@ -1,4 +1,10 @@
 # Test/CI-only dependencies (see .github/workflows/tests.yml).
 pytest>=8,<10
-# Static import sanity check for the modules we touched.
+# Static import sanity check (undefined names etc.) — run by CI.
 pyflakes>=3.2,<4
+# In-memory Mongo for the DB-backed test files. Without it pytest silently
+# SKIPS test_bot_controls / test_maintenance_mode / test_title_notify.
+mongomock_motor>=0.0.29,<1
+# Optional: browser tests (tests/test_watch_hero_browser.py) additionally need
+#   pip install playwright && python -m playwright install chromium
+# They keep skipping gracefully when playwright is absent.

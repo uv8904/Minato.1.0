@@ -53,7 +53,7 @@ __all__ = [
     "GENRE_ORDER",
     "Catalog",
     "build_catalog",
-    "build_home",
+    "build_home_catalog",
     "card_for",
     "enrich_pending",
     "kick_enrichment",

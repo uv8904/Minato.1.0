@@ -21,11 +21,21 @@ def _locked_down(monkeypatch):
     monkeypatch.setattr(info, "ADMINS", [12345])
     monkeypatch.setattr(info, "ADMIN_DASHBOARD_TOKEN", "s3cret-dashboard-token")
     monkeypatch.setattr(info, "ADMIN_DASHBOARD_PUBLIC", False)
+    monkeypatch.setattr(info, "ADMIN_DASHBOARD_ALLOW_ID", False)
 
 
-def test_admin_id_query_and_header_are_accepted():
+def test_public_telegram_id_is_not_a_credential_by_default():
+    # Telegram ids are public information — knowing an admin's id must NOT
+    # unlock the dashboards unless the operator explicitly opts in.
+    assert not auth.is_admin_request(_Request(query={"admin_id": "12345"}))
+    assert not auth.is_admin_request(_Request(headers={"X-Admin-Id": "12345"}))
+
+
+def test_admin_id_legacy_shortcut_requires_explicit_opt_in(monkeypatch):
+    monkeypatch.setattr(info, "ADMIN_DASHBOARD_ALLOW_ID", True)
     assert auth.is_admin_request(_Request(query={"admin_id": "12345"}))
     assert auth.is_admin_request(_Request(headers={"X-Admin-Id": "12345"}))
+    assert not auth.is_admin_request(_Request(query={"admin_id": "99999"}))
 
 
 def test_configured_token_is_accepted_in_constant_time():

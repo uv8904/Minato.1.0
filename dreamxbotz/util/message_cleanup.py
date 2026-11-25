@@ -26,3 +26,25 @@ def delete_later(delay, *messages):
         task.add_done_callback(_running.discard)
 
     return asyncio.get_running_loop().call_later(max(0, delay), start)
+
+
+def schedule_later(delay, func, *args, **kwargs):
+    """Run an async cleanup function after ``delay`` without blocking a worker.
+
+    Like :func:`delete_later`, but for cleanups that need more than deletions
+    (e.g. delete the files, then edit the notice message). The handler returns
+    to the dispatcher immediately; failures inside ``func`` are logged, never
+    raised into the event loop.
+    """
+    async def runner():
+        try:
+            await func(*args, **kwargs)
+        except Exception:
+            logger.debug("Scheduled cleanup failed", exc_info=True)
+
+    def start():
+        task = asyncio.create_task(runner())
+        _running.add(task)
+        task.add_done_callback(_running.discard)
+
+    return asyncio.get_running_loop().call_later(max(0, delay), start)

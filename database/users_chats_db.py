@@ -256,6 +256,26 @@ class Database:
         return user_data
     async def update_user(self, user_data):
         await self.users.update_one({"id": user_data["id"]}, {"$set": user_data}, upsert=True)
+
+    async def extend_premium(self, user_id, seconds):
+        """Add paid time ON TOP of any remaining premium — never overwrite it.
+
+        Buying a renewal with 20 days left must give 20 days + the new plan,
+        not silently destroy the paid days that were still on the account.
+        Returns the new expiry (naive local datetime, the bot's convention).
+        """
+        user = await self.get_user(user_id)
+        current = (user or {}).get("expiry_time")
+        now = datetime.datetime.now()
+        base = now
+        if isinstance(current, datetime.datetime):
+            if current.tzinfo is not None:
+                current = current.astimezone().replace(tzinfo=None)
+            if current > now:
+                base = current
+        expiry_time = base + datetime.timedelta(seconds=seconds)
+        await self.update_user({"id": user_id, "expiry_time": expiry_time})
+        return expiry_time
   
     async def get_notcopy_user(self, user_id):
         user_id = int(user_id)
@@ -408,11 +428,12 @@ class Database:
         return False
 
     async def give_free_trial(self, user_id):
-        user_id = user_id
-        seconds = 5*60         
-        expiry_time = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
-        user_data = {"id": user_id, "expiry_time": expiry_time, "has_free_trial": True}
-        await self.users.update_one({"id": user_id}, {"$set": user_data}, upsert=True)
+        # Extend, never overwrite: claiming the trial while premium is active
+        # must not wipe the remaining paid time.
+        await self.extend_premium(user_id, 5 * 60)
+        await self.users.update_one(
+            {"id": user_id}, {"$set": {"has_free_trial": True}}, upsert=True
+        )
 
     async def reset_free_trial(self, user_id=None):
         if user_id is None:

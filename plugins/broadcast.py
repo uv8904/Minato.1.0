@@ -9,6 +9,7 @@ from pyrogram.errors import FloodWait
 from database.users_chats_db import db
 from info import ADMINS
 from utils import users_broadcast, groups_broadcast, temp, get_readable_time, clear_junk, junk_group, wait_for_reply, red
+from dreamxbotz.util.message_cleanup import delete_later
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 lock = asyncio.Lock()
@@ -206,8 +207,7 @@ async def junk_clear_group(bot, message):
     groups = await db.get_all_chats()
     if not groups:
         grp = await message.reply_text("❌ Nᴏ ɢʀᴏᴜᴘs ғᴏᴜɴᴅ ғᴏʀ ᴄʟᴇᴀʀ Jᴜɴᴋ ɢʀᴏᴜᴘs.")
-        await asyncio.sleep(60)
-        await grp.delete()
+        delete_later(60, grp)
         return
     b_msg = message
     sts = await message.reply_text(text='..............')

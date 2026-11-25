@@ -36,10 +36,14 @@ health check; the compose file reads all configuration from `.env`.
 
 **Required:** `BOT_TOKEN`, `API_ID`, `API_HASH`, `DATABASE_URI`.
 **Set immediately:** `ADMINS`, `LOG_CHANNEL`, `FQDN` (the public hostname used
-in stream links — without it links point at `0.0.0.0:PORT`). If
-`IS_VERIFY=True` (default), set `SHORTENER_WEBSITE` + `SHORTENER_API`. If you
-expose `/admin` or `/analytics`, set `ADMIN_DASHBOARD_TOKEN`. If you enable
-`/clone`, set `CLONE_ENCRYPTION_KEY` **and** a least-privilege
+in stream links — without it links point at `0.0.0.0:PORT`), `CHANNELS` (the
+file channel to index) and `BIN_CHANNEL` (the private channel behind every
+stream/download link — `STREAM_MODE` is on by default, so without it those
+buttons fail). If `IS_VERIFY=True` (default), set `SHORTENER_WEBSITE` +
+`SHORTENER_API`. If you expose `/admin` or `/analytics`, set
+`ADMIN_DASHBOARD_TOKEN` — a Telegram id is public, so `?admin_id=` is **not**
+authentication (legacy shortcut requires `ADMIN_DASHBOARD_ALLOW_ID=True`).
+If you enable `/clone`, set `CLONE_ENCRYPTION_KEY` **and** a least-privilege
 `CLONE_DATABASE_URI` — clones never receive the host database URI.
 
 Startup prints a clear list of missing/invalid settings and exits before

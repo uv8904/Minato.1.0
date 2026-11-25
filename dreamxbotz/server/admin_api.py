@@ -268,10 +268,10 @@ a{color:inherit;text-decoration:none}
 
   <div class="panels">
     <div class="card">
-      <div class="kpi-label">📊 File Growth & Premium</div>
+      <div class="kpi-label">📊 Files & Premium — illustrative trend</div>
       <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
       <div class="actions">
-        <span class="tag">💡 Tip: Upload more files to grow</span>
+        <span class="tag">⚠️ Sirf "Today" wala point real hai — history store nahi hoti</span>
         <span class="tag">🔥 Premium = revenue</span>
       </div>
     </div>
@@ -396,11 +396,13 @@ async function refresh(){
 function renderChart(data){
   let ctx=document.getElementById('mainChart');
   if(mainChart) mainChart.destroy();
-  // Fake growth data based on real counts
-  let total = data.files?.total || 100;
-  let labels = ['6d ago','5d ago','4d ago','3d ago','2d ago','Yesterday','Today'];
-  let files = labels.map((_,i)=> Math.floor(total * (0.5 + i*0.08 + Math.random()*0.05)));
-  let premium = labels.map((_,i)=> Math.floor((data.premium?.active||5) * (0.4 + i*0.12 + Math.random()*0.1)));
+  // ILLUSTRATIVE ramp towards the real current totals — no historical data is
+  // stored yet, so this must not look like measured history (the old version
+  // invented it with Math.random on every refresh).
+  let total = data.files?.total || 0;
+  let labels = ['','','','','','','Today (actual)'];
+  let files = labels.map((_,i)=> Math.floor(total * (0.70 + i*0.05)));
+  let premium = labels.map((_,i)=> Math.floor((data.premium?.active||0) * (0.70 + i*0.05)));
   
   mainChart = new Chart(ctx, {
     type:'line',
@@ -428,9 +430,14 @@ setInterval(refresh, 15000);
 </body>
 </html>
     """
+    try:
+        import info as _info
+        preview_mode = bool(getattr(_info, "ADMIN_DASHBOARD_PUBLIC", False))
+    except Exception:
+        preview_mode = False
     html = html.replace("__ADMIN_BANNER__", (
-        "<div class=\'alert alert-warn\'>⚠️ Preview mode: auth is bypassed only because ADMIN_DASHBOARD_PUBLIC=True. In production pass ?admin_id=YOUR_ID or X-Admin-Token.</div>"
-        if is_admin else
-        "<div class=\'alert alert-warn\'>🔒 Not admin - showing demo data. Add ?admin_id=YOUR_TELEGRAM_ID</div>"
+        "<div class=\'alert alert-warn\'>⚠️ Preview mode: auth is bypassed only because ADMIN_DASHBOARD_PUBLIC=True. In production unset it and use ADMIN_DASHBOARD_TOKEN.</div>"
+        if preview_mode else
+        "<div class=\'alert alert-ok\'>🔒 Authenticated via admin token. Keep the token secret.</div>"
     ))
     return web.Response(text=html, content_type="text/html")

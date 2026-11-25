@@ -368,8 +368,8 @@ async def grant_premium(client: Client, user_id: int, plan_time: str) -> Optiona
     if seconds <= 0:
         logger.error("FamPay: invalid plan_time %r for user %s", plan_time, user_id)
         return None
-    expiry_time = datetime.now() + timedelta(seconds=seconds)
-    await db.update_user({"id": user_id, "expiry_time": expiry_time})
+    # Renewals extend the remaining time instead of overwriting paid days.
+    expiry_time = await db.extend_premium(user_id, seconds)
     data = await db.get_user(user_id)
     expiry = (data or {}).get("expiry_time") or expiry_time
     if expiry.tzinfo is None:  # keep the bot's naive-IST convention

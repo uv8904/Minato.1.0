@@ -8,7 +8,6 @@ from dreamxbotz.util.file_properties import get_file_ids
 from dreamxbotz.server.exceptions import InvalidHash
 import urllib.parse
 import logging
-import aiohttp
 
 
 # --------------------------------------------------------------------------- #
@@ -115,14 +114,15 @@ async def render_page(id, secure_hash, src=None):
     )
 
     tag = file_data.mime_type.split("/")[0].strip()
+    # The size is already known locally. The old code opened an HTTP GET
+    # against the bot's own public URL just to read Content-Length — it hung
+    # when FQDN was wrong, crashed when the header was missing, and started a
+    # Telegram stream for nothing.
     file_size = humanbytes(file_data.file_size)
     if tag in ["video", "audio"]:
         template_file = "dreamxbotz/template/req.html"
     else:
         template_file = "dreamxbotz/template/dl.html"
-        async with aiohttp.ClientSession() as s:
-            async with s.get(src) as u:
-                file_size = humanbytes(int(u.headers.get("Content-Length")))
 
     with open(template_file) as f:
         template = jinja2.Template(f.read())
