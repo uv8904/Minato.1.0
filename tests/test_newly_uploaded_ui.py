@@ -109,11 +109,8 @@ def render_page(mime_type="video/mp4", channel_url="https://t.me/updates"):
         spec.loader.exec_module(renderer)
 
         # Template selection: videos/audio -> req.html, everything else -> dl.html
-        session = MagicMock()
-        session.__aenter__.return_value = session
-        response = SimpleNamespace(headers={"Content-Length": "1024"})
-        session.get.return_value.__aenter__.return_value = response
-        renderer.aiohttp.ClientSession = lambda: session
+        # (The renderer uses file_data.file_size directly — it no longer opens
+        # an HTTP GET against its own public URL for Content-Length.)
         html = asyncio.run(renderer.render_page(42, "abcdef"))
     finally:
         for name, module in saved.items():

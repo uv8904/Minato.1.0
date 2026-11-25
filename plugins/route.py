@@ -3,14 +3,11 @@ import re
 import math
 import logging
 import secrets
-import time
 import mimetypes
 from aiohttp.http_exceptions import BadStatusLine
-from dreamxbotz.Bot import multi_clients, work_loads, dreamxbotz
+from dreamxbotz.Bot import multi_clients, work_loads
 from dreamxbotz.server.exceptions import FIleNotFound, InvalidHash
-from dreamxbotz.zzint import StartTime, __version__
 from dreamxbotz.util.custom_dl import ByteStreamer
-from dreamxbotz.util.time_format import get_readable_time
 from dreamxbotz.util.render_template import render_page
 from info import MULTI_CLIENT
 
@@ -48,12 +45,12 @@ async def stream_handler(request: web.Request):
         raise web.HTTPNotFound(text=e.message)
     except (AttributeError, BadStatusLine, ConnectionResetError):
         pass
-    except Exception as e:
-        logging.critical(e.with_traceback(None))
-        raise web.HTTPInternalServerError(text=str(e))
+    except Exception:
+        logging.exception("Watch page failed for %s", request.path)
+        raise web.HTTPInternalServerError(text="watch page failed")
 
 @routes.get(r"/{path:\S+}", allow_head=True)
-async def stream_handler(request: web.Request):
+async def download_handler(request: web.Request):
     try:
         path = request.match_info["path"]
         match = re.search(r"^([a-zA-Z0-9_-]{6})(\d+)$", path)
@@ -70,14 +67,14 @@ async def stream_handler(request: web.Request):
         raise web.HTTPNotFound(text=e.message)
     except (AttributeError, BadStatusLine, ConnectionResetError):
         pass
-    except Exception as e:
-        logging.critical(e.with_traceback(None))
-        raise web.HTTPInternalServerError(text=str(e))
+    except Exception:
+        logging.exception("Download request failed for %s", request.path)
+        raise web.HTTPInternalServerError(text="stream failed")
 
 class_cache = {}
 
 async def media_streamer(request: web.Request, id: int, secure_hash: str):
-    range_header = request.headers.get("Range", 0)
+    range_header = request.headers.get("Range")
     
     index = min(work_loads, key=work_loads.get)
     faster_client = multi_clients[index]
@@ -102,23 +99,30 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
     
     file_size = file_id.file_size
 
-    if range_header:
-        from_bytes, until_bytes = range_header.replace("bytes=", "").split("-")
-        from_bytes = int(from_bytes)
-        until_bytes = int(until_bytes) if until_bytes else file_size - 1
-    else:
-        from_bytes = request.http_range.start or 0
-        until_bytes = (request.http_range.stop or file_size) - 1
-
-    if (until_bytes > file_size) or (from_bytes < 0) or (until_bytes < from_bytes):
-        return web.Response(
-            status=416,
-            body="416: Range not satisfiable",
-            headers={"Content-Range": f"bytes */{file_size}"},
-        )
+    # RFC 7233 range handling. The old split("-") + int() crashed with a 500
+    # on legal suffix ranges ("bytes=-500", used by Safari/some players) and
+    # on multi-ranges. Malformed/multi ranges are ignored -> full 200 reply.
+    from_bytes = 0
+    until_bytes = file_size - 1
+    is_range = False
+    if isinstance(range_header, str):
+        m = re.fullmatch(r"\s*bytes\s*=\s*(\d*)\s*-\s*(\d*)\s*", range_header)
+        if m and (m.group(1) or m.group(2)):
+            if m.group(1):
+                from_bytes = int(m.group(1))
+                until_bytes = int(m.group(2)) if m.group(2) else file_size - 1
+            else:  # suffix range: the LAST N bytes
+                from_bytes = max(0, file_size - int(m.group(2)))
+            if from_bytes >= file_size or until_bytes < from_bytes:
+                return web.Response(
+                    status=416,
+                    body="416: Range not satisfiable",
+                    headers={"Content-Range": f"bytes */{file_size}"},
+                )
+            until_bytes = min(until_bytes, file_size - 1)
+            is_range = True
 
     chunk_size = 1024 * 1024
-    until_bytes = min(until_bytes, file_size - 1)
 
     offset = from_bytes - (from_bytes % chunk_size)
     first_part_cut = from_bytes - offset
@@ -150,14 +154,13 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
             file_name = f"{secrets.token_hex(2)}.unknown"
 
     safe_name = str(file_name).replace('"', "").replace("\r", "").replace("\n", "")
-    return web.Response(
-        status=206 if range_header else 200,
-        body=body,
-        headers={
-            "Content-Type": f"{mime_type}",
-            "Content-Range": f"bytes {from_bytes}-{until_bytes}/{file_size}",
-            "Content-Length": str(req_length),
-            "Content-Disposition": f'{disposition}; filename="{safe_name}"',
-            "Accept-Ranges": "bytes",
-        },
-    )
+    headers = {
+        "Content-Type": f"{mime_type}",
+        "Content-Length": str(req_length),
+        "Content-Disposition": f'{disposition}; filename="{safe_name}"',
+        "Accept-Ranges": "bytes",
+    }
+    if is_range:
+        # Content-Range belongs on 206/416 responses only (RFC 7233).
+        headers["Content-Range"] = f"bytes {from_bytes}-{until_bytes}/{file_size}"
+    return web.Response(status=206 if is_range else 200, body=body, headers=headers)

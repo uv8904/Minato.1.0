@@ -16,6 +16,7 @@ Supports: voice, audio, video_note
 
 import os
 import asyncio
+import html
 import logging
 import tempfile
 import re
@@ -38,9 +39,11 @@ async def transcribe_with_groq(file_path: str) -> str:
     Returns transcribed text or empty string
     """
     if not is_enabled():
-        # Try with whatever key is set - might still work
-        pass
-    
+        # No usable key: do NOT hit the API with an empty Bearer (the old
+        # no-op `pass` sent 3 doomed requests for every voice note).
+        logger.info("Voice search skipped: GROQ_API_KEY not configured")
+        return ""
+
     url = "https://api.groq.com/openai/v1/audio/transcriptions"
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}"
@@ -126,7 +129,10 @@ async def voice_search_pm(client, message: Message):
     """Voice search in PM - transcribe and search"""
     user_id = message.from_user.id if message.from_user else 0
     logger.info(f"Voice search PM from {user_id}")
-    
+
+    if not is_enabled():
+        return  # feature not configured — don't download or call the API
+
     # Check if user is banned
     from utils import temp
     if user_id in temp.BANNED_USERS:
@@ -184,8 +190,8 @@ async def voice_search_pm(client, message: Message):
         if status_msg:
             try:
                 await status_msg.edit_text(
-                    f"<b>🎙️ You said:</b> <code>{transcribed}</code>\n"
-                    f"<b>🔍 Searching for:</b> <code>{cleaned}</code>",
+                    f"<b>🎙️ You said:</b> <code>{html.escape(transcribed)}</code>\n"
+                    f"<b>🔍 Searching for:</b> <code>{html.escape(cleaned)}</code>",
                     parse_mode=enums.ParseMode.HTML
                 )
             except Exception:
@@ -212,7 +218,7 @@ async def voice_search_pm(client, message: Message):
         if status_msg:
             try:
                 await status_msg.edit_text(
-                    f"<b>❌ Voice search failed:</b> <code>{str(e)[:100]}</code>\n"
+                    f"<b>❌ Voice search failed:</b> <code>{html.escape(str(e)[:100])}</code>\n"
                     "Please type the movie name instead.",
                     parse_mode=enums.ParseMode.HTML
                 )
@@ -232,6 +238,8 @@ async def voice_search_group(client, message: Message):
     """Voice search in groups - same but respects group settings"""
     # Only process if group has auto filter enabled and message is short voice (<30s)
     try:
+        if not is_enabled():
+            return  # feature not configured — don't download or call the API
         # Check duration - ignore long audios
         voice = message.voice or message.audio
         if voice and hasattr(voice, 'duration') and voice.duration and voice.duration > 30:
@@ -277,8 +285,8 @@ async def voice_search_group(client, message: Message):
             if status_msg:
                 try:
                     await status_msg.edit_text(
-                        f"<b>🎙️ {message.from_user.first_name} said:</b> <code>{transcribed}</code>\n"
-                        f"<b>🔍 Searching:</b> <code>{cleaned}</code>",
+                        f"<b>🎙️ {message.from_user.first_name} said:</b> <code>{html.escape(transcribed)}</code>\n"
+                        f"<b>🔍 Searching:</b> <code>{html.escape(cleaned)}</code>",
                         parse_mode=enums.ParseMode.HTML
                     )
                 except Exception:

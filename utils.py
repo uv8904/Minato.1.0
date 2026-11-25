@@ -11,7 +11,11 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from dreamxbotz.util.async_cache import AsyncTTLCache
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.errors import InputUserDeactivated, UserNotParticipant, FloodWait, UserIsBlocked, PeerIdInvalid, ChatAdminRequired, MessageNotModified
+from pyrogram.errors import (
+    InputUserDeactivated, UserNotParticipant, FloodWait, UserIsBlocked, PeerIdInvalid,
+    ChatAdminRequired, MessageNotModified, ChatIdInvalid, ChannelInvalid, ChannelPrivate,
+    ChatWriteForbidden,
+)
 from pyrogram import enums
 from typing import Union
 from Script import script
@@ -341,8 +345,10 @@ async def users_broadcast(user_id, message, is_pin):
             await m.pin(both_sides=True)
         return True, "Success"
     except FloodWait as e:
-        await asyncio.sleep(e.x)
-        return await users_broadcast(user_id, message)
+        # electrogram/pyrogram expose the delay as ``.value`` (``.x`` does not
+        # exist), and the retry must keep the caller's ``is_pin`` choice.
+        await asyncio.sleep(e.value)
+        return await users_broadcast(user_id, message, is_pin)
     except InputUserDeactivated:
         await db.delete_user(int(user_id))
         logging.info(f"{user_id}-Removed from Database, since deleted account.")
@@ -358,20 +364,30 @@ async def users_broadcast(user_id, message, is_pin):
     except Exception as e:
         return False, "Error"
 
+# Only these errors mean the group is really gone/unreachable. A transient
+# network failure must NOT unregister the group from the database.
+_DEAD_CHAT_ERRORS = (
+    PeerIdInvalid, ChatIdInvalid, ChannelInvalid, ChannelPrivate, ChatWriteForbidden,
+)
+
+
 async def groups_broadcast(chat_id, message, is_pin):
     try:
         m = await message.copy(chat_id=chat_id)
         if is_pin:
             try:
                 await m.pin()
-            except:
+            except Exception:
                 pass
         return "Success"
     except FloodWait as e:
-        await asyncio.sleep(e.x)
-        return await groups_broadcast(chat_id, message)
-    except Exception as e:
+        await asyncio.sleep(e.value)
+        return await groups_broadcast(chat_id, message, is_pin)
+    except _DEAD_CHAT_ERRORS:
         await db.delete_chat(chat_id)
+        return "Error"
+    except Exception:
+        logging.warning("Group broadcast to %s failed (kept in DB)", chat_id, exc_info=True)
         return "Error"
 
 async def junk_group(chat_id, message):
@@ -382,10 +398,13 @@ async def junk_group(chat_id, message):
     except FloodWait as e:
         await asyncio.sleep(e.value)
         return await junk_group(chat_id, message)
+    except _DEAD_CHAT_ERRORS:
+        await db.delete_chat(int(chat_id))
+        logging.info(f"{chat_id} - removed from DB (chat unreachable)")
+        return False, "deleted", "chat unreachable\n\n"
     except Exception as e:
-        await db.delete_chat(int(chat_id))       
-        logging.info(f"{chat_id} - PeerIdInvalid")
-        return False, "deleted", f'{e}\n\n'
+        logging.warning("Junk check for %s failed (kept in DB)", chat_id, exc_info=True)
+        return False, "error", f'{e}\n\n'
     
 
 async def clear_junk(user_id, message):

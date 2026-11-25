@@ -56,7 +56,9 @@ async def web_server():
     web_app.add_routes(routes)
     return web_app
 
-async def check_expired_premium(client, interval=1):
+async def check_expired_premium(client, interval=30):
+    # Expiry does not need second-level precision; a 1s poll meant a Mongo
+    # query every second forever. Clones already use 60s.
     while 1:
         # A Mongo blip (very common right after a restart) must not kill this
         # task for good – log it and try again on the next round.

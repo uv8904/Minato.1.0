@@ -8,6 +8,7 @@ from info import (
 )
 from utils import get_seconds, temp
 from database.users_chats_db import db 
+from dreamxbotz.util.message_cleanup import delete_later
 import asyncio
 from pyrogram import Client, filters 
 from pyrogram.errors.exceptions.bad_request_400 import MessageTooLong
@@ -198,9 +199,8 @@ async def plan(client, message):
         reply_markup=InlineKeyboardMarkup(btn)
     )
     await client.send_message(PREMIUM_LOGS, log_message)
-    await asyncio.sleep(300)
-    await msg.delete()
-    await message.delete()
+    # Timers must not hold a dispatcher worker for 5 minutes.
+    delete_later(300, msg, message)
 
 
 # Telegram Star Payment Method 👇
@@ -261,9 +261,8 @@ async def successful_premium_payment(client, message):
             time = STAR_PREMIUM_PLANS[amount]
             seconds = await get_seconds(time)
             if seconds > 0:
-                expiry_time = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
-                user_data = {"id": user_id, "expiry_time": expiry_time}
-                await db.update_user(user_data)
+                # Renewals extend the remaining time instead of overwriting it.
+                await db.extend_premium(user_id, seconds)
                 data = await db.get_user(user_id)
                 expiry = data.get("expiry_time")
                 expiry_str_in_ist = expiry.astimezone(pytz.timezone("Asia/Kolkata")).strftime("%d-%m-%Y | %I:%M:%S %p")    

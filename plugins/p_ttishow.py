@@ -5,6 +5,7 @@ from info import ADMINS,MULTIPLE_DB, LOG_CHANNEL, OWNER_LNK, MELCOW_PHOTO
 from database.users_chats_db import db, db2
 from database.ia_filterdb import Media, Media2, db as db_stats, db2 as db2_stats
 from utils import get_size, temp, get_settings, get_readable_time
+from dreamxbotz.util.message_cleanup import schedule_later
 from Script import script
 from pyrogram.errors import ChatAdminRequired
 import asyncio
@@ -67,13 +68,21 @@ async def save_group(bot, message):
                 except Exception as e:
                     print(f"Welcome photo send failed: {e}")
         if settings.get("auto_delete"):
-            await asyncio.sleep(600)
-            try:
-                if temp.MELCOW.get('welcome'):
-                    await temp.MELCOW['welcome'].delete()
-                    temp.MELCOW['welcome'] = None 
-            except:
-                pass
+            # Capture THIS welcome message and clean it up on a timer — the
+            # handler must not hold a dispatcher worker for 10 minutes, and a
+            # newer welcome message must not be deleted by an older timer.
+            welcome = temp.MELCOW.get('welcome')
+
+            async def _cleanup_welcome(msg=welcome):
+                try:
+                    if msg:
+                        await msg.delete()
+                        if temp.MELCOW.get('welcome') is msg:
+                            temp.MELCOW['welcome'] = None
+                except Exception:
+                    pass
+
+            schedule_later(600, _cleanup_welcome)
                
 @Client.on_message(filters.command('leave') & filters.user(ADMINS))
 async def leave_a_chat(bot, message):

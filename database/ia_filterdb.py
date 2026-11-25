@@ -223,6 +223,10 @@ async def get_search_results(
     chat_id, query, file_type=None, max_results=10, offset=0, filter=False,
     sort_by="newest",
 ):
+    # An empty query must return nothing — the "." fallback pattern matches
+    # EVERY file, which handed out random results for stop-word-only searches.
+    if isinstance(query, str) and not query.strip():
+        return [], "", 0
     if chat_id is not None:
         settings = await get_settings(int(chat_id))
         try:

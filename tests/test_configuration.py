@@ -42,8 +42,18 @@ def test_multiple_db_and_clones_need_their_own_configuration():
 def test_non_fatal_warnings_cover_common_deployment_mistakes():
     warnings = info.config_warnings({})
     joined = " ".join(warnings)
-    for name in ("ADMINS", "LOG_CHANNEL", "SHORTENER_API", "FQDN"):
+    for name in ("ADMINS", "LOG_CHANNEL", "SHORTENER_API", "FQDN", "BIN_CHANNEL"):
         assert name in joined
     complete = dict(CLEAN_ENV, ADMINS="123", LOG_CHANNEL="-100123",
-                    SHORTENER_API="key", FQDN="streams.example.com")
+                    SHORTENER_API="key", FQDN="streams.example.com",
+                    BIN_CHANNEL="-1001234567890")
     assert info.config_warnings(complete) == []
+
+
+def test_stream_mode_without_bin_channel_is_warned_about():
+    env = dict(CLEAN_ENV, ADMINS="123", LOG_CHANNEL="-100123",
+               SHORTENER_API="key", FQDN="streams.example.com")
+    assert any("BIN_CHANNEL" in w for w in info.config_warnings(env))
+    # Turning streaming off silences the warning.
+    env["STREAM_MODE"] = "False"
+    assert not any("BIN_CHANNEL" in w for w in info.config_warnings(env))

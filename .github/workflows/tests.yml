@@ -20,5 +20,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: Static analysis (pyflakes — hard errors)
+        run: |
+          python -m pyflakes bot.py info.py utils.py Script.py database dreamxbotz plugins tools > /tmp/pyflakes.txt || true
+          # Unused imports/variables are advisory; undefined names and other
+          # hard errors (the class that shipped the pmfilter "del" NameError)
+          # must fail the build.
+          ADVISORY="imported but unused|assigned to but never used|redefinition of unused|f-string is missing placeholders"
+          if grep -vE "$ADVISORY" /tmp/pyflakes.txt | grep -q .; then
+            echo "::error::pyflakes found hard errors:"
+            grep -vE "$ADVISORY" /tmp/pyflakes.txt
+            exit 1
+          fi
       - name: Run test suite
         run: python -m pytest -q

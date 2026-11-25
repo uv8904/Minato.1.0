@@ -254,7 +254,10 @@ DATABASE_URI2 = env_str('DATABASE_URI2', default='')  # Required when MULTIPLE_D
 # Cloning is fail-closed unless a persistent Fernet key is configured. Each
 # clone gets a separate OS process and database; the hard cap + RAM reserve
 # stop public /clone requests from turning into unbounded workers.
-CLONE_ENABLED = is_enabled(environ.get('CLONE_ENABLED', 'True'), True)
+# Default False — same as required_config_issues() and .env.example assume.
+# (The old default True disagreed with the validator's False, so the
+# "CLONE_ENABLED=True requires ..." errors never fired for the default.)
+CLONE_ENABLED = is_enabled(environ.get('CLONE_ENABLED', 'False'), False)
 CLONE_COLLECTION = env_str('CLONE_COLLECTION', default='minato_user_clones')
 CLONE_SESSION_WORKDIR = env_str('CLONE_SESSION_WORKDIR', default='/tmp/minato_clone_sessions')
 CLONE_ENCRYPTION_KEY = env_str('CLONE_ENCRYPTION_KEY', default='')
@@ -272,6 +275,10 @@ CLONE_DATABASE_URI = env_str('CLONE_DATABASE_URI', default='')
 # only configured numeric ADMINS may use them; the dashboards are never public.
 ADMIN_DASHBOARD_TOKEN = env_str('ADMIN_DASHBOARD_TOKEN', default='')
 ADMIN_DASHBOARD_PUBLIC = is_enabled(environ.get('ADMIN_DASHBOARD_PUBLIC', 'False'), False)
+# Telegram ids are public, so ?admin_id= is NOT authentication. Only enable
+# this legacy shortcut if you accept that anyone who knows an admin's id can
+# read the dashboards. Prefer ADMIN_DASHBOARD_TOKEN.
+ADMIN_DASHBOARD_ALLOW_ID = is_enabled(environ.get('ADMIN_DASHBOARD_ALLOW_ID', 'False'), False)
 # ============================
 # Movie Notification & Update Settings
 # ============================
@@ -751,6 +758,11 @@ def config_warnings(env=None):
         warnings.append("SHORTENER_API is empty: verification links cannot be generated")
     if not _env_value(env, "FQDN") and "DYNO" not in env and "KOYEB_APP_NAME" not in env:
         warnings.append("FQDN is unset: public stream links default to https://0.0.0.0:<PORT>/")
+    if is_enabled(_env_value(env, "STREAM_MODE", "True"), True) and not _env_value(env, "BIN_CHANNEL"):
+        warnings.append(
+            "STREAM_MODE is on but BIN_CHANNEL is unset: stream/download links cannot work. "
+            "Create a private channel, make the bot admin there, and set BIN_CHANNEL to its -100 id"
+        )
     return warnings
 
 

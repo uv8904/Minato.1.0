@@ -61,7 +61,10 @@ def _client_ip(request):
     try:
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
-            return forwarded.split(",")[0].strip()[:45]
+            # The RIGHTMOST entry is what the platform's own router appended
+            # (the socket it saw). The leftmost entry is client-controlled and
+            # trivially spoofed, which let anyone bypass the per-IP budget.
+            return forwarded.split(",")[-1].strip()[:45]
         return (request.remote or "")[:45]
     except Exception:
         return ""
@@ -264,6 +267,12 @@ _GENRE_MAP = {
     "Marco": ["Action","Thriller"],
 }
 
+def _stable_hash(text: str) -> int:
+    # builtins.hash() is salted per process (PYTHONHASHSEED) — recommendations
+    # changed on every restart. SHA-1 keeps the "deterministic & fast" promise.
+    return int(hashlib.sha1(text.encode("utf-8")).hexdigest()[:8], 16)
+
+
 def _rec_score(base_titles: List[str], candidate: str) -> float:
     if candidate in base_titles:
         return -1
@@ -272,10 +281,10 @@ def _rec_score(base_titles: List[str], candidate: str) -> float:
         base_genres.update(_GENRE_MAP.get(t, []))
     cand_genres = set(_GENRE_MAP.get(candidate, []))
     if not base_genres or not cand_genres:
-        # fallback: popularity heuristic via hash
-        return (hash(candidate) % 100) / 100
+        # fallback: popularity heuristic via stable hash
+        return (_stable_hash(candidate) % 100) / 100
     overlap = len(base_genres & cand_genres)
-    return overlap + (hash(candidate) % 10)/100
+    return overlap + (_stable_hash(candidate) % 10)/100
 
 @routes.get("/api/recommend")
 async def recommend(request: web.Request):

@@ -36,7 +36,7 @@ def test_search_returns_without_waiting_for_delete_timer(monkeypatch, poster_mod
     progress = SimpleNamespace(delete=AsyncMock())
     result = SimpleNamespace(delete=AsyncMock())
     message = SimpleNamespace(
-        id=5, text="movie", chat=SimpleNamespace(id=123),
+        id=5, text="jawan", chat=SimpleNamespace(id=123),
         from_user=SimpleNamespace(id=8), delete=AsyncMock(),
         reply_text=AsyncMock(side_effect=[progress, result]),
         reply_photo=AsyncMock(return_value=result),

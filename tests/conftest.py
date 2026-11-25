@@ -25,6 +25,9 @@ for _key, _value in {
     "DATABASE_NAME": "minato_tests",
     "ADMINS": "123456789",
     "LOG_CHANNEL": "-1001234567890",
+    # test_bot_controls expects at least one default force-sub channel; without
+    # this the two fsub-seeding tests fail once mongomock_motor is installed.
+    "AUTH_CHANNELS": "-1000000000001 -1000000000002",
     "SHORTENER_API": "offline-shortener-key",
     "SHORTENER_WEBSITE": "arolinks.com",
     "SHORTENER_API2": "offline-shortener-key",

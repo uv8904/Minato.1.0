@@ -6,3 +6,6 @@ cinemagoer.db
 .venv/
 *.session
 *.session-journal
+.pytest_cache/
+unknown_errors.txt
+junk.txt

@@ -54,12 +54,8 @@ def test_rendered_branding_and_channel_links(monkeypatch, mime_type, channel_url
     renderer = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(renderer)
 
-    session = MagicMock()
-    session.__aenter__.return_value = session
-    response = SimpleNamespace(headers={'Content-Length': '1024'})
-    session.get.return_value.__aenter__.return_value = response
-    monkeypatch.setattr(renderer.aiohttp, 'ClientSession', lambda: session)
-
+    # The renderer uses file_data.file_size directly — no self-HTTP GET for
+    # Content-Length anymore, so no aiohttp stub is needed.
     html = asyncio.run(renderer.render_page(42, 'abcdef'))
     links = PageLinks()
     links.feed(html)
